@@ -7,7 +7,7 @@
 在 SillyTavern 的扩展目录中执行：
 
 ```bash
-git clone https://github.com/1614130601zjs-del/qinghui-lite.git shizhen
+git clone https://github.com/1614130601zjs-del/shizhen.git shizhen
 ```
 
 随后重启或刷新 SillyTavern，并在扩展设置中检查「拾帧 Lite」。
