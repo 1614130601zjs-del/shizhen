@@ -5106,3 +5106,6 @@ html[data-ql-style="cyber"] #chat .ql-chat-image-controls button{border:2px soli
 /* 像素掌机：已选中的子标签在悬停/聚焦/按下时保持深色（上面的通用按钮悬停规则特异性更高，会把它刷成浅色，导致白底白字） */
 #shizhen-panel#shizhen-panel#shizhen-panel[data-ql-style="pixel"] button.ql-subtab.active.active,
 #shizhen-panel#shizhen-panel#shizhen-panel[data-ql-style="pixel"] button.ql-subtab.active.active:is(:hover,:focus,:focus-visible,:active){background:var(--qs-dk)!important;color:var(--qs-on-sig)!important;border-color:var(--qs-dk)!important}
+/* 像素掌机：选中的标签文字加深色描边——无论底色被悬停/按下刷成浅色还是深色，字都看得清 */
+#shizhen-panel#shizhen-panel#shizhen-panel[data-ql-style="pixel"] :is(.ql-tab,.ql-subtab).active,
+#shizhen-panel#shizhen-panel#shizhen-panel[data-ql-style="pixel"] :is(.ql-tab,.ql-subtab).active:is(:hover,:focus,:focus-visible,:active){color:#F7F9F4!important;text-shadow:1px 0 var(--qs-ink),-1px 0 var(--qs-ink),0 1px var(--qs-ink),0 -1px var(--qs-ink),1px 1px 0 var(--qs-ink),-1px -1px 0 var(--qs-ink),1px -1px 0 var(--qs-ink),-1px 1px 0 var(--qs-ink)!important}
