@@ -5345,3 +5345,70 @@ html[data-ql-style="crab"]{--qp-sig:var(--qs-user-accent,#D9805F);--qp-on-sig:#f
 #shizhen-panel#shizhen-panel[data-ql-style="scroll"] .ql-image-placeholder{color:#84806e!important;opacity:1;font-family:"Songti SC","STSong","Noto Serif CJK SC",serif;letter-spacing:.4em}
 #shizhen-panel#shizhen-panel[data-ql-style="scroll"] .ql-image-placeholder::before{content:"";display:block;width:60px;height:1px;margin:0 auto 14px;background:#b9b196;box-shadow:0 4px 0 #cdc6af}
 #shizhen-panel#shizhen-panel[data-ql-style="scroll"] .ql-image-stage:has(.ql-image-placeholder)::after{content:"帧";position:absolute;right:16px;bottom:14px;display:flex;align-items:center;justify-content:center;width:20px;height:20px;background:var(--qs-sig);color:#f7f5ec;font:700 12px/1 "Songti SC","STSong",serif;border-radius:2px;opacity:.9;pointer-events:none}
+
+/* =========================================================
+   复古报纸（news）：旧报纸底色 + 双线版面 + 半调印刷照片
+   ========================================================= */
+@keyframes ql-news-march{from{transform:translateX(-80px)}to{transform:translateX(200px)}}
+#shizhen-panel#shizhen-panel[data-ql-style="news"]{
+ --qs-sig:var(--qs-user-accent,#9C4A36);--qs-on-sig:var(--qs-user-on,#F4ECD8);
+ --qn-paper:#EDE3CC;--qn-paper2:#E3D7BA;--qn-ink:#26221A;--qn-mute:#6E6450;--qn-field:#F7F0DE;
+ --ql-accent:var(--qs-sig)!important;--ql-panel:var(--qn-paper)!important;--ql-card:var(--qn-paper)!important;--ql-field:var(--qn-field)!important;
+ --ql-text:var(--qn-ink)!important;--ql-muted:var(--qn-mute)!important;--ql-border:var(--qn-ink)!important;
+ --ql-button-bg:var(--qn-paper)!important;--ql-button-hover:#F4ECD6!important;--ql-button-active:#D8CBA9!important;--ql-button-border:var(--qn-ink)!important;--ql-button-text:var(--qn-ink)!important;
+ font-family:"Songti SC","STSong","Noto Serif CJK SC","SimSun","Times New Roman",serif!important;color:var(--qn-ink)!important;
+ background:var(--qn-paper)!important;border:3px double var(--qn-ink)!important;border-radius:0!important;box-shadow:4px 4px 0 rgba(38,34,26,.3)!important;
+}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] *{border-radius:0!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-header{background:var(--qn-paper)!important;color:var(--qn-ink)!important;border-top:0!important;border-bottom:4px double var(--qn-ink)!important;padding:10px 12px 8px!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-brand strong{font-size:24px;font-weight:900;letter-spacing:.3em;color:var(--qn-ink)!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-brand span{color:var(--qn-mute)!important;opacity:1;font-style:italic;font-size:11px;letter-spacing:.06em}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-header::after{content:"VOL.∞ · "attr(data-ql-date);position:absolute;right:56px;top:50%;transform:translateY(-50%);color:var(--qn-mute);font:600 10px/1 "Songti SC","STSong","Noto Serif CJK SC","SimSun","Times New Roman",serif;letter-spacing:.08em;pointer-events:none}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-header #ql-close{color:var(--qn-paper)!important;background:var(--qn-ink)!important;border:1.5px solid var(--qn-ink)!important;box-shadow:2px 2px 0 rgba(38,34,26,.35)!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-tabs{background:var(--qn-paper2)!important;border-bottom:3px double var(--qn-ink)!important;gap:3px!important;padding:7px 8px!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-tab{color:var(--qn-ink)!important;background:var(--qn-paper)!important;border:1px solid var(--qn-ink)!important;box-shadow:none!important;font-weight:800!important;letter-spacing:.06em}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] button.ql-tab.active,#shizhen-panel#shizhen-panel[data-ql-style="news"] button.ql-tab.active:is(:hover,:focus,:active){color:var(--qn-paper)!important;background:var(--qn-ink)!important;border-color:var(--qn-ink)!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-page{background-color:var(--qn-paper)!important;background-image:radial-gradient(rgba(90,70,40,.11) .7px,transparent 1px),radial-gradient(rgba(90,70,40,.07) .7px,transparent 1px)!important;background-size:5px 5px,7px 7px!important;background-position:0 0,2px 3px!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-card{background:transparent!important;border:0!important;border-top:3px double var(--qn-ink)!important;border-bottom:1px solid var(--qn-ink)!important;box-shadow:none!important;padding:12px 4px!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-card h3{display:inline-block;padding:0 0 3px;border-bottom:1px solid var(--qn-ink);font-size:17px;font-weight:900;letter-spacing:.08em;color:var(--qn-ink)!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-card>h3{display:block}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-card h3::before{content:"■";margin-right:7px;color:var(--qs-sig);font-size:.62em;vertical-align:.2em}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] button:not(.ql-tab):not(#ql-close):not(.ql-cache-image):not([data-ql-detail]),#shizhen-panel#shizhen-panel[data-ql-style="news"] .menu_button:not(.ql-tab):not(#ql-close){color:var(--qn-ink)!important;background:var(--qn-paper)!important;border:1.5px solid var(--qn-ink)!important;box-shadow:2px 2px 0 var(--qn-ink)!important;font-weight:700!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] button:not(.ql-tab):not(#ql-close):not(.ql-primary):not(.ql-cache-image):not([data-ql-detail]):hover{background:#F4ECD6!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] button:not(.ql-tab):not(#ql-close):not(.ql-cache-image):not([data-ql-detail]):active{background:#D8CBA9!important;transform:translate(2px,2px);box-shadow:none!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-primary{color:var(--qn-paper)!important;background:var(--qn-ink)!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-primary:active{background:var(--qs-sig)!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] button.ql-subtab.active,#shizhen-panel#shizhen-panel[data-ql-style="news"] button.ql-subtab.active:is(:hover,:focus,:active){color:var(--qn-paper)!important;background:var(--qn-ink)!important;border-color:var(--qn-ink)!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]),#shizhen-panel#shizhen-panel[data-ql-style="news"] textarea,#shizhen-panel#shizhen-panel[data-ql-style="news"] select{color:var(--qn-ink)!important;background:var(--qn-field)!important;border:1px solid var(--qn-ink)!important;border-bottom-width:2px!important;box-shadow:inset 1px 1px 0 rgba(38,34,26,.12)!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] input:focus,#shizhen-panel#shizhen-panel[data-ql-style="news"] textarea:focus,#shizhen-panel#shizhen-panel[data-ql-style="news"] select:focus{outline:2px solid color-mix(in srgb,var(--qs-sig) 60%,transparent)!important;outline-offset:1px}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] ::-webkit-scrollbar{width:10px;height:10px}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] ::-webkit-scrollbar-track{background:var(--qn-paper2);border-left:1px solid var(--qn-ink)}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] ::-webkit-scrollbar-thumb{background:var(--qn-ink);border:2px solid var(--qn-paper2)}
+/* 取景区：待刊的照片框 → 刊登出来的半调照片 */
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-image-stage:has(.ql-image-placeholder){background:repeating-linear-gradient(45deg,rgba(38,34,26,.08) 0 1px,transparent 1px 7px),var(--qn-paper2)!important;border:1px solid var(--qn-ink)!important;box-shadow:inset 0 0 0 4px var(--qn-paper),inset 0 0 0 5px var(--qn-ink)!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-image-placeholder{color:var(--qn-ink)!important;opacity:1;font-weight:800;letter-spacing:.3em}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-image-placeholder::before{content:"";display:block;width:72px;height:50px;margin:0 auto 10px;border:1px solid var(--qn-ink);background:linear-gradient(to top right,transparent calc(50% - .6px),var(--qn-ink) calc(50% - .6px) calc(50% + .6px),transparent calc(50% + .6px)),linear-gradient(to top left,transparent calc(50% - .6px),var(--qn-ink) calc(50% - .6px) calc(50% + .6px),transparent calc(50% + .6px))}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-image-stage{position:relative;background-color:var(--qn-paper2)!important;border:1px solid var(--qn-ink)!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-image-stage:has(img){padding:8px 8px 26px!important;background:var(--qn-paper)!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] #ql-result img{position:relative;z-index:1;border:1px solid var(--qn-ink);filter:grayscale(.85) sepia(.3) contrast(1.12) brightness(.98)}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-image-stage:has(img)::after{content:"";position:absolute;left:8px;right:8px;top:8px;bottom:26px;z-index:2;pointer-events:none;background:radial-gradient(circle,rgba(38,34,26,.30) .55px,transparent 1.05px) 0 0/3px 3px;mix-blend-mode:multiply}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-image-stage:has(img)::before{content:"▲ 本报特约摄影 · 拾帧";position:absolute;left:10px;right:10px;bottom:5px;z-index:3;font:italic 600 11px/16px "Songti SC","STSong","Noto Serif CJK SC","SimSun","Times New Roman",serif;letter-spacing:.06em;color:var(--qn-mute);border-top:1px solid var(--qn-ink);padding-top:2px;pointer-events:none}
+/* 加载：排版印刷中 */
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-gen-loader{min-width:210px;gap:8px;padding:12px 16px 12px;color:var(--qn-ink);background:var(--qn-paper2);border:3px double var(--qn-ink)}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-gen-loader-title{font-size:0}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-gen-loader-title::before{content:"正在排版印刷…";font-size:13px;font-weight:900;letter-spacing:.2em;color:var(--qn-ink)}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-gen-loader-bar{width:190px;height:10px;border-radius:0;background:var(--qn-paper);border:1px solid var(--qn-ink)}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] .ql-gen-loader-bar i{width:70px;border-radius:0;background:repeating-linear-gradient(90deg,var(--qn-ink) 0 3px,transparent 3px 5px);animation:ql-news-march 1.5s steps(18) infinite}
+/* 弹窗 */
+html[data-ql-style="news"]{--qp-sig:var(--qs-user-accent,#9C4A36);--qp-on-sig:#F4ECD8;--qp-acc:var(--qp-sig);--qp-bg:#EDE3CC;--qp-text:#26221A;--qp-muted:#6E6450;--qp-line:#26221A;--qp-radius:0;--qp-btn-radius:0;--qp-bw:2px;--qp-shadow:4px 4px 0 rgba(38,34,26,.35);--qp-btn-bg:#EDE3CC;--qp-btn-hover:#F4ECD6;--qp-btn-active:#D8CBA9;--qp-font:"Songti SC","STSong","Noto Serif CJK SC","SimSun","Times New Roman",serif;--ql-accent:var(--qp-sig)}
+
+/* ---- 相册卡套：剪报 ---- */
+#chat .ql-chat-image.ql-album-news{box-sizing:border-box!important;overflow:visible!important;filter:none!important;position:relative!important;transform:none;padding:38px 12px 34px!important;border:1px solid #26221A!important;border-radius:0!important;background:#EDE3CC!important;box-shadow:inset 0 0 0 4px #EDE3CC,inset 0 0 0 5px #26221A,3px 3px 0 rgba(38,34,26,.28)!important;color:#26221A!important;font-family:"Songti SC","STSong","Noto Serif CJK SC","SimSun","Times New Roman",serif}
+#chat .ql-chat-image.ql-album-news::before,#chat .ql-chat-image.ql-album-news::after{content:none!important;display:none!important;border:0!important;background:none!important;box-shadow:none!important;transform:none!important;margin:0!important;padding:0!important;inset:auto!important;width:auto!important;height:auto!important;animation:none!important}
+#chat .ql-chat-image.ql-album-news::before{content:"拾 帧 日 报"!important;display:block!important;position:absolute!important;left:12px!important;right:12px!important;top:9px!important;text-align:center!important;font:900 15px/22px "Songti SC","STSong","Noto Serif CJK SC","SimSun","Times New Roman",serif!important;letter-spacing:.3em!important;color:#26221A!important;border-bottom:3px double #26221A!important;padding-bottom:2px!important}
+#chat .ql-chat-image.ql-album-news::after{content:"▲ 本报特约摄影　图文无涉"!important;display:block!important;position:absolute!important;left:12px!important;right:12px!important;bottom:9px!important;font:italic 600 11px/16px "Songti SC","STSong","Noto Serif CJK SC","SimSun","Times New Roman",serif!important;color:#6E6450!important;border-top:1px solid #26221A!important;padding-top:2px!important}
+#chat .ql-chat-image.ql-album-news>img{display:block;width:100%;height:auto;border:1px solid #26221A!important;border-radius:0!important;filter:grayscale(.85) sepia(.3) contrast(1.12);mix-blend-mode:multiply}
+#chat .ql-chat-image.ql-album-news .ql-chat-image-controls{position:relative;z-index:2}
+#chat .ql-chat-image.ql-album-news .ql-chat-image-controls button{color:#26221A!important;background:#EDE3CC!important;border:1.5px solid #26221A!important;border-radius:0!important;box-shadow:2px 2px 0 #26221A!important}
+#chat .mes_text .ql-inline-image-trigger.ql-album-news{color:#26221A!important;background:#EDE3CC!important;border:1.5px solid #26221A!important;border-radius:0!important;box-shadow:2px 2px 0 #26221A!important;font-family:"Songti SC","STSong","Noto Serif CJK SC","SimSun","Times New Roman",serif!important}
+#shizhen-panel#shizhen-panel[data-ql-style="news"] #ql-result img{max-height:calc(40dvh - 34px)}
