@@ -5103,3 +5103,6 @@ html[data-ql-style="cyber"] #chat .ql-chat-image-controls button{border:2px soli
 #shizhen-panel .ql-album-photo .ql-album-redraw{left:4px!important;right:auto!important;color:inherit!important}
 /* 像素掌机：去掉过渡，避免切换 tab 时背景还在渐变、文字已变白而出现“白底白字” */
 #shizhen-panel#shizhen-panel[data-ql-style="pixel"] *{transition:none!important}
+/* 像素掌机：已选中的子标签在悬停/聚焦/按下时保持深色（上面的通用按钮悬停规则特异性更高，会把它刷成浅色，导致白底白字） */
+#shizhen-panel#shizhen-panel#shizhen-panel[data-ql-style="pixel"] button.ql-subtab.active.active,
+#shizhen-panel#shizhen-panel#shizhen-panel[data-ql-style="pixel"] button.ql-subtab.active.active:is(:hover,:focus,:focus-visible,:active){background:var(--qs-dk)!important;color:var(--qs-on-sig)!important;border-color:var(--qs-dk)!important}
