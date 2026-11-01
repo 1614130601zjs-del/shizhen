@@ -565,11 +565,31 @@ function qlNameReplaceMode(s=cfg()){
  if(s.nameReplaceEnabled===false)return 'off';
  return ['inline','characters'].includes(s.nameReplaceMode)?s.nameReplaceMode:'characters';
 }
+// 括号组：(名字:1.2, 表情, 服装, source#动作) → 去掉外层括号，返回内部 tag 列表；不是整体括号则返回 null。
+function qlUnwrapGroup(tag){
+ const t=String(tag||'').trim();
+ if(!/^[({]/.test(t))return null;
+ let depth=0;
+ for(let i=0;i<t.length;i++){
+  const ch=t[i];
+  if('([{'.includes(ch))depth++;else if(')]}'.includes(ch)){depth--;if(depth===0&&i<t.length-1)return null;}
+ }
+ if(depth!==0||!/[)\]}]$/.test(t))return null;
+ return qlSplitTags(t.slice(1,-1));
+}
+const qlMissingNameShown=new Map();
+function qlWarnMissingNames(names){
+ const now=Date.now(),fresh=[];
+ for(const n of names){if(now-(qlMissingNameShown.get(n)||0)>60000){qlMissingNameShown.set(n,now);fresh.push(n);}}
+ if(!fresh.length)return;
+ const msg='角色词库里没找到：'+fresh.join('、')+'。请在「词库 → 角色词条库」添加同名词条（可用 | 写别名），否则名字会原样留在提示词里。';
+ console.warn('[拾帧] '+msg);
+ try{window.toastr?.warning(msg,'拾帧',{timeOut:8000});}catch{}
+}
 function qlReplaceCharacterNames(prompt,context=getContext()){
  const s=cfg(),none={text:prompt,rest:prompt,characters:[]};
  if(qlNameReplaceMode(s)==='off')return none;
  const entries=(s.characters||[]).filter(x=>x&&typeof x==='object'&&String(x.appearance||'').trim()&&String(x.name||'').trim());
- if(!entries.length)return none;
  const cardKey=context?.characterId==null?'':String(context.characterId);
  const userName=qlNormName(context?.name1||'');
  const groupOf=e=>{
@@ -583,17 +603,31 @@ function qlReplaceCharacterNames(prompt,context=getContext()){
   if(e.characterKey==='__user__'&&userName)names.push(userName);
   for(const n of names){const g=groupOf(e);const old=index.get(n);if(!old||g<old.g)index.set(n,{e,g});}
  }
- const used=new Set(),inline=[],rest=[],characters=[];
+ const used=new Set(),inline=[],rest=[],characters=[],missing=[];
+ const hasCjk=x=>/[㐀-鿿豈-﫿]/.test(x);
+ // 外貌词自带 1.2::…:: 权重时不能再外包一层，否则变成嵌套权重。
+ const wrap=(text,weight)=>weight!=null&&weight!==1&&!text.includes('::')?weight+'::'+text+'::':text;
  for(const tag of qlSplitTags(prompt)){
-  const {core,weight}=qlParseNameTag(tag);
-  const hit=core?index.get(qlNormName(core)):null;
+  // 先按“整个 tag 就是名字”处理；不行再看是不是 (名字:权重, 其他词…) 的括号组。
+  let {core,weight}=qlParseNameTag(tag),extras=[];
+  let hit=core?index.get(qlNormName(core)):null;
+  if(!hit){
+   const group=qlUnwrapGroup(tag);
+   if(group&&group.length){
+    const first=qlParseNameTag(group[0]);
+    const h=first.core?index.get(qlNormName(first.core)):null;
+    if(h){hit=h;core=first.core;weight=first.weight;extras=group.slice(1);}
+    else if(first.core&&hasCjk(first.core)&&!/[,，]/.test(first.core))missing.push(first.core);
+   }else if(core&&hasCjk(core)&&!/\s/.test(core))missing.push(core);
+  }
   if(!hit){inline.push(tag);rest.push(tag);continue;}
   if(used.has(hit.e))continue;
   used.add(hit.e);
   const text=String(hit.e.appearance).trim().replace(/[,，\s]+$/,'');
-  const wrapped=weight!=null&&weight!==1?weight+'::'+text+'::':text;
-  inline.push(wrapped);characters.push({key:String(hit.e.name).split('|')[0].trim(),prompt:wrapped});
+  const body=[wrap(text,weight),...extras].filter(Boolean).join(', ');
+  inline.push(body);characters.push({key:String(hit.e.name).split('|')[0].trim(),prompt:body});
  }
+ if(missing.length)qlWarnMissingNames([...new Set(missing)]);
  if(!used.size)return none;
  return {text:inline.join(', '),rest:rest.join(', '),characters};
 }
