@@ -637,15 +637,20 @@ function resolveChatImageGeneration(prompt, context=getContext()){
  const characterName=String(ch?.name||ch?.avatar||context?.name2||'').trim();
  const binding=findCharacterBinding(characterId,characterName,s);
  const comboIndex=binding?Number(binding.combinationIndex):Number(s.globalComboIndex??-1);
+ const gen=qlResolveWithNames(prompt,context,text=>resolveCombinationGeneration(text,comboIndex,s));
+ return {...gen,bindingApplied:!!binding,globalApplied:!binding&&Number(s.globalComboIndex??-1)>=0};
+}
+// 角色名替换 + 组合解析：无论用哪种配置（默认/全局/绑定/临时/取景），正文提示词都先做名字替换。
+// 拆成 NAI 多角色时：主提示词只保留未被替换的 tag（含画师串），每个角色的外貌词单独作为角色提示词。
+function qlResolveWithNames(prompt,context,resolveFn){
  const nr=qlReplaceCharacterNames(prompt,context);
- const base=resolveCombinationGeneration(nr.text,comboIndex,s);
+ const base=resolveFn(nr.text);
  let naiPromptData=null;
- if(nr.characters.length&&qlNameReplaceMode(s)==='characters'){
-  // 拆成 NAI 多角色：主提示词只保留未被替换的 tag（含画师串），每个角色的外貌词单独作为角色提示词。
-  const split=resolveCombinationGeneration(nr.rest,comboIndex,s);
+ if(nr.characters.length&&qlNameReplaceMode(cfg())==='characters'){
+  const split=resolveFn(nr.rest);
   naiPromptData={basePrompt:split.prompt,characters:nr.characters};
  }
- return {...base,naiPromptData,bindingApplied:!!binding,globalApplied:!binding&&Number(s.globalComboIndex??-1)>=0};
+ return {...base,naiPromptData};
 }
 async function requestWithActiveSettings(prompt, negativeOverride){
  const resolved=resolveActiveGeneration(prompt,negativeOverride);
@@ -1548,7 +1553,7 @@ function addMessageImage(host,url,prompt,taskKey,recordMeta={},anchor=null) {
    card.dataset.qlPrompt=updated;card.dataset.qlTempCombo=tempPreset.value;card.dataset.qlTempSize=tempSize.value;
    const record=(cfg().records||[]).find(item=>item.taskKey===taskKey);
    const matchingRecords=(cfg().records||[]).filter(item=>item.taskKey===taskKey);
-   for(const record of matchingRecords){const c=cfg(),choice=String(tempPreset.value||''),current=currentCharacter();let resolved;if(choice==='viewfinder')resolved=resolveActiveGeneration(updated);else if(choice==='global')resolved=resolveCombinationGeneration(updated,c.globalComboIndex,c);else if(choice.startsWith('bound:'))resolved=resolveCombinationGeneration(updated,Number(choice.slice(6)),c);else{const binding=findCharacterBinding(current.id,current.name,c);resolved=resolveCombinationGeneration(updated,binding?binding.combinationIndex:c.globalComboIndex,c);}record.basePrompt=updated;record.prompt=resolved.prompt;record.negative=resolved.negative||record.negative;record.updatedAt=Date.now();}
+   for(const record of matchingRecords){const c=cfg(),choice=String(tempPreset.value||''),current=currentCharacter();let resolved;const ctxNow=getContext();if(choice==='viewfinder')resolved=qlResolveWithNames(updated,ctxNow,t=>resolveActiveGeneration(t));else if(choice==='global')resolved=qlResolveWithNames(updated,ctxNow,t=>resolveCombinationGeneration(t,c.globalComboIndex,c));else if(choice.startsWith('bound:'))resolved=qlResolveWithNames(updated,ctxNow,t=>resolveCombinationGeneration(t,Number(choice.slice(6)),c));else{const binding=findCharacterBinding(current.id,current.name,c);resolved=qlResolveWithNames(updated,ctxNow,t=>resolveCombinationGeneration(t,binding?binding.combinationIndex:c.globalComboIndex,c));}record.basePrompt=updated;record.prompt=resolved.prompt;record.negative=resolved.negative||record.negative;record.updatedAt=Date.now();}
    if(matchingRecords.length){save();history();}
    editor.hidden=true;
    const note=card.querySelector('.ql-chat-image-tag-saved');if(note)note.remove();
@@ -1605,17 +1610,17 @@ function addMessageImage(host,url,prompt,taskKey,recordMeta={},anchor=null) {
      const tempValue=String(card.dataset.qlTempCombo??'');
      let generation;
      if(tempValue==='viewfinder'){
-      generation=resolveActiveGeneration(currentPrompt);
+      generation=qlResolveWithNames(currentPrompt,getContext(),text=>resolveActiveGeneration(text));
       const activeCombo=c.activeConfigMode!=='separate'&&Number(c.activeComboIndex)>=0?c.combinations[Number(c.activeComboIndex)]:null;
       const presetIndex=activeCombo?Number(activeCombo.artistIndex??-1):Number(c.activePresetIndex??-1);
       generation.presetIndex=presetIndex;generation.preset=presetIndex>=0?c.presets[presetIndex]:null;
      }else if(tempValue==='global'){
-      generation=resolveCombinationGeneration(currentPrompt,c.globalComboIndex,c);
+      generation=qlResolveWithNames(currentPrompt,getContext(),text=>resolveCombinationGeneration(text,c.globalComboIndex,c));
      }else if(tempValue.startsWith('bound:')){
       const chosen=Number(tempValue.slice(6));
-      generation=resolveCombinationGeneration(currentPrompt,Number.isInteger(chosen)&&c.combinations[chosen]?chosen:-1,c);
+      generation=qlResolveWithNames(currentPrompt,getContext(),text=>resolveCombinationGeneration(text,Number.isInteger(chosen)&&c.combinations[chosen]?chosen:-1,c));
      }else if(/^\d+$/.test(tempValue)&&c.combinations[Number(tempValue)]){
-      generation=resolveCombinationGeneration(currentPrompt,Number(tempValue),c);
+      generation=qlResolveWithNames(currentPrompt,getContext(),text=>resolveCombinationGeneration(text,Number(tempValue),c));
      }else{
       generation=resolveChatImageGeneration(currentPrompt,getContext());
      }
@@ -2020,7 +2025,7 @@ function renderStatusbarCard(frame,prompt,url,taskKey){
   dialogClose.addEventListener('click',closeTagDialog);
   edit.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();fillStatusbarTagDialog();if(!tagDialog.isConnected)document.documentElement.append(tagDialog);qlSyncPopupTheme(tagDialog);try{if(typeof tagDialog.showModal==='function'&&!tagDialog.open)tagDialog.showModal();else tagDialog.setAttribute('open','');}catch{tagDialog.setAttribute('open','');}if(controlsHideTimer)clearTimeout(controlsHideTimer);});
   tagCancel.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();closeTagDialog();});
-  tagSave.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const updated=tagTextarea.value.trim();if(!updated){tagTextarea.focus();return;}card._qlPrompt=updated;card.dataset.qlTempCombo=tagPreset.value;card.dataset.qlTempSize=tagSize.value;const current=card._qlCandidates[card._qlIndex];const records=current?.url?matchingStatusRecords(current.url):[];const c=cfg(),choice=String(tagPreset.value||'');let resolved;if(choice==='viewfinder')resolved=resolveActiveGeneration(updated);else if(/^\\d+$/.test(choice)&&c.combinations[Number(choice)])resolved=resolveCombinationGeneration(updated,Number(choice),c);else resolved=resolveChatImageGeneration(updated,getContext());for(const record of records){record.basePrompt=updated;record.prompt=resolved.prompt;record.negative=resolved.negative||record.negative;record.updatedAt=Date.now();record.statusbarTempCombo=tagPreset.value;record.statusbarTempSize=tagSize.value;}if(records.length){save();history();}closeTagDialog();status('状态栏临时 tag 已保存，仅用于当前图片后续重 Roll。');});
+  tagSave.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const updated=tagTextarea.value.trim();if(!updated){tagTextarea.focus();return;}card._qlPrompt=updated;card.dataset.qlTempCombo=tagPreset.value;card.dataset.qlTempSize=tagSize.value;const current=card._qlCandidates[card._qlIndex];const records=current?.url?matchingStatusRecords(current.url):[];const c=cfg(),choice=String(tagPreset.value||'');let resolved;if(choice==='viewfinder')resolved=qlResolveWithNames(updated,getContext(),t=>resolveActiveGeneration(t));else if(/^\\d+$/.test(choice)&&c.combinations[Number(choice)])resolved=qlResolveWithNames(updated,getContext(),t=>resolveCombinationGeneration(t,Number(choice),c));else resolved=resolveChatImageGeneration(updated,getContext());for(const record of records){record.basePrompt=updated;record.prompt=resolved.prompt;record.negative=resolved.negative||record.negative;record.updatedAt=Date.now();record.statusbarTempCombo=tagPreset.value;record.statusbarTempSize=tagSize.value;}if(records.length){save();history();}closeTagDialog();status('状态栏临时 tag 已保存，仅用于当前图片后续重 Roll。');});
   tagDialog.addEventListener('click',e=>{if(e.target===tagDialog)closeTagDialog();});
   tagDialog.addEventListener('cancel',e=>{e.preventDefault();closeTagDialog();});
   
@@ -2028,7 +2033,7 @@ function renderStatusbarCard(frame,prompt,url,taskKey){
   remove.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const current=card._qlCandidates[card._qlIndex];if(!current?.url)return;const records=cfg().records||[];const before=records.length;cfg().records=records.filter(item=>!(item&&item.taskKey===taskKey&&sameImageSource(item.dataUrl,current.url)&&(item.source||'chat')==='statusbar'));card._qlCandidates.splice(card._qlIndex,1);if(card._qlIndex>=card._qlCandidates.length)card._qlIndex=card._qlCandidates.length-1;save();history();card._qlRender();status(before===cfg().records.length?'已从当前状态栏轮播中移除图片。':'已删除当前状态栏图片及其缓存记录。');});
   controls.addEventListener('dblclick',e=>{e.preventDefault();e.stopPropagation();});
   controls.addEventListener('click',e=>e.stopPropagation());
-  const reroll=async()=>{if(card.dataset.busy==='1'||(Date.now()-(Number(card.dataset.lastRerollAt)||0))<900)return;card.dataset.lastRerollAt=Date.now();status('正在重新生成状态栏图片……');try{if(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')navigator.vibrate([28,42,28]);}catch{}const manualKey=taskKey+':manual:'+Date.now();const candidate=triggerRegistry.begin(manualKey,{prompt:card._qlPrompt,source:'statusbar-reroll'});if(!candidate.accepted)return;triggerRegistry.markRunning(manualKey);card.dataset.busy='1';try{syncViewfinderSizeToConfig();const c=cfg(),old={width:c.naiWidth,height:c.naiHeight,size:c.size};try{const choice=String(card.dataset.qlTempCombo??'');let generation;if(choice==='viewfinder')generation=resolveActiveGeneration(card._qlPrompt);else if(/^\\d+$/.test(choice)&&c.combinations[Number(choice)])generation=resolveCombinationGeneration(card._qlPrompt,Number(choice),c);else generation=resolveChatImageGeneration(card._qlPrompt,getContext());const dims=String(card.dataset.qlTempSize||'').split('x').map(Number);if(dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0)){if(c.provider==='novelai'||c.provider==='novelai-thirdparty'){c.naiWidth=dims[0];c.naiHeight=dims[1];}else c.size=card.dataset.qlTempSize;}const fresh=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null);card._qlAddCandidate(fresh);storeChatRecord(fresh,card._qlPrompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame)},generation);card._qlRender?.();}finally{c.naiWidth=old.width;c.naiHeight=old.height;c.size=old.size;save();}triggerRegistry.markSucceeded(manualKey,manualKey+':candidate:'+Date.now());}catch(e){triggerRegistry.markFailed(manualKey,e?.message||String(e));qlAlert('拾帧生成失败：'+(e?.message||String(e)));}finally{card.dataset.busy='0';}};
+  const reroll=async()=>{if(card.dataset.busy==='1'||(Date.now()-(Number(card.dataset.lastRerollAt)||0))<900)return;card.dataset.lastRerollAt=Date.now();status('正在重新生成状态栏图片……');try{if(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')navigator.vibrate([28,42,28]);}catch{}const manualKey=taskKey+':manual:'+Date.now();const candidate=triggerRegistry.begin(manualKey,{prompt:card._qlPrompt,source:'statusbar-reroll'});if(!candidate.accepted)return;triggerRegistry.markRunning(manualKey);card.dataset.busy='1';try{syncViewfinderSizeToConfig();const c=cfg(),old={width:c.naiWidth,height:c.naiHeight,size:c.size};try{const choice=String(card.dataset.qlTempCombo??'');let generation;if(choice==='viewfinder')generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveActiveGeneration(t));else if(/^\\d+$/.test(choice)&&c.combinations[Number(choice)])generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveCombinationGeneration(t,Number(choice),c));else generation=resolveChatImageGeneration(card._qlPrompt,getContext());const dims=String(card.dataset.qlTempSize||'').split('x').map(Number);if(dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0)){if(c.provider==='novelai'||c.provider==='novelai-thirdparty'){c.naiWidth=dims[0];c.naiHeight=dims[1];}else c.size=card.dataset.qlTempSize;}const fresh=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null);card._qlAddCandidate(fresh);storeChatRecord(fresh,card._qlPrompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame)},generation);card._qlRender?.();}finally{c.naiWidth=old.width;c.naiHeight=old.height;c.size=old.size;save();}triggerRegistry.markSucceeded(manualKey,manualKey+':candidate:'+Date.now());}catch(e){triggerRegistry.markFailed(manualKey,e?.message||String(e));qlAlert('拾帧生成失败：'+(e?.message||String(e)));}finally{card.dataset.busy='0';}};
   img.style.touchAction='manipulation';
   // 手机浏览器的 pointerup 与 touchend 可能在同一次点击中都触发，混用会把单击误判成双击。
   // 触屏只使用 touchend；鼠标/触控笔使用 dblclick。监听放在覆盖层 card 上，避免图片元素被酒馆重绘替换后失效。
