@@ -1811,6 +1811,14 @@ async function runInlineImageTrigger(button,entry){
   qlAlert('拾帧生成失败：'+(error?.message||String(error)));
  }finally{if(button.isConnected)button.dataset.qlBusy='0';}
 }
+// 刷新页面时消息 DOM 往往比 chatId 更早就绪：此时按 chatId 去匹配已保存的图片会全部落空，已出的图就被显示成按钮。
+// chatId 还没就绪就稍后再扫一次（最多 10 次），等它就绪后图片会自动恢复，不必再点小铅笔。
+let qlScanRetryCount=0,qlScanRetryTimer=null;
+function qlScheduleScanRetry(){
+ if(qlScanRetryTimer||qlScanRetryCount>=10)return;
+ qlScanRetryCount++;
+ qlScanRetryTimer=setTimeout(()=>{qlScanRetryTimer=null;processLatestAssistantMessage().catch(e=>console.warn('[拾帧 Lite] 重扫失败',e));},700);
+}
 async function processLatestAssistantMessage(){
   if(cfg().enabled===false)return;
  // 清理旧版本遗留在正文图片下方的失败提示；当前失败统一用弹窗，不在图片卡片内留错。
@@ -1818,6 +1826,7 @@ async function processLatestAssistantMessage(){
  const context=getContext();
  const chat=context?.chat;
  if(!Array.isArray(chat)||!chat.length)return;
+ if(!context?.chatId)qlScheduleScanRetry();else qlScanRetryCount=0;
  // 不只扫描最后一条消息：酒馆可能在扩展加载前已渲染消息，也可能在重绘时延迟更新 DOM。
  for(let messageIndex=0;messageIndex<chat.length;messageIndex++){
   const message=chat[messageIndex];
@@ -1869,7 +1878,7 @@ async function processLatestAssistantMessage(){
      save();
     }
    }
-   const savedRecords=(cfg().records||[]).filter(item=>item&&item.dataUrl&&!item.hiddenInChat&&item.taskKey===entry.taskKey&&Number(item.messageIndex)===messageIndex&&(!item.chatId||item.chatId===(context.chatId||''))&&(item.source||'chat')==='chat'&&recordMatchesStamp(item,stamp)).sort((a,b)=>(Number(a.at)||0)-(Number(b.at)||0));
+   const savedRecords=(cfg().records||[]).filter(item=>item&&item.dataUrl&&!item.hiddenInChat&&(item.taskKey===entry.taskKey||String(item.taskKey||'').startsWith(entry.taskKey+':edited:'))&&Number(item.messageIndex)===messageIndex&&(!item.chatId||item.chatId===(context.chatId||''))&&(item.source||'chat')==='chat'&&recordMatchesStamp(item,stamp)).sort((a,b)=>(Number(a.at)||0)-(Number(b.at)||0));
    // 升级前生成的旧记录没有身份戳：这是第一次在这条消息上看到它们，认领给当前消息，以后同楼层重新生成就不会再串图。
    if(stamp&&savedRecords.some(item=>!item.mesStamp)){for(const item of savedRecords)if(!item.mesStamp)item.mesStamp=stamp;save();}
    if(savedRecords.length){
@@ -2470,6 +2479,19 @@ function qlBindDoubleTap(el,{onDouble,onSingle=null,ignore=null,gap=480,maxMove=
   }
  },{passive:false});
 }
+// ===== 记录稳定标识 =====
+// 记录列表是数组，新图用 unshift 插到最前，所有旧记录的下标都会 +1；而相册、提示词图集、底片页的格子里存的是“渲染当时的下标”。
+// 渲染之后只要有新图生成，再点旧格子就会打开下标错位后的另一条记录（图和提示词对不上的“串位”）。
+// 给每条记录一个稳定的 uid，打开详情时先用渲染时记下的 uid 找回这条记录当前所在的位置。
+function qlUidOf(record){
+ if(record&&typeof record==='object'&&!record.uid)record.uid='r'+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+ return record?.uid||'';
+}
+function qlResolveRecordIndex(uid,fallbackIndex){
+ const list=cfg().records||[];
+ if(uid){const k=list.findIndex(r=>r&&r.uid===uid);if(k>=0)return k;}
+ return fallbackIndex;
+}
 function qlInstallRoster(){
  const run=()=>{try{return qlRosterText();}catch(e){console.warn('[拾帧] 生成角色名单失败',e);return '';}};
  // 方式一：注册酒馆宏（新旧版本接口不同，逐个尝试）。
@@ -2678,6 +2700,7 @@ function status(t){$('#ql-status').textContent=t;}
 function history(){
  const host=$('#ql-history');if(!host)return;
  const s=cfg(),records=s.records||[],cols=Math.max(1,Math.min(5,Number(s.historyColumns)||3));
+ const uidSnap=records.map(qlUidOf);
  const settings=$('#ql-history-columns');
  if(settings){settings.value=String(cols);settings.onchange=()=>{s.historyColumns=Math.max(1,Math.min(5,Number(settings.value)||3));save();history();};}
  host.style.setProperty('--ql-history-columns',String(cols));
@@ -2694,6 +2717,7 @@ function history(){
  const renderAlbums=()=>{
   if(!albums)return;
   const settings=cfg();if(!settings.albumNames||typeof settings.albumNames!=='object'||Array.isArray(settings.albumNames))settings.albumNames={};
+  const uidSnap=(settings.records||[]).map(qlUidOf);
   const favorites=(settings.records||[]).map((record,index)=>({...record,_cacheIndex:index})).filter(record=>record.albumCharacterName&&record.dataUrl&&record.collection!=='prompt-gallery'&&record.collection!=='cache');
   const groups=new Map();
   for(const record of favorites){const key=String(record.albumCharacterKey||record.albumCharacterName||'current');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(record);}
@@ -2760,7 +2784,7 @@ function history(){
    albums.querySelectorAll('[data-album-step]').forEach(button=>button.addEventListener('click',()=>{pageIndex=Math.max(0,Math.min(items.length-1,pageIndex+Number(button.dataset.albumStep)));paintFlip();}));
    let spreadPage=0;const spreadGrid=albums.querySelector('.ql-album-spread-grid'),spreadNumber=albums.querySelector('[data-spread-page-number]');
    const paintSpread=()=>{if(!spreadGrid)return;const totalPages=Math.max(1,Math.ceil(items.length/6));spreadPage=Math.max(0,Math.min(totalPages-1,spreadPage));spreadGrid.innerHTML=items.slice(spreadPage*6,spreadPage*6+6).map(record=>imageTile(record,record._cacheIndex)).join('');if(spreadNumber)spreadNumber.textContent=String(spreadPage+1)+'/'+String(totalPages);const prev=albums.querySelector('[data-spread-step="-1"]'),next=albums.querySelector('[data-spread-step="1"]');if(prev)prev.disabled=spreadPage===0;if(next)next.disabled=spreadPage>=totalPages-1;};
-   const handlePhotoClick=event=>{const photo=event.target?.closest?.('[data-album-photo]');if(!photo)return;if(albums.dataset.albumMoveMode==='select'){event.preventDefault();event.stopPropagation();const index=Number(photo.dataset.albumPhoto),chosen=selectedPhotos();setSelectedPhotos(chosen.includes(index)?chosen.filter(value=>value!==index):[...chosen,index]);photo.closest('.ql-album-photo')?.classList.toggle('is-selected',selectedPhotos().includes(index));const hint=albums.querySelector('.ql-album-toolbar')?.nextElementSibling;if(hint?.matches('.ql-muted'))hint.textContent='已选择 '+selectedPhotos().length+' 张照片，点击照片进行多选；再次点击「完成选择并移动」选择目标相册。';return;}openDetail(Number(photo.dataset.albumPhoto),null,'roleAlbum');};
+   const handlePhotoClick=event=>{const photo=event.target?.closest?.('[data-album-photo]');if(!photo)return;if(albums.dataset.albumMoveMode==='select'){event.preventDefault();event.stopPropagation();const index=Number(photo.dataset.albumPhoto),chosen=selectedPhotos();setSelectedPhotos(chosen.includes(index)?chosen.filter(value=>value!==index):[...chosen,index]);photo.closest('.ql-album-photo')?.classList.toggle('is-selected',selectedPhotos().includes(index));const hint=albums.querySelector('.ql-album-toolbar')?.nextElementSibling;if(hint?.matches('.ql-muted'))hint.textContent='已选择 '+selectedPhotos().length+' 张照片，点击照片进行多选；再次点击「完成选择并移动」选择目标相册。';return;}{const idx=Number(photo.dataset.albumPhoto);openDetail(qlResolveRecordIndex(uidSnap[idx],idx),null,'roleAlbum');}};
    // renderAlbums 每次重绘都会走到这里：不先摘掉上一次的监听，监听会越叠越多，偶数个监听让“选中”被反复切回去（表现为选择多张照片始终是 0 张）。
    if(albums._qlPhotoClick)albums.removeEventListener('click',albums._qlPhotoClick);
    albums._qlPhotoClick=handlePhotoClick;albums.addEventListener('click',handlePhotoClick);
@@ -2992,7 +3016,7 @@ function history(){
  };
  host.openDetail=openDetail;
  const modeButton=footer?.querySelector('#ql-cache-select-mode');let selectionMode=false;const setSelectionMode=enabled=>{selectionMode=enabled;if(modeButton){modeButton.textContent=enabled?'完成选择':'多选';modeButton.setAttribute('aria-pressed',String(enabled));}const allLabel=footer?.querySelector('.ql-cache-select-all'),count=footer?.querySelector('[data-ql-selected-count]'),bulkDelete=footer?.querySelector('[data-ql-bulk-delete]'),bulkDownload=footer?.querySelector('[data-ql-bulk-download]');if(allLabel)allLabel.hidden=!enabled;if(count)count.hidden=!enabled;if(bulkDelete)bulkDelete.hidden=!enabled;if(bulkDownload)bulkDownload.hidden=!enabled;host.classList.toggle('ql-cache-selection-mode',enabled);if(!enabled){host.querySelectorAll('.ql-cache-tile.is-selected').forEach(tile=>tile.classList.remove('is-selected'));host.querySelectorAll('[data-ql-select]').forEach(input=>input.checked=false);}updateSelection();};if(modeButton)modeButton.onclick=()=>setSelectionMode(!selectionMode);
- host.querySelectorAll('[data-ql-detail]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();const i=Number(b.dataset.qlDetail);if(selectionMode&&b.classList.contains('ql-cache-image')){const tile=b.closest('.ql-cache-tile');const input=tile?.querySelector('[data-ql-select]');if(input)input.checked=!input.checked;else{const hidden=document.createElement('input');hidden.type='checkbox';hidden.dataset.qlSelect=String(i);hidden.checked=true;hidden.hidden=true;tile?.append(hidden);}tile?.classList.toggle('is-selected',!!tile?.querySelector('[data-ql-select]')?.checked);updateSelection();return;}openDetail(i);});
+ host.querySelectorAll('[data-ql-detail]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();const i=Number(b.dataset.qlDetail);if(selectionMode&&b.classList.contains('ql-cache-image')){const tile=b.closest('.ql-cache-tile');const input=tile?.querySelector('[data-ql-select]');if(input)input.checked=!input.checked;else{const hidden=document.createElement('input');hidden.type='checkbox';hidden.dataset.qlSelect=String(i);hidden.checked=true;hidden.hidden=true;tile?.append(hidden);}tile?.classList.toggle('is-selected',!!tile?.querySelector('[data-ql-select]')?.checked);updateSelection();return;}openDetail(qlResolveRecordIndex(uidSnap[i],i));});
  host.querySelectorAll('[data-ql-download]').forEach(b=>b.onclick=async e=>{e.preventDefault();e.stopPropagation();const button=e.currentTarget;if(button.dataset.busy==='1')return;button.dataset.busy='1';try{const r=records[Number(button.dataset.qlDownload)];if(!r)throw new Error('找不到这条缓存记录。');const result=await saveCleanImage(r.dataUrl,'shizhen-'+(r.at||Date.now()));status((result?.edgeFallback?'已打开下载面板，请点击面板中的“保存图片”。':result?.downloadStarted?'已发起图片下载；请在浏览器下载列表或系统下载目录查看。':'已发起图片下载。')+(lastPngCleanReport?' '+lastPngCleanReport:''));}catch(e){status(e.message||String(e));}finally{delete button.dataset.busy;}});
  host.querySelectorAll('[data-ql-delete]').forEach(b=>b.onclick=async e=>{e.preventDefault();e.stopPropagation();const i=Number(b.dataset.qlDelete);if(!await qlConfirm('删除这条拾帧图片缓存？不会删除聊天消息中的图片。'))return;s.records.splice(i,1);save();history();status('图片缓存已删除。');});
  const updateSelection=()=>{const tiles=[...host.querySelectorAll('.ql-cache-tile')],selected=tiles.filter(tile=>tile.classList.contains('is-selected')||tile.querySelector('[data-ql-select]')?.checked);const count=footer?.querySelector('[data-ql-selected-count]'),bulkDelete=footer?.querySelector('[data-ql-bulk-delete]'),bulkDownload=footer?.querySelector('[data-ql-bulk-download]'),all=footer?.querySelector('[data-ql-select-all]');if(count)count.textContent='已选 '+selected.length+' 张';if(bulkDelete)bulkDelete.disabled=!selected.length;if(bulkDownload)bulkDownload.disabled=!selected.length;if(all){all.disabled=!tiles.length;all.checked=tiles.length>0&&selected.length===tiles.length;all.indeterminate=selected.length>0&&selected.length<tiles.length;}};
@@ -3248,6 +3272,7 @@ function renderLibrary(){
   const normalizePrompt=value=>String(value||'').trim().replace(/[\s,，、/／|;；·]+/gu,' ').toLowerCase();
   const targetPrompt=normalizePrompt(promptEntry.promptEn||promptEntry.prompt||'');
   const galleryId=String(promptEntry.id||('prompt-index-'+promptIndex));
+  (settings.records||[]).forEach(qlUidOf);
   let items=(settings.records||[]).map((record,cacheIndex)=>({...record,_cacheIndex:cacheIndex})).filter(record=>recordBelongsToPromptGallery(record,promptEntry,settings));
   root.dataset.activePromptGalleryId=galleryId;
   root.dataset.activePromptGalleryIndex=String(promptIndex);
@@ -3259,6 +3284,7 @@ function renderLibrary(){
    let pageCount=Math.max(1,Math.ceil(items.length/pageSize));
    const renderPromptGalleryPage=page=>{
     const currentRecords=cfg().records||[];
+    currentRecords.forEach(qlUidOf);
     items=currentRecords.map((record,cacheIndex)=>({...record,_cacheIndex:cacheIndex})).filter(record=>recordBelongsToPromptGallery(record,promptEntry,cfg()));
     pageCount=Math.max(1,Math.ceil(items.length/pageSize));
     const safePage=Math.max(0,Math.min(pageCount-1,Number(page)||0));
@@ -3284,7 +3310,7 @@ function renderLibrary(){
      if(!record?.dataUrl)return;
      history();
      const cacheHost=$('#ql-history');
-     if(cacheHost?.openDetail)cacheHost.openDetail(record._cacheIndex,{promptId:galleryId,onChange:()=>renderPromptGalleryPage(safePage)});
+     if(cacheHost?.openDetail)cacheHost.openDetail(qlResolveRecordIndex(record.uid,record._cacheIndex),{promptId:galleryId,onChange:()=>renderPromptGalleryPage(safePage)});
     }));
    };
    renderPromptGalleryPage(0);
