@@ -1782,7 +1782,7 @@ function storeChatRecord(url,prompt,taskKey,meta={},generationOverride=null){
  const preset=generationOverride?generationOverride.preset:(presetIndex>=0?c.presets[presetIndex]:null);
  const vibe=resolved.vibe;
  const record={
-  id:taskKey+':'+Date.now(),at:Date.now(),prompt:resolved.prompt,basePrompt:prompt,negative:resolved.negative||c.negative||'',
+  id:taskKey+':'+Date.now(),at:Date.now(),prompt:resolved.prompt,naiPromptData:resolved.naiPromptData&&Array.isArray(resolved.naiPromptData.characters)&&resolved.naiPromptData.characters.length?{basePrompt:String(resolved.naiPromptData.basePrompt||''),characters:resolved.naiPromptData.characters.map(x=>({key:x.key,prompt:x.prompt}))}:null,basePrompt:prompt,negative:resolved.negative||c.negative||'',
   provider:c.provider,model:c.provider!=='openai'?c.naiModel:c.model,
   size:c.provider!=='openai'?(c.naiWidth+'x'+c.naiHeight):c.size,
   quality:c.provider==='openai'?c.quality:null,dataUrl:url,characterName:meta.characterName||getContext()?.name2||null,characterKey:meta.characterKey??getContext()?.characterId??null,
@@ -2280,7 +2280,7 @@ async function processStatusbarFrames(){
    const generation=resolveChatImageGeneration(prompt,getContext());const url=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null);
    loading.remove();
    renderStatusbarCard(frame,prompt,url,taskKey);
-   storeChatRecord(url,prompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame)});
+   storeChatRecord(url,prompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame)},generation);
    triggerRegistry.markSucceeded(taskKey,taskKey+':candidate:'+Date.now());
   }catch(e){
    triggerRegistry.markFailed(taskKey,e?.message||String(e));
@@ -3008,7 +3008,8 @@ function history(){
   const themePanel=document.querySelector('#shizhen-panel');
   if(themePanel){const theme=getComputedStyle(themePanel);for(const name of ['--ql-accent','--ql-panel','--ql-card','--ql-text','--ql-border','--ql-muted','--ql-field','--ql-button-bg','--ql-button-hover','--ql-button-active','--ql-button-border','--ql-button-text','--SmartThemeBodyColor','--SmartThemeBorderColor','--SmartThemeBlurTintColor','--SmartThemeEmColor','--SmartThemeQuoteColor','--SmartThemeUnderlineColor']){modal.style.removeProperty(name);const value=theme.getPropertyValue(name).trim();if(value)modal.style.setProperty(name,value);}}
   const createdAt=new Date(r.at||Date.now());
-  const promptSource=String(r.prompt||r.basePrompt||'');
+  const npd=r.naiPromptData&&Array.isArray(r.naiPromptData.characters)&&r.naiPromptData.characters.length?r.naiPromptData:null;
+  const promptSource=npd?'Base Prompt\n'+(npd.basePrompt||'（空）')+'\n\nCharacter Prompts\n'+npd.characters.map((x,i)=>(i+1)+'. '+x.prompt).join('\n'):String(r.prompt||r.basePrompt||'');
   const artistPositive=String(preset?.positive||'').trim();
   // 「画面提示词」= 用户原本写的画面提示词（不含画师串、不含自动注入的角色外貌）；没有保存原文的旧记录才回退到剥离画师串。
   const promptText=String(r.basePrompt||'').trim()||(artistPositive&&promptSource.includes(artistPositive)
