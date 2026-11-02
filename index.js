@@ -2400,6 +2400,45 @@ function qlApplyCustomStyleCss(css){
  const boosted=qlBoostCustomCss(css);
  if(node.textContent!==boosted)node.textContent=boosted;
 }
+// ===== 角色名单占位符 {{拾帧角色列表}} =====
+// 世界书里写 {{拾帧角色列表}}，发给模型前替换成「角色词库」里当前可用的角色名单（当前卡的词条 + 未绑定词条 + 用户外貌），
+// 让模型知道哪些角色要直接写名字（外貌由插件固定注入），名单外的才按原创角色自己写外貌。
+const QL_ROSTER_TOKEN='拾帧角色列表';
+function qlRosterText(context=getContext()){
+ const s=cfg(),cardKey=context?.characterId==null?'':String(context.characterId);
+ const userName=String(context?.name1||'').trim();
+ const lines=[];
+ for(const e of (s.characters||[])){
+  if(!e||typeof e!=='object')continue;
+  const names=String(e.name||'').split('|').map(x=>x.trim()).filter(Boolean);
+  if(!names.length||!String(e.appearance||'').trim())continue;
+  const isUser=e.characterKey==='__user__';
+  const unbound=e.characterKey==null||e.characterKey==='';
+  if(!isUser&&!unbound&&String(e.characterKey)!==cardKey)continue;
+  if(isUser&&userName&&!names.some(n=>n.toLowerCase()===userName.toLowerCase()))names.push(userName);
+  lines.push(names.length>1?names[0]+'（也可写：'+names.slice(1).join(' / ')+'）':names[0]);
+ }
+ return lines.length?lines.join('\n'):'（角色词库里暂时没有可用的角色词条）';
+}
+function qlInstallRoster(){
+ const run=()=>{try{return qlRosterText();}catch(e){console.warn('[拾帧] 生成角色名单失败',e);return '';}};
+ // 方式一：注册酒馆宏（新旧版本接口不同，逐个尝试）。
+ try{const ctx=getContext();if(typeof ctx?.registerMacro==='function')ctx.registerMacro(QL_ROSTER_TOKEN,run);}catch(e){console.warn('[拾帧] registerMacro 失败',e);}
+ import('/scripts/macros.js').then(m=>{try{if(m?.MacrosParser?.registerMacro)m.MacrosParser.registerMacro(QL_ROSTER_TOKEN,run);}catch(e){console.warn('[拾帧] MacrosParser 注册失败',e);}}).catch(()=>{});
+ // 方式二（兜底）：宏没被酒馆展开时，在请求发出前把残留的占位符替换掉。
+ const token='{{'+QL_ROSTER_TOKEN+'}}';
+ const fix=text=>typeof text==='string'&&text.includes(token)?text.split(token).join(run()):text;
+ if(eventSource&&event_types){
+  if(event_types.CHAT_COMPLETION_PROMPT_READY)eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY,data=>{
+   const chat=data?.chat;if(!Array.isArray(chat))return;
+   for(const m of chat){
+    if(typeof m?.content==='string')m.content=fix(m.content);
+    else if(Array.isArray(m?.content))for(const p of m.content)if(p&&typeof p.text==='string')p.text=fix(p.text);
+   }
+  });
+  if(event_types.GENERATE_AFTER_COMBINING_PROMPTS)eventSource.on(event_types.GENERATE_AFTER_COMBINING_PROMPTS,data=>{if(data&&typeof data.prompt==='string')data.prompt=fix(data.prompt);});
+ }
+}
 function qlRenderStyleOptions(){
  const select=$('#ql-ui-style');if(!select)return;
  const current=cfg().uiStyle||'default';
@@ -2572,7 +2611,7 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 <div class="ql-page" data-page-panel="wordbank" role="tabpanel" hidden>
 <nav class="ql-subtabs" role="tablist" aria-label="词库分区"><button type="button" class="ql-subtab active" data-subpage="prompt-library" aria-selected="true">提示词库</button><button type="button" class="ql-subtab" data-subpage="character-library" aria-selected="false">角色词库</button></nav>
 <section class="ql-subpage active" data-subpage-panel="prompt-library"><div class="ql-card"><h3>提示词库</h3><p class="ql-muted">默认以小图网格浏览；点击某条才展开编辑区。</p><div id="ql-prompt-editor" hidden><section class="ql-library-prompt-field"><div class="ql-library-prompt-field-head"><label for="ql-library-prompt-en"><span class="ql-library-field-kicker">IMAGE PROMPT</span><span>画面提示词</span></label><button type="button" id="ql-library-prompt-copy" class="ql-library-copy-icon" aria-label="复制画面提示词" title="复制画面提示词"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><textarea id="ql-library-prompt-en" placeholder="English prompt tags / description"></textarea></section><div class="ql-row"><input id="ql-prompt-name" placeholder="名称"><select id="ql-prompt-category"><option value="单人">单人</option><option value="双人">双人</option><option value="BG">BG</option><option value="BL">BL</option><option value="GL">GL</option><option value="其他">其他</option><option value="自定义">自定义分类…</option></select><input id="ql-prompt-category-custom" placeholder="输入自定义分类" hidden></div><label>自定义 Tag（用逗号、顿号、斜杠、空格或换行分隔）</label><textarea id="ql-library-prompt-zh" placeholder="例如：年上/暧昧，温柔 眼镜"></textarea><div class="ql-image-reference-editor"><label for="ql-library-image-file">预览图片</label><input id="ql-library-image-file" type="file" accept="image/*"><div id="ql-library-image-preview" class="ql-library-image-preview" data-image="" role="button" tabindex="0" aria-label="点击添加预览图片" title="点击此处选择图片"><span class="ql-muted">尚未添加预览图</span></div><button type="button" id="ql-library-image-clear" class="menu_button">移除预览图</button></div><div class="ql-row"><button id="ql-prompt-save" class="menu_button">保存提示词</button><button type="button" id="ql-prompt-cancel" class="menu_button">取消</button></div></div><button type="button" id="ql-prompt-add" class="menu_button ql-primary">＋ 添加提示词</button><div class="ql-row ql-library-tools ql-prompt-toolbar"><select id="ql-prompt-filter" aria-label="筛选提示词分类"><option value="">全部分类</option></select><button type="button" id="ql-library-edit-mode" class="menu_button">编辑模式</button><button type="button" id="ql-prompt-bulk-delete" class="menu_button">批量删除</button></div><p class="ql-muted" id="ql-library-edit-hint">提示词可按分类筛选；Tag 自由填写并自动拆分；应用后生成的图片会收录到对应图集。</p><div id="ql-prompts-list"></div></div></section>
-<section class="ql-subpage" data-subpage-panel="character-library" hidden><div class="ql-card"><h3>角色词条库</h3><p class="ql-muted">选择角色卡管理对应的角色词条，或选择「用户外貌」保存自己的固定外貌词；用户外貌不绑定任何角色卡。</p><label for="ql-name-replace">正文 / 状态栏里的角色名处理（取决于你挂载的世界书是否输出角色名）</label><select id="ql-name-replace"><option value="off">关闭（世界书不输出角色名）</option><option value="inline">替换进主提示词</option><option value="characters">拆成 NAI 多角色提示词（V4 / V4.5 / V5，推荐）</option></select><p class="ql-muted">名字可写 克劳德:1.2、(克劳德:1.2)、1.2::克劳德::、$克劳德$。</p><p class="ql-muted">词条名称可用 | 分隔多个别名，例如「克劳德|Cloud」。优先匹配当前角色卡绑定的词条，其次未绑定角色卡的词条，最后才是其他角色卡的词条。</p><label for="ql-character-card">选择角色卡或用户外貌</label><div class="ql-row"><select id="ql-character-card"><option value="">请选择角色卡</option></select><button type="button" id="ql-character-start" class="menu_button">开始编辑</button></div><div id="ql-character-editor" hidden><label for="ql-character-name">角色名称</label><input id="ql-character-name" placeholder="例如：克劳德|Cloud（| 分隔别名）"><label for="ql-character-appearance">生图词 / 固定外貌词</label><textarea id="ql-character-appearance" placeholder="填写外貌、发色、瞳色、服装等固定生图词"></textarea><div class="ql-row"><button id="ql-character-save" class="menu_button">保存角色词条</button><button type="button" id="ql-character-cancel" class="menu_button">取消</button></div></div><p class="ql-muted" id="ql-character-status" role="status"></p><div class="ql-row ql-library-tools"><button type="button" id="ql-character-export" class="menu_button">导出所选</button><button type="button" id="ql-character-bulk-delete" class="menu_button">批量删除</button></div><div id="ql-characters-list"></div></div></section>
+<section class="ql-subpage" data-subpage-panel="character-library" hidden><div class="ql-card"><h3>角色词条库</h3><p class="ql-muted">选择角色卡管理对应的角色词条，或选择「用户外貌」保存自己的固定外貌词；用户外貌不绑定任何角色卡。</p><label for="ql-name-replace">正文 / 状态栏里的角色名处理（取决于你挂载的世界书是否输出角色名）</label><select id="ql-name-replace"><option value="off">关闭（世界书不输出角色名）</option><option value="inline">替换进主提示词</option><option value="characters">拆成 NAI 多角色提示词（V4 / V4.5 / V5，推荐）</option></select><p class="ql-muted">名字可写 克劳德:1.2、(克劳德:1.2)、1.2::克劳德::、$克劳德$。；也可以写成括号组 (克劳德:1.2, 表情, 服装, source#动作)，括号里的其他词会跟着这个角色走。</p><p class="ql-muted">世界书里写 {{拾帧角色列表}}，发送给模型前会自动换成这里的角色名单（当前角色卡的词条、未绑定词条、用户外貌），让模型直接写名字、不再自己编外貌。</p><p class="ql-muted">词条名称可用 | 分隔多个别名，例如「克劳德|Cloud」。优先匹配当前角色卡绑定的词条，其次未绑定角色卡的词条，最后才是其他角色卡的词条。</p><label for="ql-character-card">选择角色卡或用户外貌</label><div class="ql-row"><select id="ql-character-card"><option value="">请选择角色卡</option></select><button type="button" id="ql-character-start" class="menu_button">开始编辑</button></div><div id="ql-character-editor" hidden><label for="ql-character-name">角色名称</label><input id="ql-character-name" placeholder="例如：克劳德|Cloud（| 分隔别名）"><label for="ql-character-appearance">生图词 / 固定外貌词</label><textarea id="ql-character-appearance" placeholder="填写外貌、发色、瞳色、服装等固定生图词"></textarea><div class="ql-row"><button id="ql-character-save" class="menu_button">保存角色词条</button><button type="button" id="ql-character-cancel" class="menu_button">取消</button></div></div><p class="ql-muted" id="ql-character-status" role="status"></p><div class="ql-row ql-library-tools"><button type="button" id="ql-character-export" class="menu_button">导出所选</button><button type="button" id="ql-character-bulk-delete" class="menu_button">批量删除</button></div><div id="ql-characters-list"></div></div></section>
 </div>
 <div class="ql-page" data-page-panel="history" role="tabpanel" hidden><div class="ql-card"><h3>影像缓存</h3><p class="ql-muted">这里保存生成过的影像记录；点击缩略图可查看提示词、参考图与生成参数。</p><label for="ql-history-columns">每行影像数量</label><select id="ql-history-columns"><option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option><option value="5">5 张</option></select><div id="ql-history"></div></div><div id="ql-cache-footer" class="ql-cache-bulk-tools"><button type="button" class="menu_button" id="ql-cache-select-mode" aria-pressed="false">多选</button><label class="ql-cache-select-all" hidden><input type="checkbox" data-ql-select-all disabled> 全选</label><span class="ql-cache-selected-count" data-ql-selected-count hidden>已选 0 张</span><button type="button" class="menu_button" data-ql-bulk-download disabled hidden>逐张下载</button><button type="button" class="menu_button" data-ql-bulk-delete disabled hidden>删除所选</button><button type="button" class="menu_button" id="ql-clear">清空影像缓存</button></div></div>
 <div class="ql-page" data-page-panel="albums" role="tabpanel" hidden><div class="ql-card ql-album-library-card"><div id="ql-character-albums"></div></div></div>
@@ -3836,6 +3875,7 @@ jQuery(()=>{
   if(relevant)scheduleInlineScan();
  });
  chatObserver.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
+ try{qlInstallRoster();}catch(e){console.warn('[拾帧] 名单占位符安装失败',e);}
  if(!eventSource||!event_types)return;
  let scanTimer=null;
  const scheduleScan=()=>{if(cfg().enabled===false)return;if(scanTimer)clearTimeout(scanTimer);scanTimer=setTimeout(()=>{
