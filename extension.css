@@ -5575,3 +5575,6 @@ a.ql-prompt-source-badge:hover{text-decoration:underline}
 .ql-gw-kind .ql-row select{flex:1;min-width:0}
 .ql-gw-editor{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 .ql-gw-editor input{width:100%;box-sizing:border-box}
+.ql-gw-status{margin:6px 0 8px;padding:6px 10px;border-radius:10px;font-size:12px;line-height:1.7;border:1px solid color-mix(in srgb,var(--ql-accent,#c9a) 30%,transparent)}
+.ql-gw-status.is-on{background:color-mix(in srgb,var(--ql-accent,#c9a) 14%,transparent)}
+.ql-gw-status.is-off{opacity:.75}

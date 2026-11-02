@@ -613,6 +613,14 @@ function qlPickedWords(kind,cardKey){
  if(!id||id==='none')return '';
  const set=g.sets.find(x=>x&&x.id===id&&x.gender===kind);return set?String(set.text||'').trim():'';
 }
+function qlGenericStatusHtml(card){
+ const g=qlGenericCfg();
+ if(!g.on)return '<div class="ql-gw-status is-off">● 当前：<b>未启用</b>（上面的开关没打开，不会注入任何通用词）</div>';
+ const pick=g.pick||{},sets=Array.isArray(g.sets)?g.sets:[];
+ const nameOf=k=>{let id=pick[String(card??'')]?.[k];if(id==null||id==='')id=pick['*']?.[k];if(!id||id==='none')return '不使用';const x=sets.find(v=>v&&v.id===id&&v.gender===k);return x?esc(x.name||'未命名'):'不使用';};
+ const warn=qlNameReplaceMode(cfg())==='off'?'<br>⚠ 「角色名处理」现在是关闭的，男 / 女词不会注入，只有「通用词（所有画面）」会生效。':'';
+ return '<div class="ql-gw-status is-on">● 当前：<b>已启用</b>（'+(g.position==='front'?'放最前':'放最后')+'）<br>女：'+nameOf('female')+' ｜ 男：'+nameOf('male')+' ｜ 所有画面：'+nameOf('any')+warn+'<br><span class="ql-muted">验证：重新生成一张图，打开详情页看「最终提交给 NAI 的完整提示词」，末尾应有你选的词。</span></div>';
+}
 function qlWithGenderWords(body,gender,cardKey){
  if(gender!=='female'&&gender!=='male')return body;
  const text=qlPickedWords(gender,cardKey);if(!text)return body;
@@ -631,7 +639,7 @@ function qlBindGenericWordsUi(){
  const curCardName=()=>{const c=getContext();return String(c?.name2||'当前角色卡');};
  const paint=()=>{
   const o=g(),card=curCard(),scope=$q('ql-gw-scope')?.value==='card'&&card!==''?card:'*';
-  box.innerHTML='<label class="ql-check"><input type="checkbox" id="ql-gw-on" '+(o.on?'checked':'')+'> 启用通用词注入（默认关闭）</label>'
+  box.innerHTML=qlGenericStatusHtml(card)+'<label class="ql-check"><input type="checkbox" id="ql-gw-on" '+(o.on?'checked':'')+'> 启用通用词注入（默认关闭）</label>'
   +'<div class="ql-row"><label for="ql-gw-pos">位置</label><select id="ql-gw-pos"><option value="back">放在最后</option><option value="front">放在最前</option></select></div>'
   +'<div class="ql-row"><label for="ql-gw-scope">选择生效范围</label><select id="ql-gw-scope"><option value="all">全局默认</option>'+(card!==''?'<option value="card"'+(scope!=='*'?' selected':'')+'>仅「'+esc(curCardName())+'」</option>':'')+'</select></div>'
   +KINDS.map(([k,label])=>{
@@ -644,8 +652,8 @@ function qlBindGenericWordsUi(){
      +(e?'<div class="ql-gw-editor"><input data-gw-name="'+k+'" placeholder="词组名称，例如：通用女 / 精致画风" value="'+esc(es?.name||'')+'"><textarea data-gw-text="'+k+'" placeholder="例如：slim waist, best quality">'+esc(es?.text||'')+'</textarea><div class="ql-row"><button type="button" class="menu_button ql-primary" data-gw-save="'+k+'">保存</button>'+(es?'<button type="button" class="menu_button" data-gw-del="'+k+'">删除</button>':'')+'<button type="button" class="menu_button" data-gw-cancel="'+k+'">取消</button></div></div>':'')
      +'</div>';}).join('');
   $q('ql-gw-pos').value=o.position==='front'?'front':'back';
-  $q('ql-gw-on').onchange=()=>{g().on=$q('ql-gw-on').checked;save();};
-  $q('ql-gw-pos').onchange=()=>{g().position=$q('ql-gw-pos').value==='front'?'front':'back';save();};
+  $q('ql-gw-on').onchange=()=>{g().on=$q('ql-gw-on').checked;save();paint();};
+  $q('ql-gw-pos').onchange=()=>{g().position=$q('ql-gw-pos').value==='front'?'front':'back';save();paint();};
   $q('ql-gw-scope').onchange=paint;
   box.querySelectorAll('[data-gw-pick]').forEach(sel=>sel.onchange=()=>{const o=g(),k=sel.dataset.gwPick;if(!o.pick[scope])o.pick[scope]={};if(sel.value==='')delete o.pick[scope][k];else o.pick[scope][k]=sel.value;save();paint();});
   box.querySelectorAll('[data-gw-new]').forEach(b=>b.onclick=()=>{editing[b.dataset.gwNew]='new';paint();});
@@ -698,13 +706,25 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
   if(used.has(hit.e))continue;
   used.add(hit.e);
   const text=String(hit.e.appearance).trim().replace(/[,，\s]+$/,'');
-  const body=qlWithGenderWords([wrap(text,weight),...extras].filter(Boolean).join(', '),qlDetectGender(hit.e),cardKey);
-  inline.push(body);characters.push({key:String(hit.e.name).split('|')[0].trim(),prompt:body});
+  const body=[wrap(text,weight),...extras].filter(Boolean).join(', ');
+  const gender=qlDetectGender(hit.e);
+  characters.push({key:String(hit.e.name).split('|')[0].trim(),prompt:body,gender,slot:inline.length});inline.push(body);
  }
  const missingUnique=[...new Set(missing)];
  if(missingUnique.length&&!opts.silent)qlWarnMissingNames(missingUnique);
  if(!used.size)return {...none,missing:missingUnique};
- return {text:inline.join(', '),rest:rest.join(', '),characters,missing:missingUnique};
+ // 通用词：画面里的人全是同一性别 → 只在公共区写一遍；男女混合（或认不出性别）→ 各自写进自己的角色提示词。
+ const restText=rest.join(', ');
+ const kinds=new Set(characters.map(c=>c.gender).filter(Boolean));
+ if(/\b(?:[1-9]girls?|girls?|females?|wom[ae]n)\b/i.test(restText))kinds.add('female');
+ if(/\b(?:[1-9]boys?|boys?|males?|m[ae]n)\b/i.test(restText))kinds.add('male');
+ let common='';
+ if(kinds.size===1){common=qlPickedWords([...kinds][0],cardKey);}
+ else if(kinds.size>1){
+  for(const c of characters){c.prompt=qlWithGenderWords(c.prompt,c.gender,cardKey);inline[c.slot]=c.prompt;}
+  return {text:inline.join(', '),rest:restText,characters,missing:missingUnique,common:''};
+ }
+ return {text:inline.join(', '),rest:restText,characters,missing:missingUnique,common};
 }
 function resolveChatImageGeneration(prompt, context=getContext()){
  const s=cfg(),characterId=context?.characterId==null?'':String(context.characterId);
@@ -719,10 +739,12 @@ function resolveChatImageGeneration(prompt, context=getContext()){
 // 拆成 NAI 多角色时：主提示词只保留未被替换的 tag（含画师串），每个角色的外貌词单独作为角色提示词。
 function qlResolveWithNames(prompt,context,resolveFn){
  const nr=qlReplaceCharacterNames(prompt,context);
- const base=resolveFn(qlWithAnyWords(nr.text,context?.characterId==null?'':String(context.characterId)));
+ const cardK=context?.characterId==null?'':String(context.characterId);
+ const withCommon=t=>qlMergeWords(qlWithAnyWords(t,cardK),nr.common||'',qlGenericCfg().position==='front'?'front':'back');
+ const base=resolveFn(withCommon(nr.text));
  let naiPromptData=null;
  if(nr.characters.length&&qlNameReplaceMode(cfg())==='characters'){
-  const split=resolveFn(qlWithAnyWords(nr.rest,context?.characterId==null?'':String(context.characterId)));
+  const split=resolveFn(withCommon(nr.rest));
   naiPromptData={basePrompt:split.prompt,characters:nr.characters};
  }
  return {...base,naiPromptData};
@@ -2761,7 +2783,7 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 <div class="ql-page" data-page-panel="wordbank" role="tabpanel" hidden>
 <nav class="ql-subtabs" role="tablist" aria-label="词库分区"><button type="button" class="ql-subtab active" data-subpage="prompt-library" aria-selected="true">提示词库</button><button type="button" class="ql-subtab" data-subpage="character-library" aria-selected="false">角色词库</button></nav>
 <section class="ql-subpage active" data-subpage-panel="prompt-library"><div class="ql-card"><h3>提示词库</h3><p class="ql-muted">默认以小图网格浏览；点击某条才展开编辑区。</p><div id="ql-prompt-editor" hidden><section class="ql-library-prompt-field"><div class="ql-library-prompt-field-head"><label for="ql-library-prompt-en"><span class="ql-library-field-kicker">IMAGE PROMPT</span><span>画面提示词</span></label><button type="button" id="ql-library-prompt-copy" class="ql-library-copy-icon" aria-label="复制画面提示词" title="复制画面提示词"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><textarea id="ql-library-prompt-en" placeholder="English prompt tags / description"></textarea></section><div class="ql-row"><input id="ql-prompt-name" placeholder="名称"><select id="ql-prompt-category"><option value="单人">单人</option><option value="双人">双人</option><option value="BG">BG</option><option value="BL">BL</option><option value="GL">GL</option><option value="其他">其他</option><option value="自定义">自定义分类…</option></select><input id="ql-prompt-category-custom" placeholder="输入自定义分类" hidden></div><label>自定义 Tag（用逗号、顿号、斜杠、空格或换行分隔）</label><textarea id="ql-library-prompt-zh" placeholder="例如：年上/暧昧，温柔 眼镜"></textarea><div class="ql-row ql-prompt-source-row"><label for="ql-prompt-source">来源</label><select id="ql-prompt-source"><option value="original">原创</option><option value="other">他人的</option></select></div><textarea id="ql-prompt-source-note" class="ql-prompt-source-note" placeholder="原帖链接，或作者/出处说明（方便以后找回原作者）" hidden></textarea><div class="ql-image-reference-editor"><label for="ql-library-image-file">预览图片</label><input id="ql-library-image-file" type="file" accept="image/*"><div id="ql-library-image-preview" class="ql-library-image-preview" data-image="" role="button" tabindex="0" aria-label="点击添加预览图片" title="点击此处选择图片"><span class="ql-muted">尚未添加预览图</span></div><button type="button" id="ql-library-image-clear" class="menu_button">移除预览图</button></div><div class="ql-row"><button id="ql-prompt-save" class="menu_button">保存提示词</button><button type="button" id="ql-prompt-cancel" class="menu_button">取消</button></div></div><button type="button" id="ql-prompt-add" class="menu_button ql-primary">＋ 添加提示词</button><div class="ql-row ql-library-tools ql-prompt-toolbar"><select id="ql-prompt-filter" aria-label="筛选提示词分类"><option value="">全部分类</option></select><button type="button" id="ql-library-edit-mode" class="menu_button">编辑模式</button><button type="button" id="ql-prompt-bulk-delete" class="menu_button">批量删除</button></div><p class="ql-muted" id="ql-library-edit-hint">提示词可按分类筛选；Tag 自由填写并自动拆分；应用后生成的图片会收录到对应图集。</p><div id="ql-prompts-list"></div></div></section>
-<section class="ql-subpage" data-subpage-panel="character-library" hidden><div class="ql-card"><h3>角色词条库</h3><p class="ql-muted">选择角色卡管理对应的角色词条，或选择「用户外貌」保存自己的固定外貌词；用户外貌不绑定任何角色卡。</p><label for="ql-name-replace">正文 / 状态栏里的角色名处理（取决于你挂载的世界书是否输出角色名）</label><select id="ql-name-replace"><option value="off">关闭（世界书不输出角色名）</option><option value="inline">替换进主提示词</option><option value="characters">拆成 NAI 多角色提示词（V4 / V4.5 / V5，推荐）</option></select><label for="ql-missing-name-action">找不到角色名时</label><select id="ql-missing-name-action"><option value="ask">先弹窗询问（可去添加外貌）</option><option value="go">只提示，仍然生成</option></select><p class="ql-muted">名字可写 克劳德:1.2、(克劳德:1.2)、1.2::克劳德::、$克劳德$。；也可以写成括号组 (克劳德:1.2, 表情, 服装, source#动作)，括号里的其他词会跟着这个角色走。</p><p class="ql-muted">世界书里写 {{拾帧角色列表}}，发送给模型前会自动换成这里的角色名单（当前角色卡的词条、未绑定词条、用户外貌），让模型直接写名字、不再自己编外貌。</p><p class="ql-muted">词条名称可用 | 分隔多个别名，例如「克劳德|Cloud」。优先匹配当前角色卡绑定的词条，其次未绑定角色卡的词条，最后才是其他角色卡的词条。</p><div class="ql-generic-words"><h4>通用词自动注入</h4><p class="ql-muted">默认关闭。发图前由插件自动识别角色性别（看词条里选的性别，没选就看外貌词里的 1girl / 1boy 等），再把你选好的男 / 女通用词拼进该角色自己的提示词；不同角色卡可以各选各的词组。外貌词里已有的同名 tag 不会重复添加。</p><div id="ql-gw-box"></div></div><label for="ql-character-card">选择角色卡或用户外貌</label><div class="ql-row"><select id="ql-character-card"><option value="">请选择角色卡</option></select><button type="button" id="ql-character-start" class="menu_button">开始编辑</button></div><div id="ql-character-editor" hidden><label for="ql-character-name">角色名称</label><input id="ql-character-name" placeholder="例如：克劳德|Cloud（| 分隔别名）"><label for="ql-character-gender">性别（用于自动注入男 / 女通用词）</label><select id="ql-character-gender"><option value="">自动识别（看外貌词里的 1girl / 1boy）</option><option value="female">女</option><option value="male">男</option></select><label for="ql-character-appearance">生图词 / 固定外貌词</label><textarea id="ql-character-appearance" placeholder="填写外貌、发色、瞳色、服装等固定生图词"></textarea><div class="ql-row"><button id="ql-character-save" class="menu_button">保存角色词条</button><button type="button" id="ql-character-cancel" class="menu_button">取消</button></div></div><p class="ql-muted" id="ql-character-status" role="status"></p><div class="ql-row ql-library-tools"><button type="button" id="ql-character-export" class="menu_button">导出所选</button><button type="button" id="ql-character-bulk-delete" class="menu_button">批量删除</button></div><div id="ql-characters-list"></div></div></section>
+<section class="ql-subpage" data-subpage-panel="character-library" hidden><div class="ql-card"><h3>角色词条库</h3><p class="ql-muted">选择角色卡管理对应的角色词条，或选择「用户外貌」保存自己的固定外貌词；用户外貌不绑定任何角色卡。</p><label for="ql-name-replace">正文 / 状态栏里的角色名处理（取决于你挂载的世界书是否输出角色名）</label><select id="ql-name-replace"><option value="off">关闭（世界书不输出角色名）</option><option value="inline">替换进主提示词</option><option value="characters">拆成 NAI 多角色提示词（V4 / V4.5 / V5，推荐）</option></select><label for="ql-missing-name-action">找不到角色名时</label><select id="ql-missing-name-action"><option value="ask">先弹窗询问（可去添加外貌）</option><option value="go">只提示，仍然生成</option></select><p class="ql-muted">名字可写 克劳德:1.2、(克劳德:1.2)、1.2::克劳德::、$克劳德$。；也可以写成括号组 (克劳德:1.2, 表情, 服装, source#动作)，括号里的其他词会跟着这个角色走。</p><p class="ql-muted">世界书里写 {{拾帧角色列表}}，发送给模型前会自动换成这里的角色名单（当前角色卡的词条、未绑定词条、用户外貌），让模型直接写名字、不再自己编外貌。</p><p class="ql-muted">词条名称可用 | 分隔多个别名，例如「克劳德|Cloud」。优先匹配当前角色卡绑定的词条，其次未绑定角色卡的词条，最后才是其他角色卡的词条。</p><div class="ql-generic-words"><h4>通用词自动注入</h4><p class="ql-muted">默认关闭。发图前由插件自动识别每个角色的性别（看词条里选的性别，没选就看外貌词里的 1girl / 1boy 等）。画面里全是男 → 只把你选好的男通用词在公共区写一遍；全是女同理；男女混合时，才分别写进各自角色的提示词。这样男通用词里放体型 / 骨相，角色词条里就只需要留发型发色和特殊标志。不同角色卡可以各选各的词组，已有的同名 tag 不会重复。</p><div id="ql-gw-box"></div></div><label for="ql-character-card">选择角色卡或用户外貌</label><div class="ql-row"><select id="ql-character-card"><option value="">请选择角色卡</option></select><button type="button" id="ql-character-start" class="menu_button">开始编辑</button></div><div id="ql-character-editor" hidden><label for="ql-character-name">角色名称</label><input id="ql-character-name" placeholder="例如：克劳德|Cloud（| 分隔别名）"><label for="ql-character-gender">性别（用于自动注入男 / 女通用词）</label><select id="ql-character-gender"><option value="">自动识别（看外貌词里的 1girl / 1boy）</option><option value="female">女</option><option value="male">男</option></select><label for="ql-character-appearance">生图词 / 固定外貌词</label><textarea id="ql-character-appearance" placeholder="填写外貌、发色、瞳色、服装等固定生图词"></textarea><div class="ql-row"><button id="ql-character-save" class="menu_button">保存角色词条</button><button type="button" id="ql-character-cancel" class="menu_button">取消</button></div></div><p class="ql-muted" id="ql-character-status" role="status"></p><div class="ql-row ql-library-tools"><button type="button" id="ql-character-export" class="menu_button">导出所选</button><button type="button" id="ql-character-bulk-delete" class="menu_button">批量删除</button></div><div id="ql-characters-list"></div></div></section>
 </div>
 <div class="ql-page" data-page-panel="history" role="tabpanel" hidden><div class="ql-card"><h3>影像缓存</h3><p class="ql-muted">这里保存生成过的影像记录；点击缩略图可查看提示词、参考图与生成参数。</p><label for="ql-history-columns">每行影像数量</label><select id="ql-history-columns"><option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option><option value="5">5 张</option></select><div id="ql-history"></div></div><div id="ql-cache-footer" class="ql-cache-bulk-tools"><button type="button" class="menu_button" id="ql-cache-select-mode" aria-pressed="false">多选</button><label class="ql-cache-select-all" hidden><input type="checkbox" data-ql-select-all disabled> 全选</label><span class="ql-cache-selected-count" data-ql-selected-count hidden>已选 0 张</span><button type="button" class="menu_button" data-ql-bulk-download disabled hidden>逐张下载</button><button type="button" class="menu_button" data-ql-bulk-delete disabled hidden>删除所选</button><button type="button" class="menu_button" id="ql-clear">清空影像缓存</button></div></div>
 <div class="ql-page" data-page-panel="albums" role="tabpanel" hidden><div class="ql-card ql-album-library-card"><div id="ql-character-albums"></div></div></div>
