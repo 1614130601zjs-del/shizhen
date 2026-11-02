@@ -2889,7 +2889,7 @@ function history(){
      const info=targets.find(item=>item.key===target);
      const card=/^\d+$/.test(target)?cards[Number(target)]:null;
      const targetName=info?.name||String(card?.name||settings.albumNames?.[target]||'未命名相册');
-     for(const index of chosen){const record=settings.records[index];if(record){record.albumCharacterKey=target;record.albumCharacterName=targetName;record.collection='character-album';delete record.promptEntryId;delete record.sourcePromptEntryId;delete record.sourcePromptEntryAppliedAt;}}
+     for(const rawIndex of chosen){const record=settings.records[qlResolveRecordIndex(uidSnap[rawIndex],rawIndex)];if(record){record.albumCharacterKey=target;record.albumCharacterName=targetName;record.collection='character-album';delete record.promptEntryId;delete record.sourcePromptEntryId;delete record.sourcePromptEntryAppliedAt;}}
      save();close();albums.dataset.albumKey=target;albums.dataset.albumMoveMode='';setSelectedPhotos([]);history();renderAlbums();status('已移动 '+chosen.length+' 张照片到「'+targetName+'」。');
     };
     albums.append(overlay);
@@ -2911,9 +2911,9 @@ function history(){
    // renderAlbums 每次重绘都会走到这里：不先摘掉上一次的监听，监听会越叠越多，偶数个监听让“选中”被反复切回去（表现为选择多张照片始终是 0 张）。
    if(albums._qlPhotoClick)albums.removeEventListener('click',albums._qlPhotoClick);
    albums._qlPhotoClick=handlePhotoClick;albums.addEventListener('click',handlePhotoClick);
-   const handleRemove=event=>{const remove=event.target?.closest?.('[data-ql-unfavorite]');if(!remove)return;event.preventDefault();event.stopPropagation();const record=cfg().records[Number(remove.dataset.qlUnfavorite)];if(record){delete record.albumCharacterName;delete record.albumCharacterKey;delete record.promptEntryId;delete record.sourcePromptEntryId;delete record.sourcePromptEntryAppliedAt;record.collection='cache';save();history();renderAlbums();renderLibrary();status('已取消收藏，照片已回到底片缓存。');}};
+   const handleRemove=event=>{const remove=event.target?.closest?.('[data-ql-unfavorite]');if(!remove)return;event.preventDefault();event.stopPropagation();const unfavIdx=Number(remove.dataset.qlUnfavorite);const record=cfg().records[qlResolveRecordIndex(uidSnap[unfavIdx],unfavIdx)];if(record){delete record.albumCharacterName;delete record.albumCharacterKey;delete record.promptEntryId;delete record.sourcePromptEntryId;delete record.sourcePromptEntryAppliedAt;record.collection='cache';save();history();renderAlbums();renderLibrary();status('已取消收藏，照片已回到底片缓存。');}};
    spreadGrid?.addEventListener('click',handleRemove);
-   const handleRedraw=event=>{const b=event.target?.closest?.('[data-ql-redraw]');if(!b)return;event.preventDefault();event.stopPropagation();qlWsOpenFromRecord(cfg().records[Number(b.dataset.qlRedraw)],{fromAlbum:true});};
+   const handleRedraw=event=>{const b=event.target?.closest?.('[data-ql-redraw]');if(!b)return;event.preventDefault();event.stopPropagation();{const ri=Number(b.dataset.qlRedraw);qlWsOpenFromRecord(cfg().records[qlResolveRecordIndex(uidSnap[ri],ri)],{fromAlbum:true});}};
    spreadGrid?.addEventListener('click',handleRedraw);
    albums.querySelectorAll('[data-spread-step]').forEach(button=>button.addEventListener('click',()=>{spreadPage=Math.max(0,Math.min(Math.max(0,Math.ceil(items.length/6)-1),spreadPage+Number(button.dataset.spreadStep)));paintSpread();}));
    const spreadArea=albums.querySelector('.ql-album-spread-grid');let spreadStartX=0;spreadArea?.addEventListener('touchstart',event=>{spreadStartX=event.changedTouches[0].clientX;},{passive:true});spreadArea?.addEventListener('touchend',event=>{const dx=event.changedTouches[0].clientX-spreadStartX;if(Math.abs(dx)>40){spreadPage=Math.max(0,Math.min(Math.max(0,Math.ceil(items.length/6)-1),spreadPage+(dx<0?1:-1)));paintSpread();}},{passive:true});
