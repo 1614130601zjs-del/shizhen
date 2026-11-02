@@ -1582,13 +1582,7 @@ function addMessageImage(host,url,prompt,taskKey,recordMeta={},anchor=null) {
   img.addEventListener('touchend',e=>{const t=e.changedTouches[0],dx=t.clientX-touchX,dy=t.clientY-touchY;if(Math.abs(dx)>42&&Math.abs(dx)>Math.abs(dy)*1.25)step(dx<0?1:-1);},{passive:true});
   img.addEventListener('contextmenu',e=>{e.preventDefault();saveCleanImage(img.src,'shizhen-'+Date.now());});
   img.addEventListener('dblclick',e=>{e.preventDefault();e.stopPropagation();runChatReroll();});
-  let lastTap=0,tapTimer=null;
-  img.addEventListener('touchend',e=>{
-   const t=e.changedTouches?.[0];if(!t)return;
-   const now=Date.now();
-   if(now-lastTap>0&&now-lastTap<480){e.preventDefault();e.stopPropagation();lastTap=0;if(tapTimer){clearTimeout(tapTimer);tapTimer=null;}reroll.click();}
-   else{lastTap=now;}
-  },{passive:false});
+  qlBindDoubleTap(img,{onDouble:()=>reroll.click()});
   const runChatReroll=async()=>{
    if(cfg().enabled===false){status('拾帧已停用；请先在偏好设置中重新启用插件。');return;}
    // 兼容旧版或中断请求留下的永久 busy 锁；旧锁没有时间戳时立即恢复。
@@ -2040,37 +2034,23 @@ function renderStatusbarCard(frame,prompt,url,taskKey){
   img.style.touchAction='manipulation';
   // 手机浏览器的 pointerup 与 touchend 可能在同一次点击中都触发，混用会把单击误判成双击。
   // 触屏只使用 touchend；鼠标/触控笔使用 dblclick。监听放在覆盖层 card 上，避免图片元素被酒馆重绘替换后失效。
-  let lastTouchTap=0,tapTimer=null,touchStartX=0,touchStartY=0;
+  let touchStartX=0,touchStartY=0;
   card.addEventListener('touchstart',e=>{
    if(e.target?.closest?.('.ql-statusbar-controls')||e.changedTouches?.length!==1)return;
    touchStartX=e.changedTouches[0].clientX;touchStartY=e.changedTouches[0].clientY;
   },{passive:true});
+  // 横向滑动：切换候选图；其余的轻点交给统一的双击识别。
   card.addEventListener('touchend',e=>{
    if(e.target?.closest?.('.ql-statusbar-controls'))return;
    if(e.changedTouches?.length!==1)return;
    const touch=e.changedTouches[0],dx=touch.clientX-touchStartX,dy=touch.clientY-touchStartY;
    if(Math.abs(dx)>42&&Math.abs(dx)>Math.abs(dy)*1.25){
-    lastTouchTap=0;
-    if(tapTimer){clearTimeout(tapTimer);tapTimer=null;}
     const total=card._qlCandidates.length;
     if(total>1)moveCandidate(dx<0?1:-1);
     else showControlsBriefly();
-    return;
    }
-   const now=Date.now();
-   if(lastTouchTap>0&&now-lastTouchTap<450){
-    e.preventDefault();e.stopPropagation();lastTouchTap=0;
-    if(tapTimer){clearTimeout(tapTimer);tapTimer=null;}
-    reroll();
-   }else{
-    lastTouchTap=now;
-    if(tapTimer)clearTimeout(tapTimer);
-    tapTimer=setTimeout(()=>{
-     tapTimer=null;lastTouchTap=0;
-     showControlsBriefly();
-    },450);
-   }
-  },{passive:false});
+  },{passive:true});
+  qlBindDoubleTap(card,{onDouble:()=>reroll(),onSingle:()=>showControlsBriefly(),ignore:e=>!!e.target?.closest?.('.ql-statusbar-controls')});
   card.addEventListener('click',e=>{
    if(e.detail>1||e.target?.closest?.('.ql-statusbar-controls'))return;
    // 触屏设备的 touchend 后也会合成 click；不能在第一次轻触时立刻盖上控制层，
@@ -2457,6 +2437,38 @@ async function qlGuardMissingNames(prompt,context=getContext()){
  if(result==='extra')return true;
  if(result===true)qlOpenCharacterEditorFor(missing[0]);
  return false;
+}
+// ===== 触屏双击识别 =====
+// 只有“手指几乎没动、按下时间很短”的触摸才算一次轻点；滑动、长按、滚动页面都不算。
+// 两次轻点要在 gap 毫秒内、落点相距不远才算双击。这样下滑滚动时连续两次手势不会误触发重 Roll，
+// 而真正的双击（哪怕手指略有抖动）也不会因为别的组件抢走事件而漏掉。
+function qlBindDoubleTap(el,{onDouble,onSingle=null,ignore=null,gap=480,maxMove=10,maxHold=380,maxDist=48}={}){
+ let start=null,last=null,timer=null;
+ const reset=()=>{start=null;};
+ el.addEventListener('touchstart',e=>{
+  if((ignore&&ignore(e))||(e.touches&&e.touches.length!==1)){reset();last=null;return;}
+  const t=e.changedTouches[0];start={x:t.clientX,y:t.clientY,at:Date.now(),moved:false};
+ },{passive:true});
+ el.addEventListener('touchmove',e=>{
+  if(!start)return;const t=e.changedTouches[0];
+  if(Math.hypot(t.clientX-start.x,t.clientY-start.y)>maxMove){start.moved=true;last=null;if(timer){clearTimeout(timer);timer=null;}}
+ },{passive:true});
+ el.addEventListener('touchcancel',()=>{reset();last=null;},{passive:true});
+ el.addEventListener('touchend',e=>{
+  const s=start;reset();
+  if(!s||(ignore&&ignore(e)))return;
+  const t=e.changedTouches[0],now=Date.now();
+  const tap=!s.moved&&Math.hypot(t.clientX-s.x,t.clientY-s.y)<=maxMove&&now-s.at<=maxHold;
+  if(!tap){last=null;if(timer){clearTimeout(timer);timer=null;}return;}
+  if(last&&now-last.at<gap&&Math.hypot(t.clientX-last.x,t.clientY-last.y)<=maxDist){
+   e.preventDefault();e.stopPropagation();last=null;if(timer){clearTimeout(timer);timer=null;}
+   onDouble(e);
+  }else{
+   last={x:t.clientX,y:t.clientY,at:now};
+   if(timer)clearTimeout(timer);
+   timer=setTimeout(()=>{timer=null;last=null;if(onSingle)onSingle();},gap);
+  }
+ },{passive:false});
 }
 function qlInstallRoster(){
  const run=()=>{try{return qlRosterText();}catch(e){console.warn('[拾帧] 生成角色名单失败',e);return '';}};
