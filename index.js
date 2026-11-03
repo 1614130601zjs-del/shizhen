@@ -639,7 +639,7 @@ function qlBindGenericWordsUi(){
  const curCardName=()=>{const c=getContext();return String(c?.name2||'当前角色卡');};
  const paint=()=>{
   const o=g(),card=curCard(),scope=$q('ql-gw-scope')?.value==='card'&&card!==''?card:'*';
-  box.innerHTML=qlGenericStatusHtml(card)+'<label class="ql-check"><input type="checkbox" id="ql-gw-on" '+(o.on?'checked':'')+'> 启用通用词注入（默认关闭）</label>'
+  box.innerHTML=qlGenericStatusHtml(card)+'<label class="ql-check"><input type="checkbox" id="ql-gw-on" '+(o.on?'checked':'')+'> 启用通用词注入（默认关闭）<b class="ql-check-state'+(o.on?' is-on':'')+'">'+(o.on?'　✓ 已开启':'　已关闭')+'</b></label>'
   +'<div class="ql-row"><label for="ql-gw-pos">位置</label><select id="ql-gw-pos"><option value="back">放在最后</option><option value="front">放在最前</option></select></div>'
   +'<div class="ql-row"><label for="ql-gw-scope">选择生效范围</label><select id="ql-gw-scope"><option value="all">全局默认</option>'+(card!==''?'<option value="card"'+(scope!=='*'?' selected':'')+'>仅「'+esc(curCardName())+'」</option>':'')+'</select></div>'
   +KINDS.map(([k,label])=>{
@@ -1777,6 +1777,58 @@ async function persistImageToTavern(src,taskKey='image'){
  return normalizeTavernImagePath(result.path);
 }
 
+// ===== 消息锚定：把图片记录的 uid 写进聊天消息自己的 extra 里（参考智绘姬：图片跟着消息走，而不是只靠楼层号 / 聊天 ID / 时间戳去对）=====
+// 结构：message.extra.shizhen_images[swipe:提示词哈希:同提示词序号]=[uid…]。刷新、改聊天名、分支、时间戳变化都不影响找回。
+function qlPromptHash(prompt){
+ const t=String(prompt||'').trim().replace(/\s+/g,' ');
+ let h=2166136261;for(let i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,16777619);}
+ return (h>>>0).toString(36);
+}
+function qlLinkKey(message,prompt,sameOrdinal){return String(message?.swipe_id??0)+':'+qlPromptHash(prompt)+':'+(sameOrdinal||0);}
+let qlSaveChatTimer=null;
+function qlSaveChatSoon(){
+ clearTimeout(qlSaveChatTimer);
+ qlSaveChatTimer=setTimeout(()=>{try{const c=getContext();const f=c?.saveChat||c?.saveChatConditional;if(typeof f==='function')f.call(c);}catch(e){console.warn('[拾帧] 保存聊天失败',e);}},900);
+}
+function qlLinkRecordToMessage(record,messageIndex,prompt,sameOrdinal){
+ try{
+  const m=getContext()?.chat?.[Number(messageIndex)];if(!m||!record)return;
+  const uid=qlUidOf(record);
+  m.extra=m.extra&&typeof m.extra==='object'?m.extra:{};
+  const store=m.extra.shizhen_images=m.extra.shizhen_images&&typeof m.extra.shizhen_images==='object'?m.extra.shizhen_images:{};
+  const key=qlLinkKey(m,prompt,sameOrdinal);
+  const arr=store[key]=Array.isArray(store[key])?store[key]:[];
+  if(!arr.includes(uid)){arr.push(uid);qlSaveChatSoon();}
+ }catch(e){console.warn('[拾帧] 写入消息锚点失败',e);}
+}
+function qlLinkedRecords(messageIndex,prompt,sameOrdinal,source){
+ try{
+  const m=getContext()?.chat?.[Number(messageIndex)];const store=m?.extra?.shizhen_images;if(!store)return [];
+  const uids=store[qlLinkKey(m,prompt,sameOrdinal)];if(!Array.isArray(uids)||!uids.length)return [];
+  const set=new Set(uids);
+  return (cfg().records||[]).filter(r=>r&&r.uid&&set.has(r.uid)&&r.dataUrl&&!r.hiddenInChat&&(r.source||'chat')===source);
+ }catch{return [];}
+}
+// 正文第 n 个标记：同一消息里提示词相同的标记，按先后给序号，避免相同提示词的几张图互相串。
+function qlSameOrdinalInMessage(message,ordinal){
+ try{
+  const list=markers(message.mes||'');const target=list[ordinal];if(!target)return 0;
+  const norm=x=>String(x||'').trim().replace(/\s+/g,' ');
+  let n=0;for(let i=0;i<ordinal;i++)if(norm(list[i].prompt)===norm(target.prompt))n++;
+  return n;
+ }catch{return 0;}
+}
+function qlStatusbarLinkMeta(frame,prompt){
+ let idx=NaN,ord=0;
+ try{
+  const mes=mesElementOf(frame);idx=mes?Number(mes.getAttribute('mesid')):NaN;
+  const doc=frame.ownerDocument||document;
+  const scope=doc===document?(mes||document):doc;
+  const same=Array.from(scope.querySelectorAll('[class~="scanning"]')).filter(el=>statusbarPromptForTarget(el)===prompt);
+  ord=Math.max(0,same.indexOf(frame));
+ }catch{}
+ return {messageIndex:Number.isInteger(idx)?idx:undefined,linkPrompt:prompt,linkOrdinal:ord};
+}
 function storeChatRecord(url,prompt,taskKey,meta={},generationOverride=null){
  const c=cfg(),resolved=generationOverride||resolveActiveGeneration(prompt);
  const presetIndex=generationOverride?Number(generationOverride.presetIndex??-1):Number(c.activePresetIndex??-1);
@@ -1792,7 +1844,18 @@ function storeChatRecord(url,prompt,taskKey,meta={},generationOverride=null){
   config:snapshotConfig(prompt,resolved.negative),source:meta.source||'chat',collection:'cache',
   messageIndex:meta.messageIndex,mesStamp:meta.mesStamp??((meta.source||'chat')==='chat'?messageStamp(meta.messageIndex):''),taskKey,character:meta.character||null,chatId:getContext()?.chatId||null,promptEntryId:meta.promptEntryId||null,sourcePromptEntryId:meta.sourcePromptEntryId||meta.promptEntryId||null
  };
- c.records.unshift(record);save();history();
+ c.records.unshift(record);qlUidOf(record);
+ try{
+  const src=record.source||'chat';
+  if(src==='chat'&&Number.isInteger(Number(meta.messageIndex))){
+   const m=getContext()?.chat?.[Number(meta.messageIndex)];
+   const ord=Number(String(taskKey).split(':edited:')[0].split(':').pop());
+   if(m&&Number.isInteger(ord)){const mk=markers(m.mes||'')[ord];if(mk)qlLinkRecordToMessage(record,meta.messageIndex,mk.prompt,qlSameOrdinalInMessage(m,ord));}
+  }else if(src==='statusbar'&&Number.isInteger(Number(meta.messageIndex))&&meta.linkPrompt){
+   qlLinkRecordToMessage(record,meta.messageIndex,meta.linkPrompt,meta.linkOrdinal||0);
+  }
+ }catch(e){console.warn('[拾帧] 消息锚点失败',e);}
+ save();history();
  if(typeof url==='string'&&/^data:image\//i.test(url)){
   persistImageToTavern(url,taskKey).then(path=>{
    if(record.dataUrl!==url)return;
@@ -1998,7 +2061,9 @@ async function processLatestAssistantMessage(){
      save();
     }
    }
-   const savedRecords=(cfg().records||[]).filter(item=>item&&item.dataUrl&&!item.hiddenInChat&&(item.taskKey===entry.taskKey||String(item.taskKey||'').startsWith(entry.taskKey+':edited:'))&&Number(item.messageIndex)===messageIndex&&(!item.chatId||item.chatId===(context.chatId||''))&&(item.source||'chat')==='chat'&&(recordMatchesStamp(item,stamp)||normalizeMarkerPrompt(item.basePrompt||item.prompt)===normalizeMarkerPrompt(entry.prompt))).sort((a,b)=>(Number(a.at)||0)-(Number(b.at)||0));
+   let savedRecords=(cfg().records||[]).filter(item=>item&&item.dataUrl&&!item.hiddenInChat&&(item.taskKey===entry.taskKey||String(item.taskKey||'').startsWith(entry.taskKey+':edited:'))&&Number(item.messageIndex)===messageIndex&&(!item.chatId||item.chatId===(context.chatId||''))&&(item.source||'chat')==='chat'&&(recordMatchesStamp(item,stamp)||normalizeMarkerPrompt(item.basePrompt||item.prompt)===normalizeMarkerPrompt(entry.prompt))).sort((a,b)=>(Number(a.at)||0)-(Number(b.at)||0));
+   // 消息自己带的锚点：就算聊天 ID、楼层号、时间戳都对不上，只要这条消息里记着这张图，就能找回。
+   {const linked=qlLinkedRecords(messageIndex,entry.prompt,qlSameOrdinalInMessage(message,entry.markerOrdinal),'chat');if(linked.length){const have=new Set(savedRecords);for(const r of linked)if(!have.has(r))savedRecords.push(r);savedRecords.sort((a,b)=>(Number(a.at)||0)-(Number(b.at)||0));}}
    // 提示词完全一致但身份戳对不上（刷新后酒馆给的时间戳格式可能不同）：当作同一条，更新戳，避免整页图片变回按钮。
    if(stamp&&savedRecords.some(item=>item.mesStamp&&item.mesStamp!==stamp)){for(const item of savedRecords)if(item.mesStamp&&item.mesStamp!==stamp)item.mesStamp=stamp;save();}
    // 升级前生成的旧记录没有身份戳：这是第一次在这条消息上看到它们，认领给当前消息，以后同楼层重新生成就不会再串图。
@@ -2160,11 +2225,11 @@ function renderStatusbarCard(frame,prompt,url,taskKey){
   tagDialog.addEventListener('click',e=>{if(e.target===tagDialog)closeTagDialog();});
   tagDialog.addEventListener('cancel',e=>{e.preventDefault();closeTagDialog();});
   
-  favorite.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const current=card._qlCandidates[card._qlIndex];if(!current?.url)return;let records=matchingStatusRecords(current.url);if(!records.length){storeChatRecord(current.url,card._qlPrompt||prompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame)});records=matchingStatusRecords(current.url);}if(!records.length){status('没有找到这张状态栏图片的缓存记录。');return;}if(records.some(item=>item.albumCharacterName)){for(const item of records){delete item.albumCharacterName;delete item.albumCharacterKey;delete item.promptEntryId;delete item.sourcePromptEntryId;delete item.sourcePromptEntryAppliedAt;item.collection='cache';}save();history();status('已取消收藏，图片已回到底片缓存。');}else{const character=currentCharacter();const name=String(character.name||getContext()?.name2||'当前角色').trim();for(const item of records){item.albumCharacterName=name;item.albumCharacterKey=character.id||'';item.collection='character-album';delete item.promptEntryId;delete item.sourcePromptEntryId;delete item.sourcePromptEntryAppliedAt;}save();history();status('已收藏到「'+name+'」角色相册。');}updateStatusActions();});
+  favorite.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const current=card._qlCandidates[card._qlIndex];if(!current?.url)return;let records=matchingStatusRecords(current.url);if(!records.length){storeChatRecord(current.url,card._qlPrompt||prompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame),...qlStatusbarLinkMeta(frame,prompt)});records=matchingStatusRecords(current.url);}if(!records.length){status('没有找到这张状态栏图片的缓存记录。');return;}if(records.some(item=>item.albumCharacterName)){for(const item of records){delete item.albumCharacterName;delete item.albumCharacterKey;delete item.promptEntryId;delete item.sourcePromptEntryId;delete item.sourcePromptEntryAppliedAt;item.collection='cache';}save();history();status('已取消收藏，图片已回到底片缓存。');}else{const character=currentCharacter();const name=String(character.name||getContext()?.name2||'当前角色').trim();for(const item of records){item.albumCharacterName=name;item.albumCharacterKey=character.id||'';item.collection='character-album';delete item.promptEntryId;delete item.sourcePromptEntryId;delete item.sourcePromptEntryAppliedAt;}save();history();status('已收藏到「'+name+'」角色相册。');}updateStatusActions();});
   remove.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const current=card._qlCandidates[card._qlIndex];if(!current?.url)return;const records=cfg().records||[];const before=records.length;cfg().records=records.filter(item=>!(item&&item.taskKey===taskKey&&sameImageSource(item.dataUrl,current.url)&&(item.source||'chat')==='statusbar'));card._qlCandidates.splice(card._qlIndex,1);if(card._qlIndex>=card._qlCandidates.length)card._qlIndex=card._qlCandidates.length-1;save();history();card._qlRender();status(before===cfg().records.length?'已从当前状态栏轮播中移除图片。':'已删除当前状态栏图片及其缓存记录。');});
   controls.addEventListener('dblclick',e=>{e.preventDefault();e.stopPropagation();});
   controls.addEventListener('click',e=>e.stopPropagation());
-  const reroll=async()=>{if(card.dataset.busy==='1'||(Date.now()-(Number(card.dataset.lastRerollAt)||0))<900)return;card.dataset.lastRerollAt=Date.now();if(card._qlPrompt&&!await qlGuardMissingNames(card._qlPrompt,getContext()))return;status('正在重新生成状态栏图片……');try{if(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')navigator.vibrate([28,42,28]);}catch{}const manualKey=taskKey+':manual:'+Date.now();const candidate=triggerRegistry.begin(manualKey,{prompt:card._qlPrompt,source:'statusbar-reroll'});if(!candidate.accepted)return;triggerRegistry.markRunning(manualKey);card.dataset.busy='1';try{syncViewfinderSizeToConfig();const c=cfg(),old={width:c.naiWidth,height:c.naiHeight,size:c.size};try{const choice=String(card.dataset.qlTempCombo??'');let generation;if(choice==='viewfinder')generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveActiveGeneration(t));else if(/^\\d+$/.test(choice)&&c.combinations[Number(choice)])generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveCombinationGeneration(t,Number(choice),c));else generation=resolveChatImageGeneration(card._qlPrompt,getContext());const dims=String(card.dataset.qlTempSize||'').split('x').map(Number);if(dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0)){if(c.provider==='novelai'||c.provider==='novelai-thirdparty'){c.naiWidth=dims[0];c.naiHeight=dims[1];}else c.size=card.dataset.qlTempSize;}const fresh=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null);card._qlAddCandidate(fresh);storeChatRecord(fresh,card._qlPrompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame)},generation);card._qlRender?.();}finally{c.naiWidth=old.width;c.naiHeight=old.height;c.size=old.size;save();}triggerRegistry.markSucceeded(manualKey,manualKey+':candidate:'+Date.now());}catch(e){triggerRegistry.markFailed(manualKey,e?.message||String(e));qlAlert('拾帧生成失败：'+(e?.message||String(e)));}finally{card.dataset.busy='0';}};
+  const reroll=async()=>{if(card.dataset.busy==='1'||(Date.now()-(Number(card.dataset.lastRerollAt)||0))<900)return;card.dataset.lastRerollAt=Date.now();if(card._qlPrompt&&!await qlGuardMissingNames(card._qlPrompt,getContext()))return;status('正在重新生成状态栏图片……');try{if(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')navigator.vibrate([28,42,28]);}catch{}const manualKey=taskKey+':manual:'+Date.now();const candidate=triggerRegistry.begin(manualKey,{prompt:card._qlPrompt,source:'statusbar-reroll'});if(!candidate.accepted)return;triggerRegistry.markRunning(manualKey);card.dataset.busy='1';try{syncViewfinderSizeToConfig();const c=cfg(),old={width:c.naiWidth,height:c.naiHeight,size:c.size};try{const choice=String(card.dataset.qlTempCombo??'');let generation;if(choice==='viewfinder')generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveActiveGeneration(t));else if(/^\\d+$/.test(choice)&&c.combinations[Number(choice)])generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveCombinationGeneration(t,Number(choice),c));else generation=resolveChatImageGeneration(card._qlPrompt,getContext());const dims=String(card.dataset.qlTempSize||'').split('x').map(Number);if(dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0)){if(c.provider==='novelai'||c.provider==='novelai-thirdparty'){c.naiWidth=dims[0];c.naiHeight=dims[1];}else c.size=card.dataset.qlTempSize;}const fresh=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null);card._qlAddCandidate(fresh);storeChatRecord(fresh,card._qlPrompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame),...qlStatusbarLinkMeta(frame,prompt)},generation);card._qlRender?.();}finally{c.naiWidth=old.width;c.naiHeight=old.height;c.size=old.size;save();}triggerRegistry.markSucceeded(manualKey,manualKey+':candidate:'+Date.now());}catch(e){triggerRegistry.markFailed(manualKey,e?.message||String(e));qlAlert('拾帧生成失败：'+(e?.message||String(e)));}finally{card.dataset.busy='0';}};
   img.style.touchAction='manipulation';
   // 手机浏览器的 pointerup 与 touchend 可能在同一次点击中都触发，混用会把单击误判成双击。
   // 触屏只使用 touchend；鼠标/触控笔使用 dblclick。监听放在覆盖层 card 上，避免图片元素被酒馆重绘替换后失效。
@@ -2259,9 +2324,11 @@ async function processStatusbarFrames(){
   // 状态栏在 iframe 里时 frame.closest('.mes') 找不到楼层，taskKey 里的楼层号会变成 no-message-id，
   // 不同楼层、重新生成后的同楼层只要提示词一样就会共用同一个 key；这里再用消息身份戳把它们隔开。
   const stamp=messageStampOfElement(frame);
-  const savedStatusbar=(cfg().records||[])
+  let savedStatusbar=(cfg().records||[])
    .filter(item=>item&&item.dataUrl&&item.taskKey===taskKey&&(item.source||'chat')==='statusbar'&&recordMatchesStamp(item,stamp))
    .sort((a,b)=>(Number(a.at)||0)-(Number(b.at)||0));
+  // 消息锚点：状态栏多张图、楼层号/key 对不上时，用消息里记的 uid 找回。
+  {const lm=qlStatusbarLinkMeta(frame,prompt);if(Number.isInteger(lm.messageIndex)){const linked=qlLinkedRecords(lm.messageIndex,prompt,lm.linkOrdinal,'statusbar');if(linked.length){const have=new Set(savedStatusbar);for(const r of linked)if(!have.has(r))savedStatusbar.push(r);savedStatusbar.sort((a,b)=>(Number(a.at)||0)-(Number(b.at)||0));}}}
   if(stamp&&savedStatusbar.some(item=>!item.mesStamp)){for(const item of savedStatusbar)if(!item.mesStamp)item.mesStamp=stamp;save();}
   if(savedStatusbar.length){
    restoreStatusbarCard(frame,prompt,taskKey,savedStatusbar);
@@ -2284,7 +2351,7 @@ async function processStatusbarFrames(){
    const generation=resolveChatImageGeneration(prompt,getContext());const url=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null);
    loading.remove();
    renderStatusbarCard(frame,prompt,url,taskKey);
-   storeChatRecord(url,prompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame)},generation);
+   storeChatRecord(url,prompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame),...qlStatusbarLinkMeta(frame,prompt)},generation);
    triggerRegistry.markSucceeded(taskKey,taskKey+':candidate:'+Date.now());
   }catch(e){
    triggerRegistry.markFailed(taskKey,e?.message||String(e));
@@ -2790,7 +2857,7 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 <div class="ql-card ql-viewfinder-card"><div class="ql-viewfinder-heading"><h3>图片放置区</h3><div class="ql-viewfinder-actions" role="group" aria-label="图片操作"><span id="ql-gen-indicator" class="ql-gen-indicator" role="status" hidden>正在生图…</span><button id="ql-generate" class="menu_button ql-viewfinder-icon-button" type="button" aria-label="生成一张" title="生成一张"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 8.5h3l1.5-2h7l1.5 2h3A1.5 1.5 0 0 1 21.5 10v8A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5Z"/><circle cx="12" cy="13.5" r="3.2"/><path d="M17.5 11h.01"/></svg></button><button id="ql-result-favorite" class="menu_button ql-viewfinder-icon-button" type="button" aria-label="收藏到角色相册" title="收藏到角色相册" disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></svg></button><button id="ql-result-enlarge" class="menu_button ql-viewfinder-icon-button" type="button" aria-label="放大查看" title="放大查看" disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 5 5"/></svg></button></div></div><p class="ql-muted">生成后可收藏图片，或自适应屏幕查看大图。</p><div class="ql-viewfinder-album-target"><label for="ql-result-album-target">收藏目标相册</label><select id="ql-result-album-target"><option value="">请选择角色卡相册</option></select><button id="ql-result-album-target-save" class="menu_button" type="button">保存</button></div><div class="ql-viewfinder-layout"><div id="ql-result" class="ql-image-stage"><div class="ql-image-placeholder">等待生成图片</div></div></div></div>
 
 <div class="ql-card"><div class="ql-prompt-label-row"><label for="ql-prompt">画面提示词</label><button id="ql-prompt-clear" type="button" class="menu_button">清空</button></div><textarea id="ql-prompt" placeholder="画面提示词"></textarea></div>
-<div class="ql-card ql-viewfinder-roles-card"><div class="ql-section-heading"><div><h3>角色外貌</h3><p class="ql-muted">提示词里的 boy A / girl B / character A / char1 或 1girl / 2girls 等标记会自动生成对应的外貌栏位；外貌会作为 NAI 的「角色提示词」单独提交（不再插进正文里），也可以手动填写、清空或从角色词库导入。</p></div><button id="ql-role-add" type="button" class="menu_button">添加角色</button></div><label class="ql-check ql-vf-generic-row"><input type="checkbox" id="ql-vf-generic"> 取景区注入通用词（体型 / 质量，需先在「角色词条库」里启用）</label><p class="ql-muted">提示词里已经写了体型时，可以关掉这一项，避免重复。</p><div id="ql-viewfinder-roles"></div><details class="ql-final-preview"><summary>查看最终提交给 NAI 的完整提示词</summary><pre id="ql-final-prompt-text"></pre><div class="ql-row"><button id="ql-final-prompt-copy" type="button" class="menu_button">复制完整提示词</button></div><p class="ql-muted">有角色外貌时分成两块提交：Base Prompt 是画师串、质量词、动作与场景；Character Prompts 是各角色的外貌，按角色 1、2…顺序排列。没有角色外貌时只提交一整段。你输入的原始画面提示词不会被改写。</p></details></div>
+<div class="ql-card ql-viewfinder-roles-card"><div class="ql-section-heading"><div><h3>角色外貌</h3><p class="ql-muted">提示词里的 boy A / girl B / character A / char1 或 1girl / 2girls 等标记会自动生成对应的外貌栏位；外貌会作为 NAI 的「角色提示词」单独提交（不再插进正文里），也可以手动填写、清空或从角色词库导入。</p></div><button id="ql-role-add" type="button" class="menu_button">添加角色</button></div><label class="ql-check ql-vf-generic-row"><input type="checkbox" id="ql-vf-generic"> 取景区注入通用词（体型 / 质量，需先在「角色词条库」里启用）<b class="ql-check-state" id="ql-vf-generic-state"></b></label><p class="ql-muted">提示词里已经写了体型时，可以关掉这一项，避免重复。</p><div id="ql-viewfinder-roles"></div><details class="ql-final-preview"><summary>查看最终提交给 NAI 的完整提示词</summary><pre id="ql-final-prompt-text"></pre><div class="ql-row"><button id="ql-final-prompt-copy" type="button" class="menu_button">复制完整提示词</button></div><p class="ql-muted">有角色外貌时分成两块提交：Base Prompt 是画师串、质量词、动作与场景；Character Prompts 是各角色的外貌，按角色 1、2…顺序排列。没有角色外貌时只提交一整段。你输入的原始画面提示词不会被改写。</p></details></div>
 <div class="ql-card"><h3>影像配置</h3><label for="ql-active-config-mode">选择方式</label><select id="ql-active-config-mode"><option value="combo">选择组合（使用预设）</option><option value="separate">选择画师串 + 选择 Vibe</option></select><div id="ql-combo-config-row"><label for="ql-active-preset">选择预设组合</label><select id="ql-active-preset"><option value="-1">不使用组合</option></select></div><div id="ql-separate-config-row" hidden><label for="ql-active-artist">选择画师串</label><select id="ql-active-artist"><option value="-1">不使用画师串</option></select><label for="ql-active-vibe">选择 Vibe</label><select id="ql-active-vibe"><option value="-1">不使用 Vibe</option></select></div><div class="ql-row"><button id="ql-apply-preset" class="menu_button" type="button">应用组合</button><button id="ql-open-preset" class="menu_button" type="button">管理配置</button></div><p class="ql-muted">第一种直接使用已保存的预设组合；第二种分别选择画师串和 Vibe，两项可以独立设置。角色卡默认组合在「配置 → 预设」中管理。</p></div>
 <div class="ql-card"><h3>模型参数</h3><label for="ql-fast-provider">生图后端</label><select id="ql-fast-provider"><option value="novelai">NovelAI 官网</option><option value="novelai-thirdparty">NovelAI 第三方</option></select><div id="ql-fast-openai" hidden><input id="ql-fast-model" value="gpt-image-1"><select id="ql-fast-size"><option value="auto">auto</option><option>1024x1024</option></select><select id="ql-fast-quality"><option>medium</option></select></div><div id="ql-fast-nai" hidden><label>NovelAI 模型</label><select id="ql-fast-nai-model"><option value="nai-diffusion-5-full">V5 Full（5F）</option><option value="nai-diffusion-5-curated">V5 Curated（5C）</option><option value="nai-diffusion-4-5-full">V4.5 Full</option><option value="nai-diffusion-4-5-curated">V4.5 Curated</option><option value="nai-diffusion-4-full">V4 Full</option><option value="nai-diffusion-4-curated">V4 Curated</option><option value="nai-diffusion-3">Anime V3</option><option value="nai-diffusion-furry-3">Furry V3</option></select><div class="ql-row"><div><label>画面尺寸预设</label><select id="ql-fast-nai-size-preset"><option value="832x1216">竖版 · 832 × 1216</option><option value="768x1344">长竖版 · 768 × 1344</option><option value="1024x1024">正方形 · 1024 × 1024</option><option value="1216x832">横版 · 1216 × 832</option><option value="1344x768">宽横版 · 1344 × 768</option></select><input id="ql-fast-nai-width" type="hidden"><input id="ql-fast-nai-height" type="hidden"></div></div><details class="ql-nai-advanced"><summary>高级生成设置（不常调整）</summary><div class="ql-row"><div><label>步数</label><input id="ql-fast-nai-steps" type="number" min="1" max="50"></div><div><label>CFG Scale</label><input id="ql-fast-nai-scale" type="number" min="1" max="20" step="0.5"></div></div><div class="ql-row"><div><label>采样器</label><select id="ql-fast-nai-sampler"><option value="k_euler_ancestral">Euler Ancestral</option><option value="k_euler">Euler</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_2m">DPM++ 2M</option><option value="k_dpmpp_sde">DPM++ SDE</option><option value="k_dpmpp_2m_sde">DPM++ 2M SDE</option><option value="ddim_v3">DDIM（仅 V3 模型）</option></select></div><div><label>调度器</label><select id="ql-fast-nai-scheduler"><option value="karras">Karras</option><option value="native">Native</option><option value="exponential">Exponential</option><option value="polyexponential">Polyexponential</option></select></div></div><div class="ql-row"><div><label for="ql-fast-nai-quality">质量标签</label><select id="ql-fast-nai-quality"><option value="standard">标准</option><option value="light">轻量（仅 V5）</option><option value="off">关闭</option></select></div></div><label for="ql-fast-nai-seed">固定 Seed（留空则随机）</label><input id="ql-fast-nai-seed" type="number" min="0" max="2147483647" placeholder="随机 Seed"><label class="ql-inline-check"><input id="ql-fast-nai-normalize" type="checkbox"> 归一化 Vibe 参考强度</label><p class="ql-muted">开启后会自动归一化 V4/V4.5 多条 Vibe 的强度；关闭则按每条参考的原始强度发送。</p></details></div><p id="ql-status" class="ql-muted" role="status"></p></div>
 </section>
@@ -4207,7 +4274,7 @@ $('#ql-prompt-save').onclick=()=>{const name=$('#ql-prompt-name').value.trim(),p
 $('#ql-character-card').onchange=()=>{if($('#ql-character-save').dataset.edit!==undefined)return;activeCharacterCardKey=$('#ql-character-card').value||'';characterLibraryStarted=false;$('#ql-character-editor').hidden=true;$('#ql-character-name').readOnly=false;renderLibrary();$('#ql-character-status').textContent=activeCharacterCardKey==='__user__'?'已选择用户外貌，点击「开始编辑」查看外貌词。':activeCharacterCardKey?'已选择角色卡，点击「开始编辑」查看词条。':'请选择一张角色卡或「用户外貌」。';};
 $('#ql-character-save').onclick=()=>{const select=$('#ql-character-card'),characterKey=select?.value||'',name=$('#ql-character-name').value.trim(),appearance=$('#ql-character-appearance').value.trim(),isUserAppearance=characterKey==='__user__';if(!name){$('#ql-character-status').textContent='请填写条目名称。';return;}const card=!isUserAppearance&&characterKey!==''?(getContext()?.characters||[])[Number(characterKey)]:null;const item={name,characterKey:isUserAppearance?'__user__':characterKey===''?null:String(characterKey),characterName:isUserAppearance?'用户外貌':card?.name||card?.avatar||'',characterAvatar:isUserAppearance?'':card?.avatar||'',appearance,gender:$('#ql-character-gender')?.value||'',updatedAt:Date.now()};const edit=$('#ql-character-save').dataset.edit;const existing=edit!==undefined?cfg().characters[Number(edit)]:null;if(edit!==undefined&&existing)cfg().characters[Number(edit)]={...existing,...item};else if(isUserAppearance)cfg().characters.push(item);else cfg().characters.unshift(item);cfg().characters=isUserAppearance?cfg().characters.slice(-100):cfg().characters.slice(0,100);save();if(characterKey!=='')activeCharacterCardKey=String(characterKey);else activeCharacterCardKey='__unbound';delete $('#ql-character-save').dataset.edit;$('#ql-character-save').textContent='保存角色词条';$('#ql-character-name').readOnly=false;$('#ql-character-editor').hidden=true;renderLibrary();$('#ql-character-status').textContent=isUserAppearance?'已保存用户外貌条目：'+item.name:(characterKey!==''?'已保存，并绑定到角色卡：'+item.characterName:'已保存角色词条（尚未绑定角色卡）。');};$('#ql-character-cancel').onclick=()=>{delete $('#ql-character-save').dataset.edit;$('#ql-character-save').textContent='保存角色词条';$('#ql-character-name').readOnly=false;$('#ql-character-name').value='';$('#ql-character-appearance').value='';$('#ql-character-card').value='';$('#ql-character-editor').hidden=true;$('#ql-character-status').textContent='已切换到新建模式。';};$('#ql-character-card').onchange=()=>{activeCharacterCardKey=$('#ql-character-card').value||'';characterLibraryStarted=false;$('#ql-character-editor').hidden=true;renderLibrary();};
 qlBindGenericWordsUi();
-{const cb=$('#ql-vf-generic');if(cb){cb.checked=cfg().viewfinderGeneric!==false;cb.onchange=()=>{cfg().viewfinderGeneric=cb.checked;save();qlUpdateFinalPreview();};}}
+{const cb=$('#ql-vf-generic'),st=$('#ql-vf-generic-state');const paint=()=>{if(st){st.textContent=cb.checked?'　✓ 已开启':'　已关闭';st.classList.toggle('is-on',cb.checked);}};if(cb){cb.checked=cfg().viewfinderGeneric!==false;paint();cb.onchange=()=>{cfg().viewfinderGeneric=cb.checked;save();paint();qlUpdateFinalPreview();};}}
 {const jm=$('#ql-jelly-mode'),js=$('#ql-jelly-strength');if(jm){jm.value=['squish','pull','both','wobble'].includes(cfg().jellyMode)?cfg().jellyMode:'off';jm.onchange=()=>{cfg().jellyMode=jm.value;save();};}{const sc=$('#ql-jelly-scope');if(sc){sc.value=['smudge','whole'].includes(cfg().jellyScope)?cfg().jellyScope:'local';sc.onchange=()=>{cfg().jellyScope=sc.value;save();};}}if(js){js.value=['soft','bouncy'].includes(cfg().jellyStrength)?cfg().jellyStrength:'mid';js.onchange=()=>{cfg().jellyStrength=js.value;save();};}}
 {const b=$('#ql-diag-restore');if(b)b.onclick=()=>qlDialog({title:'图片恢复排查',message:qlDiagnoseRestore(),showCancel:false});}
 {const sel=$('#ql-missing-name-action');if(sel){sel.value=cfg().missingNameAction==='go'?'go':'ask';sel.onchange=()=>{cfg().missingNameAction=sel.value;save();};}}
