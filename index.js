@@ -1678,7 +1678,7 @@ function addMessageImage(host,url,prompt,taskKey,recordMeta={},anchor=null) {
   img.addEventListener('touchend',e=>{const t=e.changedTouches[0],dx=t.clientX-touchX,dy=t.clientY-touchY;if(Math.abs(dx)>42&&Math.abs(dx)>Math.abs(dy)*1.25)step(dx<0?1:-1);},{passive:true});
   img.addEventListener('contextmenu',e=>{e.preventDefault();saveCleanImage(img.src,'shizhen-'+Date.now());});
   img.addEventListener('dblclick',e=>{e.preventDefault();e.stopPropagation();runChatReroll();});
-  qlBindDoubleTap(img,{onDouble:()=>reroll.click()});
+  qlBindDoubleTap(img,{onDouble:()=>reroll.click(),onSingle:()=>{const src=img.currentSrc||img.src;if(src)openViewfinderImage(src);}});
   const runChatReroll=async()=>{
    if(cfg().enabled===false){status('拾帧已停用；请先在偏好设置中重新启用插件。');return;}
    // 兼容旧版或中断请求留下的永久 busy 锁；旧锁没有时间戳时立即恢复。
@@ -2126,8 +2126,11 @@ function renderStatusbarCard(frame,prompt,url,taskKey){
   next.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();moveCandidate(1);});
   for(const control of [prev,next]){control.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});control.addEventListener('touchend',e=>e.stopPropagation(),{passive:true});}
   const actionBar=document.createElement('div');actionBar.className='ql-statusbar-action-bar';actionBar.style.cssText='position:absolute!important;top:7px!important;right:7px!important;left:auto!important;bottom:auto!important;transform:none!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:5px!important;width:max-content!important;max-width:96%!important;z-index:2147483647!important;pointer-events:auto!important;';
-  for(const button of [edit,favorite,remove]){button.style.cssText+=';position:static!important;top:auto!important;right:auto!important;left:auto!important;bottom:auto!important;display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;flex:0 0 27px!important;width:27px!important;height:27px!important;min-width:27px!important;min-height:27px!important;padding:5px!important;border:1px solid rgba(255,255,255,.72)!important;border-radius:8px!important;background:rgba(20,16,22,.68)!important;color:#fff!important;touch-action:manipulation!important;';}
-  actionBar.append(edit,favorite,remove);controls.append(prev,count,next,actionBar);
+  const zoom=document.createElement('button');zoom.type='button';zoom.className='menu_button ql-statusbar-action ql-statusbar-zoom';zoom.setAttribute('aria-label','放大查看');zoom.title='放大查看';
+  zoom.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 5 5M8.2 10.5h4.6M10.5 8.2v4.6"/></svg>';
+  zoom.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const cur=card._qlCandidates?.[card._qlIndex];const src=cur?.url||img.currentSrc||img.src;if(src)openViewfinderImage(src);});
+  for(const button of [zoom,edit,favorite,remove]){button.style.cssText+=';position:static!important;top:auto!important;right:auto!important;left:auto!important;bottom:auto!important;display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;flex:0 0 27px!important;width:27px!important;height:27px!important;min-width:27px!important;min-height:27px!important;padding:5px!important;border:1px solid rgba(255,255,255,.72)!important;border-radius:8px!important;background:rgba(20,16,22,.68)!important;color:#fff!important;touch-action:manipulation!important;';}
+  actionBar.append(zoom,edit,favorite,remove);controls.append(prev,count,next,actionBar);
   // 与相册三个点菜单一致：弹窗放在主文档根节点，再同步拾帧主题变量。
   const doc=document;
   const tagDialog=doc.createElement('dialog');tagDialog.className='ql-statusbar-tag-dialog';tagDialog.style.cssText='position:fixed;inset:0;margin:auto;width:min(460px,calc(100vw - 28px));max-width:calc(100vw - 28px);max-height:min(84dvh,720px);overflow:auto;box-sizing:border-box;padding:0;';
