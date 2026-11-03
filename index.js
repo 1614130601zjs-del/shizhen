@@ -3813,17 +3813,11 @@ function qlAttachJelly(img){
   }
  };
  // 选区显示层：低分辨率画布放大，边缘自带柔化
- let accent=null;
- const accentRgb=()=>{
-  if(accent)return accent;
-  let col='';try{if(document.documentElement.hasAttribute('data-ql-style'))col=getComputedStyle(document.documentElement).getPropertyValue('--qp-sig').trim();if(!col)col=getComputedStyle(img.closest('dialog')||img).getPropertyValue('--ql-accent').trim();}catch{}
-  try{const c=document.createElement('canvas');c.width=c.height=1;const x=c.getContext('2d');x.fillStyle='#e58aa8';if(col)x.fillStyle=col;x.fillRect(0,0,1,1);const d=x.getImageData(0,0,1,1).data;accent=[d[0],d[1],d[2]];}catch{accent=[229,138,168];}
-  return accent;
- };
+ const accentRgb=()=>[255,64,129]; // 选区固定用醒目的玫红，不随主题变化
  const paintSel=()=>{
   if(!selCv)return;
   const x=selCv.getContext('2d'),id=x.createImageData(MW,MH),[r,g,b]=accentRgb();
-  for(let k=0;k<MW*MH;k++){id.data[k*4]=r;id.data[k*4+1]=g;id.data[k*4+2]=b;id.data[k*4+3]=Math.round(Math.min(1,S.mask[k])*140);}
+  for(let k=0;k<MW*MH;k++){id.data[k*4]=r;id.data[k*4+1]=g;id.data[k*4+2]=b;id.data[k*4+3]=Math.round(Math.min(1,S.mask[k])*175);}
   x.putImageData(id,0,0);
  };
  const placeOverlays=bx=>{
@@ -4128,7 +4122,7 @@ function openViewfinderImage(url){
     const img=overlay.querySelector('img'),host=img.offsetParent||img.parentElement;if(!host)return;
     let ring=host.querySelector('.ql-jb-ring');if(!ring){ring=document.createElement('div');ring.className='ql-jb-ring';host.appendChild(ring);}
     const d=2.2*qlJellyBrush()*Math.min(img.clientWidth,img.clientHeight);
-    ring.style.cssText='position:absolute;pointer-events:none;z-index:4;border-radius:50%;border:2px solid var(--qp-sig,var(--ql-accent,#e58aa8));background:color-mix(in srgb,var(--qp-sig,var(--ql-accent,#e58aa8)) 25%,transparent);width:'+d+'px;height:'+d+'px;left:'+(img.offsetLeft+img.clientWidth/2-d/2)+'px;top:'+(img.offsetTop+img.clientHeight/2-d/2)+'px';
+    ring.style.cssText='position:absolute;pointer-events:none;z-index:4;border-radius:50%;border:2px solid #ff4081;background:rgba(255,64,129,.25);width:'+d+'px;height:'+d+'px;left:'+(img.offsetLeft+img.clientWidth/2-d/2)+'px;top:'+(img.offsetTop+img.clientHeight/2-d/2)+'px';
     clearTimeout(ring._t);ring._t=setTimeout(()=>ring.remove(),800);
    });
    bar.addEventListener('click',async e=>{
