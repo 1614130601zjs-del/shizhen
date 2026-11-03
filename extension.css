@@ -5580,9 +5580,21 @@ a.ql-prompt-source-badge:hover{text-decoration:underline}
 .ql-gw-status.is-off{opacity:.75}
 
 /* 放大图底部：果冻快速切换 */
-dialog.ql-viewfinder-lightbox .ql-jelly-bar{position:absolute!important;top:100%!important;left:50%!important;transform:translateX(-50%)!important;display:flex!important;width:max-content;max-width:100vw;margin:10px 0 0!important;z-index:6;gap:4px;padding:3px;border-radius:999px;background:color-mix(in srgb,var(--ql-panel,#fff) 86%,transparent);border:1px solid var(--ql-border,rgba(0,0,0,.15));box-sizing:border-box}
-dialog.ql-viewfinder-lightbox .ql-jelly-bar button{all:unset!important;box-sizing:border-box!important;display:inline-block!important;width:auto!important;min-width:46px!important;height:auto!important;padding:4px 12px!important;border-radius:999px!important;font-size:12px!important;line-height:1.4!important;text-align:center!important;white-space:nowrap!important;color:var(--ql-text,#444)!important;cursor:pointer;-webkit-tap-highlight-color:transparent}
-dialog.ql-viewfinder-lightbox .ql-jelly-bar button.is-active{background:var(--ql-accent,#b9a)!important;color:#fff!important}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar{position:absolute!important;top:100%!important;left:50%!important;transform:translateX(-50%)!important;width:max-content;max-width:100vw;margin:10px 0 0!important;z-index:6;box-sizing:border-box}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-head{display:flex!important;gap:4px;padding:3px;border-radius:999px;background:color-mix(in srgb,var(--ql-panel,#fff) 88%,transparent);border:1px solid var(--ql-border,rgba(0,0,0,.15));justify-content:center}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-panel{position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:calc(100vw - 24px);padding:8px 10px;border-radius:14px;background:color-mix(in srgb,var(--ql-panel,#fff) 94%,transparent);border:1px solid var(--ql-border,rgba(0,0,0,.15));box-shadow:0 4px 18px rgba(0,0,0,.2);display:flex;flex-direction:column;gap:6px;box-sizing:border-box}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-panel[hidden]{display:none!important}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-row b{font-size:12px;min-width:34px;color:var(--ql-muted,#777);font-weight:600}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-hint{font-size:11px;font-style:normal;color:var(--ql-muted,#777);flex-basis:100%;padding-left:38px}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-msg{font-size:11px;color:var(--ql-muted,#777);max-width:260px}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-msg:empty{display:none}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar button{all:unset!important;box-sizing:border-box!important;display:inline-block!important;width:auto!important;min-width:46px!important;height:auto!important;padding:4px 12px!important;border-radius:999px!important;font-size:12px!important;line-height:1.4!important;text-align:center!important;white-space:nowrap!important;color:var(--ql-text,#444)!important;cursor:pointer;-webkit-tap-highlight-color:transparent;border:1px solid var(--ql-border,rgba(0,0,0,.15))!important}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar button[hidden]{display:none!important}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar button.is-active{background:var(--ql-accent,#b9a)!important;color:#fff!important;border-color:transparent!important}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar button.is-active[data-jb-scope]::before,dialog.ql-viewfinder-lightbox .ql-jelly-bar button.is-active[data-jb-in]::before{content:"✓ "}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar.is-off .ql-jb-head button:not([data-jb=power]){opacity:.45}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar.is-selecting .ql-jb-head{border-color:var(--ql-accent,#b9a)}
 
 /* 复选框：自绘选中态（主题里原生勾选框常看不出是否选中） */
 #shizhen-panel .ql-check{display:flex;align-items:center;gap:0;cursor:pointer}

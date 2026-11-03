@@ -2884,7 +2884,7 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 <div class="ql-page" data-page-panel="history" role="tabpanel" hidden><div class="ql-card"><h3>影像缓存</h3><p class="ql-muted">这里保存生成过的影像记录；点击缩略图可查看提示词、参考图与生成参数。</p><label for="ql-history-columns">每行影像数量</label><select id="ql-history-columns"><option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option><option value="5">5 张</option></select><div id="ql-history"></div></div><div id="ql-cache-footer" class="ql-cache-bulk-tools"><button type="button" class="menu_button" id="ql-cache-select-mode" aria-pressed="false">多选</button><label class="ql-cache-select-all" hidden><input type="checkbox" data-ql-select-all disabled> 全选</label><span class="ql-cache-selected-count" data-ql-selected-count hidden>已选 0 张</span><button type="button" class="menu_button" data-ql-bulk-download disabled hidden>逐张下载</button><button type="button" class="menu_button" data-ql-bulk-delete disabled hidden>删除所选</button><button type="button" class="menu_button" id="ql-clear">清空影像缓存</button></div></div>
 <div class="ql-page" data-page-panel="albums" role="tabpanel" hidden><div class="ql-card ql-album-library-card"><div id="ql-character-albums"></div></div></div>
 <div class="ql-page" data-page-panel="prompt-gallery" role="tabpanel" hidden><div class="ql-card ql-prompt-gallery-page-card"><h3 id="ql-prompt-gallery-title" class="ql-muted" hidden>提示词图集</h3><p class="ql-muted" id="ql-prompt-gallery-description" hidden></p><div id="ql-prompt-gallery-content"></div></div></div>
-<div class="ql-page" data-page-panel="settings" role="tabpanel" hidden><div class="ql-card"><h3>插件运行状态</h3><p class="ql-muted">关闭后会暂停拾帧的状态栏扫描、正文标记自动触发和自动生图；已有影像、相册与设置会保留。</p><div class="ql-row"><button id="ql-plugin-toggle" class="menu_button ql-primary" type="button" aria-pressed="true">插件：已启用</button></div></div><div class="ql-card"><h3>数据导出与导入</h3><p class="ql-muted">在这里导出或导入拾帧数据备份。导入备份会替换当前拾帧数据，请先备份现有内容。</p><div class="ql-row"><button id="ql-export-all-data" type="button" class="menu_button">导出拾帧数据</button><button id="ql-import-all-data" type="button" class="menu_button">导入拾帧备份</button></div><input id="ql-import-all-file" type="file" accept=".json,application/json" hidden><p id="ql-export-all-status" class="ql-muted" role="status"></p></div><div class="ql-card"><h3>图片下载选项</h3><p class="ql-muted">可选择保存为 PNG 或 JPG。PNG 保留原始文件及其元数据；JPG 会重新编码图像，不保留原 PNG 的提示词与生成参数数据块。</p><label for="ql-download-format">下载文件格式</label><div class="ql-row ql-setting-control-row"><select id="ql-download-format"><option value="png">PNG（.png）</option><option value="jpg">JPG（.jpg）</option></select><button id="ql-png-download-save" type="button" class="menu_button ql-primary">保存下载格式</button></div><p id="ql-png-download-status" class="ql-muted" role="status"></p></div><div class="ql-card"><h3>放大图小互动（果冻）</h3><p class="ql-muted">在详情页点开放大图后，可以戳一戳、拉一拉图片，松手会 Q 弹地回去。纯装饰，默认关闭。</p><label for="ql-jelly-mode">互动方式</label><select id="ql-jelly-mode"><option value="off">关闭</option><option value="squish">只有点按：戳一下压扁回弹</option><option value="pull">只有拖动：拉伸后回弹</option><option value="both">全都要：点按压扁 + 拖动拉伸</option><option value="wobble">摇摇：点按或拖动后左右晃一晃</option></select><label for="ql-jelly-scope">作用范围</label><select id="ql-jelly-scope"><option value="local">局部：只有按到的一小块动</option><option value="smudge">涂抹：手指划过的地方被抹开，松手回弹</option><option value="whole">整体：整张图一起弹</option></select><label for="ql-jelly-strength">弹性</label><select id="ql-jelly-strength"><option value="soft">软糯（幅度小）</option><option value="mid">适中</option><option value="bouncy">超Q（幅度大）</option></select></div><div class="ql-card"><h3>聊天相册样式</h3><p class="ql-muted">选择正文生图卡片的相册边框风格，保存后会应用到现有图片和新图片。</p><label for="ql-chat-album-style">相册外观</label><div class="ql-row ql-setting-control-row"><select id="ql-chat-album-style"><option value="follow">跟随界面风格（默认）</option><option value="pixel">像素掌机</option><option value="ccd">CCD 数码相机</option><option value="polaroid">拍立得手账</option><option value="scroll">简约书笺</option><option value="cyber">赛博像素</option><option value="win">经典桌面（Windows）</option><option value="news">复古报纸</option><option value="purikura">大头贴（Y2K）</option><option value="receipt">热敏小票</option><option value="classic">经典相册（白边留白）</option><option value="film">胶片相册（深色边框）</option><option value="soft">柔和卡片（圆角浅色）</option></select><button id="ql-chat-album-style-save" type="button" class="menu_button">应用相册样式</button></div><p id="ql-chat-album-style-status" class="ql-muted" role="status"></p><details class="ql-custom-style-box"><summary>✦ 新建 / 管理自定义相册样式</summary><label for="ql-ca-pick">选择要编辑的相册样式</label><select id="ql-ca-pick"><option value="">＋ 新建相册样式</option></select><label for="ql-ca-name">样式名称</label><input id="ql-ca-name" type="text" maxlength="24" placeholder="给相册样式起个名字"><label for="ql-ca-css">相册样式 CSS（含说明的骨架）</label><textarea id="ql-ca-css" rows="12" spellcheck="false"></textarea><div class="ql-row"><button id="ql-ca-skeleton" type="button" class="menu_button">插入骨架</button><button id="ql-ca-save" type="button" class="menu_button">保存并应用</button><button id="ql-ca-delete" type="button" class="menu_button">删除</button></div><div class="ql-row"><button id="ql-ca-export" type="button" class="menu_button">导出 JSON</button><button id="ql-ca-export-ai" type="button" class="menu_button">导出给 AI（含说明）</button><button id="ql-ca-import" type="button" class="menu_button">导入 JSON / CSS</button><input id="ql-ca-file" type="file" accept=".json,.css,application/json,text/css" hidden></div><p id="ql-ca-status" class="ql-muted" role="status"></p></details></div><div class="ql-card"><h3>外观与配色</h3><p class="ql-muted">拾帧使用独立配色与字体，不跟随酒馆主题设置；可选择低饱和配色或自选点缀色。</p><label for="ql-ui-style">界面风格</label><div class="ql-row ql-setting-control-row"><select id="ql-ui-style"><option value="default">柔和（默认）</option><option value="pixel">像素掌机</option><option value="ccd">CCD 数码相机</option><option value="polaroid">拍立得手账</option><option value="scroll">简约书笺</option><option value="cyber">赛博像素</option><option value="win">经典桌面（Windows）</option><option value="crab">小螃蟹（沙滩）</option><option value="cat">小黑猫（月夜）</option><option value="news">复古报纸</option><option value="purikura">大头贴（Y2K）</option><option value="receipt">热敏小票</option></select></div><details class="ql-custom-style-box"><summary>✦ 新建 / 管理自定义风格</summary><label for="ql-cs-pick">选择要编辑的风格</label><select id="ql-cs-pick"><option value="">＋ 新建风格</option></select><label for="ql-cs-name">风格名称</label><input id="ql-cs-name" type="text" maxlength="24" placeholder="给风格起个名字"><label for="ql-cs-css">风格 CSS（含变量说明的骨架）</label><textarea id="ql-cs-css" rows="14" spellcheck="false"></textarea><div class="ql-row"><button id="ql-cs-skeleton" type="button" class="menu_button">插入骨架</button><button id="ql-cs-save" type="button" class="menu_button">保存并应用</button><button id="ql-cs-delete" type="button" class="menu_button">删除</button></div><div class="ql-row"><button id="ql-cs-export" type="button" class="menu_button">导出 JSON</button><button id="ql-cs-export-ai" type="button" class="menu_button">导出给 AI（含说明）</button><button id="ql-cs-import" type="button" class="menu_button">导入 JSON / CSS</button><input id="ql-cs-file" type="file" accept=".json,.css,application/json,text/css" hidden></div><p id="ql-cs-status" class="ql-muted" role="status"></p></details><p class="ql-muted">风格改变设置面板、放大弹窗和详情页的外观；每套风格自带点缀色，在下方配色里选别的配色或「自选颜色」就会换成它。</p><label for="ql-ui-tint">背景染色强度 <span id="ql-ui-tint-value" class="ql-muted"></span></label><input id="ql-ui-tint" type="range" min="0" max="24" step="1"><p class="ql-muted">把点缀色轻轻染进背景；0 为不染色，数值越大颜色越明显（只在选了别的配色或自选颜色时有效）。</p><label for="ql-theme-color">点缀色（拖动色环，或用下面三个滑条）</label><div class="ql-row ql-setting-control-row"><select id="ql-theme-preset" hidden><option value="mist">雾灰蓝（默认独立主题）</option><option value="sage">鼠尾草绿</option><option value="lavender">灰紫</option><option value="oat">燕麦奶茶</option><option value="custom">自选颜色</option></select><button id="ql-theme-apply" type="button" class="menu_button">应用配色</button><button id="ql-theme-reset" type="button" class="menu_button">恢复默认</button></div><div id="ql-custom-color-row"><div class="ql-color-picker-row"><input id="ql-theme-color" type="color" value="#9aaec2" aria-label="自选点缀色"><span id="ql-theme-color-value">#9AAEC2</span></div><div class="ql-hsl-row"><label for="ql-hsl-h">色相</label><input id="ql-hsl-h" class="ql-hsl-hue" type="range" min="0" max="360" step="1"><label for="ql-hsl-s">饱和度</label><input id="ql-hsl-s" class="ql-hsl-sat" type="range" min="0" max="100" step="1"><label for="ql-hsl-l">明度</label><input id="ql-hsl-l" class="ql-hsl-lum" type="range" min="15" max="85" step="1"></div><p class="ql-muted">只调整拾帧界面的点缀色，卡片和图片周围保持浅色底，不会把相框变成深色。</p></div><p id="ql-theme-status" class="ql-muted" role="status"></p></div><div class="ql-card"><h3>接口连接设置</h3><nav class="ql-subtabs" role="tablist" aria-label="接口类型"><button type="button" class="ql-subtab active" data-subpage="conn-nai-official" aria-selected="true">NAI 官网</button><button type="button" class="ql-subtab" data-subpage="conn-nai-third" aria-selected="false">NAI 第三方</button></nav><section class="ql-subpage active" data-subpage-panel="conn-nai-official"><p class="ql-muted">官网模式使用 NovelAI 官方 API，Key 仅保存在当前酒馆扩展设置中。</p><label for="ql-nai-key">NovelAI 官网 Key</label><input id="ql-nai-key" type="password" autocomplete="off" placeholder="NovelAI Persistent API Token"><button id="ql-save-nai" class="menu_button ql-primary">保存 NAI 官网连接</button></section><section class="ql-subpage" data-subpage-panel="conn-nai-third" hidden><p class="ql-muted">第三方 NAI 兼容服务需要填写服务商提供的地址与 Key。</p><label for="ql-nai-third-endpoint">第三方 API 地址</label><input id="ql-nai-third-endpoint" placeholder="https://服务商地址"><label for="ql-nai-third-key">第三方 API Key</label><input id="ql-nai-third-key" type="password" autocomplete="off" placeholder="服务商提供的 Key"><button id="ql-save-nai-third" class="menu_button ql-primary">保存 NAI 第三方连接</button></section><div hidden><input id="ql-endpoint"><input id="ql-key"><input id="ql-gpt-endpoint"><input id="ql-gpt-key"></div></div><div hidden><select id="ql-provider"><option value="novelai">NovelAI 官网</option><option value="novelai-thirdparty">NovelAI 第三方</option></select><input id="ql-model"><select id="ql-size"><option value="auto">auto</option><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option><option>2048x2048</option><option>2048x1152</option><option>3840x2160</option><option>2160x3840</option></select><select id="ql-quality"><option>low</option><option>medium</option><option>high</option></select><input id="ql-nai-model"><input id="ql-nai-steps"><input id="ql-nai-scale"><input id="ql-nai-width" type="hidden"><input id="ql-nai-height" type="hidden"><select id="ql-nai-sampler"><option value="k_euler_ancestral">Euler Ancestral</option><option value="k_euler">Euler</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_2m">DPM++ 2M</option><option value="k_dpmpp_sde">DPM++ SDE</option><option value="k_dpmpp_2m_sde">DPM++ 2M SDE</option><option value="ddim_v3">DDIM（仅 V3 模型）</option></select><select id="ql-nai-scheduler"><option value="karras">Karras</option><option value="native">Native</option><option value="exponential">Exponential</option><option value="polyexponential">Polyexponential</option></select><input id="ql-nai-normalize" type="checkbox"><input id="ql-nai-quality"><input id="ql-nai-seed"><div id="ql-openai-settings" hidden></div><div id="ql-nai-settings" hidden></div></div></div>
+<div class="ql-page" data-page-panel="settings" role="tabpanel" hidden><div class="ql-card"><h3>插件运行状态</h3><p class="ql-muted">关闭后会暂停拾帧的状态栏扫描、正文标记自动触发和自动生图；已有影像、相册与设置会保留。</p><div class="ql-row"><button id="ql-plugin-toggle" class="menu_button ql-primary" type="button" aria-pressed="true">插件：已启用</button></div></div><div class="ql-card"><h3>数据导出与导入</h3><p class="ql-muted">在这里导出或导入拾帧数据备份。导入备份会替换当前拾帧数据，请先备份现有内容。</p><div class="ql-row"><button id="ql-export-all-data" type="button" class="menu_button">导出拾帧数据</button><button id="ql-import-all-data" type="button" class="menu_button">导入拾帧备份</button></div><input id="ql-import-all-file" type="file" accept=".json,application/json" hidden><p id="ql-export-all-status" class="ql-muted" role="status"></p></div><div class="ql-card"><h3>图片下载选项</h3><p class="ql-muted">可选择保存为 PNG 或 JPG。PNG 保留原始文件及其元数据；JPG 会重新编码图像，不保留原 PNG 的提示词与生成参数数据块。</p><label for="ql-download-format">下载文件格式</label><div class="ql-row ql-setting-control-row"><select id="ql-download-format"><option value="png">PNG（.png）</option><option value="jpg">JPG（.jpg）</option></select><button id="ql-png-download-save" type="button" class="menu_button ql-primary">保存下载格式</button></div><p id="ql-png-download-status" class="ql-muted" role="status"></p></div><div class="ql-card"><h3>放大图小互动（果冻）</h3><p class="ql-muted">在详情页点开放大图后，可以戳一戳、拖一拖、摇一摇图片，松手会 Q 弹地回去。纯装饰，默认关闭。放大图下方的「果冻」小面板可以随时快速切换这些选项，还能涂出「选区」，只让选中的地方动。</p><label for="ql-jelly-on">果冻</label><select id="ql-jelly-on"><option value="off">关闭</option><option value="on">开启</option></select><label for="ql-jelly-scope">范围</label><select id="ql-jelly-scope"><option value="local">局部：按到的一小块凹下去</option><option value="smudge">抹开：手指划过的地方被带着走，松手回弹</option><option value="whole">全屏：整张图一起弹</option></select><label>交互方式（可多选）</label><label class="ql-check"><input type="checkbox" id="ql-jelly-tap"> 点击：戳一下压扁回弹</label><label class="ql-check"><input type="checkbox" id="ql-jelly-drag"> 拖动：按住拖拽拉伸，松手回弹</label><label class="ql-check"><input type="checkbox" id="ql-jelly-shake"> 摇晃手机：图片跟着晃，停了弹回</label><p id="ql-jelly-shake-msg" class="ql-muted" role="status"></p><label for="ql-jelly-strength">弹性</label><select id="ql-jelly-strength"><option value="soft">软糯（幅度小）</option><option value="mid">适中</option><option value="bouncy">超Q（幅度大）</option></select></div><div class="ql-card"><h3>聊天相册样式</h3><p class="ql-muted">选择正文生图卡片的相册边框风格，保存后会应用到现有图片和新图片。</p><label for="ql-chat-album-style">相册外观</label><div class="ql-row ql-setting-control-row"><select id="ql-chat-album-style"><option value="follow">跟随界面风格（默认）</option><option value="pixel">像素掌机</option><option value="ccd">CCD 数码相机</option><option value="polaroid">拍立得手账</option><option value="scroll">简约书笺</option><option value="cyber">赛博像素</option><option value="win">经典桌面（Windows）</option><option value="news">复古报纸</option><option value="purikura">大头贴（Y2K）</option><option value="receipt">热敏小票</option><option value="classic">经典相册（白边留白）</option><option value="film">胶片相册（深色边框）</option><option value="soft">柔和卡片（圆角浅色）</option></select><button id="ql-chat-album-style-save" type="button" class="menu_button">应用相册样式</button></div><p id="ql-chat-album-style-status" class="ql-muted" role="status"></p><details class="ql-custom-style-box"><summary>✦ 新建 / 管理自定义相册样式</summary><label for="ql-ca-pick">选择要编辑的相册样式</label><select id="ql-ca-pick"><option value="">＋ 新建相册样式</option></select><label for="ql-ca-name">样式名称</label><input id="ql-ca-name" type="text" maxlength="24" placeholder="给相册样式起个名字"><label for="ql-ca-css">相册样式 CSS（含说明的骨架）</label><textarea id="ql-ca-css" rows="12" spellcheck="false"></textarea><div class="ql-row"><button id="ql-ca-skeleton" type="button" class="menu_button">插入骨架</button><button id="ql-ca-save" type="button" class="menu_button">保存并应用</button><button id="ql-ca-delete" type="button" class="menu_button">删除</button></div><div class="ql-row"><button id="ql-ca-export" type="button" class="menu_button">导出 JSON</button><button id="ql-ca-export-ai" type="button" class="menu_button">导出给 AI（含说明）</button><button id="ql-ca-import" type="button" class="menu_button">导入 JSON / CSS</button><input id="ql-ca-file" type="file" accept=".json,.css,application/json,text/css" hidden></div><p id="ql-ca-status" class="ql-muted" role="status"></p></details></div><div class="ql-card"><h3>外观与配色</h3><p class="ql-muted">拾帧使用独立配色与字体，不跟随酒馆主题设置；可选择低饱和配色或自选点缀色。</p><label for="ql-ui-style">界面风格</label><div class="ql-row ql-setting-control-row"><select id="ql-ui-style"><option value="default">柔和（默认）</option><option value="pixel">像素掌机</option><option value="ccd">CCD 数码相机</option><option value="polaroid">拍立得手账</option><option value="scroll">简约书笺</option><option value="cyber">赛博像素</option><option value="win">经典桌面（Windows）</option><option value="crab">小螃蟹（沙滩）</option><option value="cat">小黑猫（月夜）</option><option value="news">复古报纸</option><option value="purikura">大头贴（Y2K）</option><option value="receipt">热敏小票</option></select></div><details class="ql-custom-style-box"><summary>✦ 新建 / 管理自定义风格</summary><label for="ql-cs-pick">选择要编辑的风格</label><select id="ql-cs-pick"><option value="">＋ 新建风格</option></select><label for="ql-cs-name">风格名称</label><input id="ql-cs-name" type="text" maxlength="24" placeholder="给风格起个名字"><label for="ql-cs-css">风格 CSS（含变量说明的骨架）</label><textarea id="ql-cs-css" rows="14" spellcheck="false"></textarea><div class="ql-row"><button id="ql-cs-skeleton" type="button" class="menu_button">插入骨架</button><button id="ql-cs-save" type="button" class="menu_button">保存并应用</button><button id="ql-cs-delete" type="button" class="menu_button">删除</button></div><div class="ql-row"><button id="ql-cs-export" type="button" class="menu_button">导出 JSON</button><button id="ql-cs-export-ai" type="button" class="menu_button">导出给 AI（含说明）</button><button id="ql-cs-import" type="button" class="menu_button">导入 JSON / CSS</button><input id="ql-cs-file" type="file" accept=".json,.css,application/json,text/css" hidden></div><p id="ql-cs-status" class="ql-muted" role="status"></p></details><p class="ql-muted">风格改变设置面板、放大弹窗和详情页的外观；每套风格自带点缀色，在下方配色里选别的配色或「自选颜色」就会换成它。</p><label for="ql-ui-tint">背景染色强度 <span id="ql-ui-tint-value" class="ql-muted"></span></label><input id="ql-ui-tint" type="range" min="0" max="24" step="1"><p class="ql-muted">把点缀色轻轻染进背景；0 为不染色，数值越大颜色越明显（只在选了别的配色或自选颜色时有效）。</p><label for="ql-theme-color">点缀色（拖动色环，或用下面三个滑条）</label><div class="ql-row ql-setting-control-row"><select id="ql-theme-preset" hidden><option value="mist">雾灰蓝（默认独立主题）</option><option value="sage">鼠尾草绿</option><option value="lavender">灰紫</option><option value="oat">燕麦奶茶</option><option value="custom">自选颜色</option></select><button id="ql-theme-apply" type="button" class="menu_button">应用配色</button><button id="ql-theme-reset" type="button" class="menu_button">恢复默认</button></div><div id="ql-custom-color-row"><div class="ql-color-picker-row"><input id="ql-theme-color" type="color" value="#9aaec2" aria-label="自选点缀色"><span id="ql-theme-color-value">#9AAEC2</span></div><div class="ql-hsl-row"><label for="ql-hsl-h">色相</label><input id="ql-hsl-h" class="ql-hsl-hue" type="range" min="0" max="360" step="1"><label for="ql-hsl-s">饱和度</label><input id="ql-hsl-s" class="ql-hsl-sat" type="range" min="0" max="100" step="1"><label for="ql-hsl-l">明度</label><input id="ql-hsl-l" class="ql-hsl-lum" type="range" min="15" max="85" step="1"></div><p class="ql-muted">只调整拾帧界面的点缀色，卡片和图片周围保持浅色底，不会把相框变成深色。</p></div><p id="ql-theme-status" class="ql-muted" role="status"></p></div><div class="ql-card"><h3>接口连接设置</h3><nav class="ql-subtabs" role="tablist" aria-label="接口类型"><button type="button" class="ql-subtab active" data-subpage="conn-nai-official" aria-selected="true">NAI 官网</button><button type="button" class="ql-subtab" data-subpage="conn-nai-third" aria-selected="false">NAI 第三方</button></nav><section class="ql-subpage active" data-subpage-panel="conn-nai-official"><p class="ql-muted">官网模式使用 NovelAI 官方 API，Key 仅保存在当前酒馆扩展设置中。</p><label for="ql-nai-key">NovelAI 官网 Key</label><input id="ql-nai-key" type="password" autocomplete="off" placeholder="NovelAI Persistent API Token"><button id="ql-save-nai" class="menu_button ql-primary">保存 NAI 官网连接</button></section><section class="ql-subpage" data-subpage-panel="conn-nai-third" hidden><p class="ql-muted">第三方 NAI 兼容服务需要填写服务商提供的地址与 Key。</p><label for="ql-nai-third-endpoint">第三方 API 地址</label><input id="ql-nai-third-endpoint" placeholder="https://服务商地址"><label for="ql-nai-third-key">第三方 API Key</label><input id="ql-nai-third-key" type="password" autocomplete="off" placeholder="服务商提供的 Key"><button id="ql-save-nai-third" class="menu_button ql-primary">保存 NAI 第三方连接</button></section><div hidden><input id="ql-endpoint"><input id="ql-key"><input id="ql-gpt-endpoint"><input id="ql-gpt-key"></div></div><div hidden><select id="ql-provider"><option value="novelai">NovelAI 官网</option><option value="novelai-thirdparty">NovelAI 第三方</option></select><input id="ql-model"><select id="ql-size"><option value="auto">auto</option><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option><option>2048x2048</option><option>2048x1152</option><option>3840x2160</option><option>2160x3840</option></select><select id="ql-quality"><option>low</option><option>medium</option><option>high</option></select><input id="ql-nai-model"><input id="ql-nai-steps"><input id="ql-nai-scale"><input id="ql-nai-width" type="hidden"><input id="ql-nai-height" type="hidden"><select id="ql-nai-sampler"><option value="k_euler_ancestral">Euler Ancestral</option><option value="k_euler">Euler</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_2m">DPM++ 2M</option><option value="k_dpmpp_sde">DPM++ SDE</option><option value="k_dpmpp_2m_sde">DPM++ 2M SDE</option><option value="ddim_v3">DDIM（仅 V3 模型）</option></select><select id="ql-nai-scheduler"><option value="karras">Karras</option><option value="native">Native</option><option value="exponential">Exponential</option><option value="polyexponential">Polyexponential</option></select><input id="ql-nai-normalize" type="checkbox"><input id="ql-nai-quality"><input id="ql-nai-seed"><div id="ql-openai-settings" hidden></div><div id="ql-nai-settings" hidden></div></div></div>
 </section></div>`;}
 
 function syncFastControls(){if(!$('#ql-fast-provider'))return;$('#ql-provider').value=$('#ql-fast-provider').value;$('#ql-model').value=$('#ql-fast-model').value;$('#ql-size').value=$('#ql-fast-size').value;$('#ql-quality').value=$('#ql-fast-quality').value;$('#ql-nai-model').value=$('#ql-fast-nai-model').value;$('#ql-nai-steps').value=$('#ql-fast-nai-steps').value;$('#ql-nai-scale').value=$('#ql-fast-nai-scale').value;const dims=String($('#ql-fast-nai-size-preset').value||'832x1216').split('x').map(Number);$('#ql-fast-nai-width').value=dims[0]||832;$('#ql-fast-nai-height').value=dims[1]||1216;$('#ql-nai-width').value=$('#ql-fast-nai-width').value;$('#ql-nai-height').value=$('#ql-fast-nai-height').value;$('#ql-nai-sampler').value=$('#ql-fast-nai-sampler').value;$('#ql-nai-scheduler').value=$('#ql-fast-nai-scheduler').value;$('#ql-nai-normalize').checked=$('#ql-fast-nai-normalize').checked;$('#ql-nai-quality').value=$('#ql-fast-nai-quality').value;$('#ql-nai-seed').value=$('#ql-fast-nai-seed').value;}
@@ -3736,26 +3736,59 @@ function importChatu8Candidate(){
 }
 
 
-// ===== 放大图小互动（果冻）：弹簧动画，只在触摸 / 拖动时跑，松手停稳后自动结束 =====
-// 局部果冻：只有按到的那一小块凹下去 / 被拉起来（WebGL 网格形变）；不支持 WebGL 时退回整张图一起弹。
+// ===== 放大图小互动（果冻）：范围（局部 / 抹开 / 全屏）× 选区（可选）× 交互（点击 / 拖动 / 摇晃） =====
+// 弹簧动画只在触摸 / 拖动 / 摇晃时跑，松手停稳后自动结束；选区只在放大图打开期间保留。
+const QL_JELLY_MW=48,QL_JELLY_MH=48;
+function qlJellyCfg(){
+ const c=cfg();
+ if(typeof c.jellyOn!=='boolean'){
+  const m=c.jellyMode;
+  c.jellyOn=['squish','pull','both','wobble'].includes(m);
+  c.jellyTap=m!=='pull';c.jellyDrag=m!=='squish';
+ }
+ if(typeof c.jellyTap!=='boolean')c.jellyTap=true;
+ if(typeof c.jellyDrag!=='boolean')c.jellyDrag=true;
+ if(typeof c.jellyShake!=='boolean')c.jellyShake=false;
+ return {on:c.jellyOn,scope:['smudge','whole'].includes(c.jellyScope)?c.jellyScope:'local',tap:c.jellyTap,drag:c.jellyDrag,shake:c.jellyShake,amp:{soft:.6,mid:1,bouncy:1.5}[c.jellyStrength]||1};
+}
+function qlJellyState(img){
+ if(!img._qlJ)img._qlJ={mask:new Float32Array(QL_JELLY_MW*QL_JELLY_MH),has:false,selecting:false};
+ return img._qlJ;
+}
+function qlJellyClearSelection(img){
+ if(!img)return;const S=qlJellyState(img);S.mask.fill(0);S.has=false;S.selecting=false;
+}
+async function qlJellyEnableMotion(setMsg){
+ const say=t=>{try{setMsg&&setMsg(t);}catch{}};
+ if(typeof DeviceMotionEvent==='undefined'){say('此浏览器不支持摇晃感应');return false;}
+ if(typeof DeviceMotionEvent.requestPermission==='function'){
+  try{const r=await DeviceMotionEvent.requestPermission();if(r!=='granted'){say('没有拿到动作传感器权限');return false;}}
+  catch{say('请求动作传感器权限失败');return false;}
+ }
+ let got=false;const h=()=>{got=true;};window.addEventListener('devicemotion',h);
+ setTimeout(()=>{window.removeEventListener('devicemotion',h);say(got?'摇晃已就绪：晃一晃手机试试':'没收到传感器数据：请确认是用 http://127.0.0.1 或 https 打开的酒馆，并且系统没有关闭动作传感器');},1500);
+ return true;
+}
 function qlAttachJelly(img){
  if(!img)return;
- const mode=['squish','pull','both','wobble'].includes(cfg().jellyMode)?cfg().jellyMode:'off';
- const amp={soft:.6,mid:1,bouncy:1.5}[cfg().jellyStrength]||1;
+ const S=qlJellyState(img),conf=qlJellyCfg(),amp=conf.amp,scope=conf.scope;
  img._qlJellyAbort?.abort();img._qlJellyAbort=null;
  img.style.transform='';img.style.touchAction='';img.style.willChange='';
- if(mode==='off')return;
- const scope=['smudge','whole'].includes(cfg().jellyScope)?cfg().jellyScope:'local';
- if(scope==='whole')return qlAttachJellyWhole(img);
+ if(!conf.on){S.selecting=false;return;}
+ if(scope==='whole'&&!S.has&&!conf.shake&&!S.selecting)return qlAttachJellyWhole(img,conf);
  let probeOk=false;
  try{const pc=document.createElement('canvas');probeOk=!!(pc.getContext('webgl')||pc.getContext('experimental-webgl'));}catch{}
- if(!probeOk)return qlAttachJellyWhole(img);
+ if(!probeOk)return qlAttachJellyWhole(img,conf);
  const ac=new AbortController();img._qlJellyAbort=ac;const sig={signal:ac.signal};
- img.draggable=false;img.style.touchAction='none';img.style.webkitUserDrag='none';
- let canvas=null,gl=null,prog=null,posBuf=null,idxCount=0,tex=null,texSrc='',cols=0,rows=0,pos=null,uvs=null,locPos=0,boxW=0,boxH=0,failed=false;
- let raf=0,press=null,cx=0,cy=0,lx=0,ly=0,ofx=null,ofy=null,ovx=null,ovy=null;
- const dep={x:0,v:0,t:0,k:.3,d:.6},ox={x:0,v:0,t:0,k:.3,d:.7},oy={x:0,v:0,t:0,k:.3,d:.7},rip={a:0,t:0};
- const destroy=()=>{cancelAnimationFrame(raf);raf=0;try{canvas?.remove();}catch{}canvas=null;gl=null;};
+ const wantPointer=conf.tap||conf.drag||S.selecting;
+ if(wantPointer){img.draggable=false;img.style.touchAction='none';img.style.webkitUserDrag='none';}
+ const MW=QL_JELLY_MW,MH=QL_JELLY_MH;
+ let canvas=null,selCv=null,gl=null,prog=null,posBuf=null,idxCount=0,tex=null,texSrc='',cols=0,rows=0,pos=null,locPos=0,boxW=0,boxH=0,failed=false;
+ let raf=0,press=null,cx=0,cy=0,lx=0,ly=0,ofx=null,ofy=null,ovx=null,ovy=null,mv=null,shw=null,shown=false;
+ const dep={x:0,v:0,t:0,k:.3,d:.6},ox={x:0,v:0,t:0,k:.3,d:.7},oy={x:0,v:0,t:0,k:.3,d:.7};
+ const aff={x:[0,0,1,1,0],v:[0,0,0,0,0],t:[0,0,1,1,0]};
+ const shk={x:0,y:0,vx:0,vy:0};
+ const destroy=()=>{cancelAnimationFrame(raf);raf=0;try{canvas?.remove();}catch{}try{selCv?.remove();}catch{}canvas=null;selCv=null;gl=null;};
  ac.signal.addEventListener('abort',destroy);
  const box=()=>{
   const r=img.getBoundingClientRect(),cs=getComputedStyle(img);
@@ -3764,6 +3797,38 @@ function qlAttachJelly(img){
   return {left:l,top:t,w:Math.max(10,r.width-l-rr),h:Math.max(10,r.height-t-b)};
  };
  const compile=(type,src)=>{const sh=gl.createShader(type);gl.shaderSource(sh,src);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw new Error('shader');return sh;};
+ // 选区采样（双线性），返回 0~1
+ const maskAt=(u,v)=>{
+  const gx=Math.max(0,Math.min(MW-1,u*(MW-1))),gy=Math.max(0,Math.min(MH-1,v*(MH-1)));
+  const x0=Math.floor(gx),y0=Math.floor(gy),x1=Math.min(MW-1,x0+1),y1=Math.min(MH-1,y0+1),fx=gx-x0,fy=gy-y0,m=S.mask;
+  return (m[y0*MW+x0]*(1-fx)+m[y0*MW+x1]*fx)*(1-fy)+(m[y1*MW+x0]*(1-fx)+m[y1*MW+x1]*fx)*fy;
+ };
+ const rebuildWeights=()=>{
+  if(!mv)return;
+  for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){
+   const k=j*(cols+1)+i,u=i/cols,v=j/rows;
+   mv[k]=S.has?maskAt(u,v):1;
+   shw[k]=S.has?mv[k]:Math.pow(Math.sin(Math.PI*u),.6)*Math.pow(Math.sin(Math.PI*v),.6);
+  }
+ };
+ // 选区显示层：低分辨率画布放大，边缘自带柔化
+ let accent=null;
+ const accentRgb=()=>{
+  if(accent)return accent;
+  let col='';try{col=getComputedStyle(img.closest('dialog')||img).getPropertyValue('--ql-accent').trim();}catch{}
+  try{const c=document.createElement('canvas');c.width=c.height=1;const x=c.getContext('2d');x.fillStyle='#e58aa8';if(col)x.fillStyle=col;x.fillRect(0,0,1,1);const d=x.getImageData(0,0,1,1).data;accent=[d[0],d[1],d[2]];}catch{accent=[229,138,168];}
+  return accent;
+ };
+ const paintSel=()=>{
+  if(!selCv)return;
+  const x=selCv.getContext('2d'),id=x.createImageData(MW,MH),[r,g,b]=accentRgb();
+  for(let k=0;k<MW*MH;k++){id.data[k*4]=r;id.data[k*4+1]=g;id.data[k*4+2]=b;id.data[k*4+3]=Math.round(Math.min(1,S.mask[k])*140);}
+  x.putImageData(id,0,0);
+ };
+ const placeOverlays=bx=>{
+  const l=(img.offsetLeft+bx.left)+'px',t=(img.offsetTop+bx.top)+'px',w=bx.w+'px',h=bx.h+'px';
+  for(const c of [canvas,selCv]){if(!c)continue;c.style.left=l;c.style.top=t;c.style.width=w;c.style.height=h;}
+ };
  const ensure=()=>{
   if(failed)return false;
   try{
@@ -3772,6 +3837,8 @@ function qlAttachJelly(img){
     const host=img.offsetParent||img.parentElement;if(!host)throw new Error('no host');
     canvas=document.createElement('canvas');canvas.className='ql-jelly-canvas';canvas.style.cssText='position:absolute;pointer-events:none;display:none;z-index:2;';
     host.appendChild(canvas);
+    selCv=document.createElement('canvas');selCv.className='ql-jelly-sel';selCv.width=MW;selCv.height=MH;selCv.style.cssText='position:absolute;pointer-events:none;z-index:3;display:none;';
+    host.appendChild(selCv);
     gl=canvas.getContext('webgl',{alpha:true,premultipliedAlpha:true,antialias:true})||canvas.getContext('experimental-webgl');
     if(!gl)throw new Error('no gl');
     prog=gl.createProgram();
@@ -3788,8 +3855,9 @@ function qlAttachJelly(img){
    const dpr=Math.min(2,window.devicePixelRatio||1);
    if(Math.abs(bx.w-boxW)>.5||Math.abs(bx.h-boxH)>.5||!pos){
     boxW=bx.w;boxH=bx.h;canvas.width=Math.round(bx.w*dpr);canvas.height=Math.round(bx.h*dpr);
-    cols=20;rows=Math.max(12,Math.min(40,Math.round(cols*bx.h/bx.w)));
-    const n=(cols+1)*(rows+1);pos=new Float32Array(n*2);uvs=new Float32Array(n*2);ofx=new Float32Array(n);ofy=new Float32Array(n);ovx=new Float32Array(n);ovy=new Float32Array(n);
+    cols=32;rows=Math.max(16,Math.min(56,Math.round(cols*bx.h/bx.w)));
+    const n=(cols+1)*(rows+1);pos=new Float32Array(n*2);const uvs=new Float32Array(n*2);
+    ofx=new Float32Array(n);ofy=new Float32Array(n);ovx=new Float32Array(n);ovy=new Float32Array(n);mv=new Float32Array(n);shw=new Float32Array(n);
     const idx=[];
     for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){const k=j*(cols+1)+i;uvs[k*2]=i/cols;uvs[k*2+1]=j/rows;}
     for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){const a=j*(cols+1)+i,b=a+1,c=a+cols+1,d=c+1;idx.push(a,b,c,b,d,c);}
@@ -3798,8 +3866,9 @@ function qlAttachJelly(img){
     const ub=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,ub);gl.bufferData(gl.ARRAY_BUFFER,uvs,gl.STATIC_DRAW);
     const locUv=gl.getAttribLocation(prog,'aUv');gl.enableVertexAttribArray(locUv);gl.vertexAttribPointer(locUv,2,gl.FLOAT,false,0,0);
     gl.viewport(0,0,canvas.width,canvas.height);
+    rebuildWeights();paintSel();
    }
-   canvas.style.left=(img.offsetLeft+bx.left)+'px';canvas.style.top=(img.offsetTop+bx.top)+'px';canvas.style.width=bx.w+'px';canvas.style.height=bx.h+'px';
+   placeOverlays(bx);
    if(texSrc!==(img.currentSrc||img.src)){
     gl.bindTexture(gl.TEXTURE_2D,tex);
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
@@ -3809,17 +3878,26 @@ function qlAttachJelly(img){
   }catch(e){failed=true;destroy();console.warn('[拾帧] 局部果冻不可用，改用整图弹动',e);return false;}
  };
  const draw=()=>{
-  const R=.17*Math.min(boxW,boxH),R2=.22*Math.min(boxW,boxH),RR=R*R,RR2=R2*R2;
-  const ripOn=rip.a*Math.exp(-rip.t*.045)>.05;
-  const fall=Math.exp;
+  const m=Math.min(boxW,boxH),R=.17*m,R2=.22*m,RR=R*R,RR2=R2*R2,shAmp=.05*m*amp;
+  const useLocal=scope!=='whole',useAff=scope==='whole';
+  const [tx,ty,sx,sy,rot]=aff.x,cr=Math.cos(rot*Math.PI/180),sr=Math.sin(rot*Math.PI/180),mx0=boxW/2,my0=boxH/2;
+  const shOn=Math.abs(shk.x)>.0005||Math.abs(shk.y)>.0005;
   for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){
-   const k=j*(cols+1)+i,px=i/cols*boxW,py=j/rows*boxH;
-   const dx=px-cx,dy=py-cy,d2=dx*dx+dy*dy;
-   const w=fall(-d2/RR),w2=fall(-d2/RR2);
-   const f=1-dep.x*w;
-   let x=cx+dx*f+ox.x*w2+ofx[k],y=cy+dy*f+oy.x*w2+ofy[k];
-   if(ripOn){const d=Math.sqrt(d2)+1e-3,a=rip.a*Math.exp(-rip.t*.045)*Math.exp(-d/(R*2.2))*Math.sin(d*.075-rip.t*.45);x+=dx/d*a;y+=dy/d*a;}
-   pos[k*2]=x;pos[k*2+1]=y;
+   const k=j*(cols+1)+i,px=i/cols*boxW,py=j/rows*boxH,m1=mv[k];
+   let x=px,y=py;
+   if(useLocal){
+    const dx=px-cx,dy=py-cy,d2=dx*dx+dy*dy;
+    const w=Math.exp(-d2/RR)*m1,w2=Math.exp(-d2/RR2)*m1;
+    const f=1-dep.x*w;
+    x=cx+dx*f+ox.x*w2+ofx[k];y=cy+dy*f+oy.x*w2+ofy[k];
+   }
+   if(useAff){
+    const dxc=px-mx0,dyc=py-my0;
+    const X=mx0+tx+(dxc*cr-dyc*sr)*sx,Y=my0+ty+(dxc*sr+dyc*cr)*sy;
+    x=px+(X-px)*m1;y=py+(Y-py)*m1;
+   }
+   if(shOn){const w=shw[k];x+=shk.x*shAmp*w*(1+.6*(py/boxH-.5));y+=shk.y*shAmp*w*(1+.4*(px/boxW-.5));}
+   pos[k*2]=Math.max(0,Math.min(boxW,x));pos[k*2+1]=Math.max(0,Math.min(boxH,y));
   }
   gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
   gl.bindBuffer(gl.ARRAY_BUFFER,posBuf);gl.bufferData(gl.ARRAY_BUFFER,pos,gl.DYNAMIC_DRAW);
@@ -3827,47 +3905,79 @@ function qlAttachJelly(img){
   gl.uniform2f(gl.getUniformLocation(prog,'uSize'),boxW,boxH);
   gl.drawElements(gl.TRIANGLES,idxCount,gl.UNSIGNED_SHORT,0);
  };
- const step=s=>{s.v+=(s.t-s.x)*s.k;s.v*=s.d;s.x+=s.v;return Math.abs(s.v)>.0006||Math.abs(s.t-s.x)>.0006;};
+ const step=s=>{s.v+=(s.t-s.x)*s.k;s.v*=s.d;s.x+=s.v;return Math.abs(s.v)>.002||Math.abs(s.t-s.x)>.002;};
+ const resetAll=()=>{
+  dep.x=dep.v=ox.x=ox.v=oy.x=oy.v=0;aff.x=[0,0,1,1,0];aff.v=[0,0,0,0,0];aff.t=[0,0,1,1,0];shk.x=shk.y=shk.vx=shk.vy=0;
+  if(ofx){ofx.fill(0);ofy.fill(0);ovx.fill(0);ovy.fill(0);}
+ };
+ const K=.16,D=.80;
  const tick=()=>{
   if(!canvas||!gl){raf=0;return;}
   let live=false;
   live=step(dep)||live;live=step(ox)||live;live=step(oy)||live;
+  for(let i=0;i<5;i++){
+   if(press&&!press.paint&&i<4&&scope==='whole'){aff.x[i]=aff.t[i];aff.v[i]=0;}
+   else{aff.v[i]+=(aff.t[i]-aff.x[i])*K;aff.v[i]*=D;aff.x[i]+=aff.v[i];}
+   if(Math.abs(aff.v[i])>.002||Math.abs(aff.t[i]-aff.x[i])>.002)live=true;
+  }
+  shk.vx+=-shk.x*.1;shk.vx*=.9;shk.x+=shk.vx;shk.vy+=-shk.y*.1;shk.vy*=.9;shk.y+=shk.vy;
+  if(Math.abs(shk.x)>.002||Math.abs(shk.vx)>.002||Math.abs(shk.y)>.002||Math.abs(shk.vy)>.002)live=true;
   if(ofx){for(let k=0;k<ofx.length;k++){if(!press||!press.smudging){ovx[k]+=(0-ofx[k])*.12;ovy[k]+=(0-ofy[k])*.12;ovx[k]*=.8;ovy[k]*=.8;ofx[k]+=ovx[k];ofy[k]+=ovy[k];}if(Math.abs(ofx[k])>.02||Math.abs(ofy[k])>.02||Math.abs(ovx[k])>.01||Math.abs(ovy[k])>.01)live=true;}}
-  if(rip.a*Math.exp(-rip.t*.045)>.05){rip.t++;live=true;}
   draw();
-  if(live||press)raf=requestAnimationFrame(tick);
-  else{raf=0;canvas.style.display='none';dep.x=dep.v=ox.x=ox.v=oy.x=oy.v=0;rip.a=0;if(ofx){ofx.fill(0);ofy.fill(0);ovx.fill(0);ovy.fill(0);}}
+  if(live||(press&&!press.paint))raf=requestAnimationFrame(tick);
+  else{raf=0;canvas.style.display='none';shown=false;resetAll();}
  };
+ const show=()=>{if(canvas&&!shown){canvas.style.display='block';shown=true;}};
  const kick=()=>{if(!raf)raf=requestAnimationFrame(tick);};
+ const local=e=>{const r=img.getBoundingClientRect(),bx=box();return [Math.max(0,Math.min(boxW,e.clientX-r.left-bx.left)),Math.max(0,Math.min(boxH,e.clientY-r.top-bx.top))];};
+ // 涂选区：自由手绘，高斯笔刷取最大值，边缘柔和
+ const paintAt=(x,y)=>{
+  const u=x/boxW,v=y/boxH,rad=.075*Math.min(boxW,boxH),rr=rad*rad*1.3;
+  for(let j=0;j<MH;j++){const dy=(j/(MH-1)-v)*boxH;if(Math.abs(dy)>rad*2.2)continue;
+   for(let i=0;i<MW;i++){const dx=(i/(MW-1)-u)*boxW;if(Math.abs(dx)>rad*2.2)continue;
+    const w=Math.exp(-(dx*dx+dy*dy)/rr);if(w>S.mask[j*MW+i])S.mask[j*MW+i]=Math.min(1,w*1.15);}}
+  S.has=true;paintSel();rebuildWeights();
+ };
  img.addEventListener('pointerdown',e=>{
   if(e.pointerType==='mouse'&&e.button!==0)return;
-  if(!ensure()){if(failed)qlAttachJellyWhole(img);return;}
-  const r=img.getBoundingClientRect(),bx=box();
-  cx=Math.max(0,Math.min(boxW,e.clientX-r.left-bx.left));cy=Math.max(0,Math.min(boxH,e.clientY-r.top-bx.top));
-  press={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),moved:false,smudging:false};lx=cx;ly=cy;
+  if(!S.selecting&&!conf.tap&&!conf.drag)return;
+  if(!ensure()){if(failed)qlAttachJellyWhole(img,conf);return;}
+  const [px,py]=local(e);
   try{img.setPointerCapture(e.pointerId);}catch{}
   e.preventDefault();
-  canvas.style.display='block';
+  if(S.selecting){
+   press={id:e.pointerId,paint:true};selCv.style.display='block';paintAt(px,py);return;
+  }
+  cx=px;cy=py;lx=px;ly=py;
+  press={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),moved:false,smudging:false};
+  show();
   Object.assign(dep,{k:.3,d:.6});Object.assign(ox,{k:.3,d:.7});Object.assign(oy,{k:.3,d:.7});
   ox.t=ox.x=0;oy.t=oy.x=0;ox.v=oy.v=0;
-  if(mode==='squish'||mode==='both')dep.t=Math.min(.5,.3*amp);
+  if(scope!=='whole'&&conf.tap)dep.t=Math.min(.5,.3*amp);
   kick();
  },sig);
  img.addEventListener('pointermove',e=>{
   if(!press||e.pointerId!==press.id||!canvas)return;
+  if(press.paint){const [px,py]=local(e);paintAt(px,py);return;}
   const dx=e.clientX-press.x,dy=e.clientY-press.y;
   if(!press.moved&&Math.hypot(dx,dy)<6)return;
   press.moved=true;press.dx=dx;
-  if(mode==='squish'||mode==='wobble')return;
+  if(!conf.drag)return;
+  if(scope==='whole'){
+   const damp=v=>Math.sign(v)*Math.pow(Math.abs(v),.82)*.55;
+   const w=boxW,h=boxH,ax=Math.abs(dx)/w,ay=Math.abs(dy)/h;
+   const stX=Math.min(.38,ax*.9*amp),stY=Math.min(.38,ay*.9*amp);
+   aff.t[0]=damp(dx);aff.t[1]=damp(dy);aff.t[2]=(1+stX)*(1-stY*.45);aff.t[3]=(1+stY)*(1-stX*.45);aff.t[4]=Math.max(-6,Math.min(6,dx/w*5*amp));
+   kick();return;
+  }
   dep.t=0;
   if(scope==='smudge'){
-   // 涂抹：手指划过的地方（笔刷半径内）的像素被带着走，松手后各点自己弹回原位。
-   const r=img.getBoundingClientRect(),bx=box();
-   const nx=Math.max(0,Math.min(boxW,e.clientX-r.left-bx.left)),ny=Math.max(0,Math.min(boxH,e.clientY-r.top-bx.top));
+   // 抹开：手指划过的地方（笔刷半径内）的像素被带着走，松手后各点自己弹回原位。
+   const [nx,ny]=local(e);
    const mx=nx-lx,my=ny-ly;lx=nx;ly=ny;cx=nx;cy=ny;press.smudging=true;
    const Rb=.12*Math.min(boxW,boxH),RRb=Rb*Rb,lim=.12*Math.min(boxW,boxH)*amp;
    for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){
-    const k=j*(cols+1)+i,dx=i/cols*boxW-nx,dy=j/rows*boxH-ny,w=Math.exp(-(dx*dx+dy*dy)/RRb);
+    const k=j*(cols+1)+i,ddx=i/cols*boxW-nx,ddy=j/rows*boxH-ny,w=Math.exp(-(ddx*ddx+ddy*ddy)/RRb)*mv[k];
     if(w<.02)continue;
     ofx[k]=Math.max(-lim,Math.min(lim,ofx[k]+mx*w*.9));ofy[k]=Math.max(-lim,Math.min(lim,ofy[k]+my*w*.9));ovx[k]=0;ovy[k]=0;
    }
@@ -3879,22 +3989,44 @@ function qlAttachJelly(img){
  const end=e=>{
   if(!press||(e&&e.pointerId!==press.id))return;
   const p=press;press=null;p.smudging=false;try{img.releasePointerCapture(p.id);}catch{}
+  if(p.paint){return;}
   Object.assign(dep,{k:.15,d:.78});Object.assign(ox,{k:.13,d:.8});Object.assign(oy,{k:.13,d:.8});
   dep.t=0;ox.t=0;oy.t=0;
-  if(mode==='wobble'){rip.a=11*amp*(p.moved?1.3:1);rip.t=0;}
+  if(scope==='whole'){
+   const quick=Date.now()-p.t<450&&!p.moved;
+   if(quick&&conf.tap){aff.x[2]=1+.11*amp;aff.x[3]=1-.14*amp;aff.v[2]=0;aff.v[3]=0;}
+   else if(p.moved&&conf.drag){aff.v[2]-=(aff.x[2]-1)*.35;aff.v[3]-=(aff.x[3]-1)*.35;}
+   aff.t=[0,0,1,1,0];
+  }
   kick();
  };
  img.addEventListener('pointerup',end,sig);img.addEventListener('pointercancel',end,sig);
  img.addEventListener('contextmenu',e=>{if(press)e.preventDefault();},sig);
+ if(S.selecting&&ensure()){selCv.style.display='block';paintSel();}
+ // 摇晃手机：加速度推着选区（没选区时是整张图、边缘不动）晃，停了弹簧自己回来。
+ if(conf.shake&&!S.selecting){
+  let gx=0,gy=0,primed=false;
+  window.addEventListener('devicemotion',e=>{
+   if(press)return;
+   let ax=0,ay=0;const a=e.acceleration;
+   if(a&&(a.x!=null||a.y!=null)){ax=a.x||0;ay=a.y||0;}
+   else{const g=e.accelerationIncludingGravity||{};const vx=g.x||0,vy=g.y||0;if(!primed){gx=vx;gy=vy;primed=true;}gx=gx*.9+vx*.1;gy=gy*.9+vy*.1;ax=vx-gx;ay=vy-gy;}
+   if(Math.abs(ax)+Math.abs(ay)<1.2)return;
+   if(!ensure())return;
+   show();
+   shk.vx+=Math.max(-1.2,Math.min(1.2,-ax*.025*amp));shk.vy+=Math.max(-1.2,Math.min(1.2,ay*.025*amp));
+   shk.x=Math.max(-1.6,Math.min(1.6,shk.x));shk.y=Math.max(-1.6,Math.min(1.6,shk.y));
+   kick();
+  },sig);
+ }
 }
-function qlAttachJellyWhole(img){
+function qlAttachJellyWhole(img,conf){
  if(!img)return;
- const mode=['squish','pull','both','wobble'].includes(cfg().jellyMode)?cfg().jellyMode:'off';
- const amp={soft:.6,mid:1,bouncy:1.5}[cfg().jellyStrength]||1;
+ conf=conf||qlJellyCfg();const amp=conf.amp;
  // 每次打开都按当前设置重新决定是否启用；上一次绑的监听用 AbortController 统一撤掉。
  img._qlJellyAbort?.abort();img._qlJellyAbort=null;
  img.style.transform='';img.style.touchAction='';img.style.transformOrigin='';
- if(mode==='off')return;
+ if(!conf.on||(!conf.tap&&!conf.drag))return;
  const ac=new AbortController();img._qlJellyAbort=ac;const sig={signal:ac.signal};
  img.draggable=false;img.style.touchAction='none';img.style.willChange='transform';img.style.webkitUserDrag='none';
  // 状态：x=[tx,ty,sx,sy,rot]，v=速度，t=目标
@@ -3905,7 +4037,7 @@ function qlAttachJellyWhole(img){
  const tick=()=>{
   let moving=false;
   for(let i=0;i<5;i++){
-   if(drag&&i<4&&mode!=='wobble'){st.x[i]=st.t[i];st.v[i]=0;}
+   if(drag&&i<4){st.x[i]=st.t[i];st.v[i]=0;}
    else{st.v[i]+=(st.t[i]-st.x[i])*K;st.v[i]*=D;st.x[i]+=st.v[i];}
    if(Math.abs(st.v[i])>.0008||Math.abs(st.t[i]-st.x[i])>.0008)moving=true;
   }
@@ -3916,7 +4048,6 @@ function qlAttachJellyWhole(img){
  const kick=()=>{if(!raf)raf=requestAnimationFrame(tick);};
  const rest=()=>{st.t=[0,0,1,1,0];};
  const squish=()=>{st.x[2]=1+.11*amp;st.x[3]=1-.14*amp;st.v[2]=0;st.v[3]=0;rest();kick();};
- const wobble=dir=>{st.v[4]+=(dir||1)*3.2*amp;st.v[2]+=.012*amp;st.v[3]-=.012*amp;rest();kick();};
  img.addEventListener('pointerdown',e=>{
   if(e.pointerType==='mouse'&&e.button!==0)return;
   drag={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),moved:false};
@@ -3928,9 +4059,8 @@ function qlAttachJellyWhole(img){
   const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
   if(!drag.moved&&Math.hypot(dx,dy)<6)return;
   drag.moved=true;
-  if(mode==='squish')return;
+  if(!conf.drag)return;
   const w=img.clientWidth||300,h=img.clientHeight||300;
-  if(mode==='wobble'){drag.dx=dx;return;}
   // 沿拖动方向拉伸、垂直方向收窄，图片中心跟着手指走一小段（橡皮筋式阻尼）。
   const damp=v=>Math.sign(v)*Math.pow(Math.abs(v),.82)*.55;
   const ax=Math.abs(dx)/w,ay=Math.abs(dy)/h;
@@ -3944,9 +4074,8 @@ function qlAttachJellyWhole(img){
   if(!drag||(e&&e.pointerId!==drag.id))return;
   const d=drag;drag=null;try{img.releasePointerCapture(d.id);}catch{}
   const quick=Date.now()-d.t<450&&!d.moved;
-  if(mode==='wobble'){wobble(d.moved?(d.dx>=0?1:-1):(Math.random()<.5?-1:1));return;}
-  if(quick&&(mode==='squish'||mode==='both')){squish();return;}
-  if(d.moved&&(mode==='pull'||mode==='both')){
+  if(quick&&conf.tap){squish();return;}
+  if(d.moved&&conf.drag){
    // 松手：保留当前拉伸状态，并给一点反向速度，弹簧会带来 Q 弹的过冲。
    st.v[2]-=(st.x[2]-1)*.35;st.v[3]-=(st.x[3]-1)*.35;rest();kick();return;
   }
@@ -3962,19 +4091,50 @@ function openViewfinderImage(url){
   overlay=document.createElement('dialog');overlay.className='ql-viewfinder-lightbox';overlay.setAttribute('aria-label','放大查看图片');
   overlay.innerHTML='<div class="ql-album-paper is-flip"><div class="ql-album-single-page"><button type="button" class="ql-viewfinder-lightbox-close" aria-label="关闭图片" title="关闭"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="ql-album-single-photo"><img alt="放大查看的生成图片"></div></div></div>';
   {
-   // 放大图底部的果冻快速切换：不用回设置页。
+   // 放大图下方的果冻面板：范围 / 选区 / 交互，不用回设置页。
    const bar=document.createElement('div');bar.className='ql-jelly-bar';bar.setAttribute('role','group');bar.setAttribute('aria-label','果冻互动');
-   bar.innerHTML='<button type="button" data-jelly="off">关</button><button type="button" data-jelly="local">局部</button><button type="button" data-jelly="smudge">涂抹</button><button type="button" data-jelly="whole">整体</button>';
-   const paintBar=()=>{const c=cfg(),on=['squish','pull','both','wobble'].includes(c.jellyMode),scope=['smudge','whole'].includes(c.jellyScope)?c.jellyScope:'local';bar.querySelectorAll('button').forEach(b=>{const v=b.dataset.jelly;b.classList.toggle('is-active',v==='off'?!on:(on&&v===scope));});};
-   bar.addEventListener('click',e=>{
-    const b=e.target.closest('button[data-jelly]');if(!b)return;e.preventDefault();e.stopPropagation();
-    const c=cfg(),v=b.dataset.jelly;
-    if(v==='off'){if(['squish','pull','both','wobble'].includes(c.jellyMode))c.jellyModeLast=c.jellyMode;c.jellyMode='off';}
-    else{c.jellyScope=v==='local'?'local':v;if(!['squish','pull','both','wobble'].includes(c.jellyMode))c.jellyMode=['squish','pull','both','wobble'].includes(c.jellyModeLast)?c.jellyModeLast:'both';}
-    save();paintBar();qlAttachJelly(overlay.querySelector('img'));
-    const jm=document.querySelector('#ql-jelly-mode'),sc=document.querySelector('#ql-jelly-scope');if(jm)jm.value=['squish','pull','both','wobble'].includes(c.jellyMode)?c.jellyMode:'off';if(sc)sc.value=['smudge','whole'].includes(c.jellyScope)?c.jellyScope:'local';
+   bar.innerHTML='<div class="ql-jb-head"><button type="button" data-jb="power"></button><button type="button" data-jb="more">设置 ▴</button><button type="button" data-jb="done" hidden>✓ 完成选区</button><button type="button" data-jb="clr" hidden>清除选区</button></div>'
+    +'<div class="ql-jb-panel" hidden><div class="ql-jb-row"><b>范围</b><button type="button" data-jb-scope="local">局部</button><button type="button" data-jb-scope="smudge">抹开</button><button type="button" data-jb-scope="whole">全屏</button></div>'
+    +'<div class="ql-jb-row"><b>选区</b><button type="button" data-jb="sel">✎ 涂选区</button><button type="button" data-jb="clr2">清除</button><em class="ql-jb-hint"></em></div>'
+    +'<div class="ql-jb-row"><b>交互</b><button type="button" data-jb-in="tap">点击</button><button type="button" data-jb-in="drag">拖动</button><button type="button" data-jb-in="shake">摇晃</button></div>'
+    +'<div class="ql-jb-msg" role="status"></div></div>';
+   const $b=sel=>bar.querySelector(sel);
+   const setMsg=t=>{$b('.ql-jb-msg').textContent=t||'';};
+   const paintBar=()=>{
+    const c=qlJellyCfg(),img=overlay.querySelector('img'),S=img?qlJellyState(img):{has:false,selecting:false};
+    $b('[data-jb=power]').textContent=c.on?'果冻：开':'果冻：关';$b('[data-jb=power]').classList.toggle('is-active',c.on);
+    bar.classList.toggle('is-off',!c.on);bar.classList.toggle('is-selecting',!!S.selecting);
+    bar.querySelectorAll('[data-jb-scope]').forEach(b=>b.classList.toggle('is-active',b.dataset.jbScope===c.scope));
+    const ins={tap:c.tap,drag:c.drag,shake:c.shake};bar.querySelectorAll('[data-jb-in]').forEach(b=>b.classList.toggle('is-active',!!ins[b.dataset.jbIn]));
+    $b('[data-jb=sel]').classList.toggle('is-active',!!S.selecting);
+    $b('.ql-jb-hint').textContent=S.has?'已选区（只有选中的地方会动）':'未选区（整张图都会动）';
+    $b('[data-jb=done]').hidden=!S.selecting;$b('[data-jb=clr]').hidden=!S.selecting;$b('[data-jb=more]').hidden=!!S.selecting;
+    if(S.selecting)$b('.ql-jb-panel').hidden=true;
+    $b('[data-jb=more]').textContent=$b('.ql-jb-panel').hidden?'设置 ▴':'收起 ▾';
+   };
+   const syncSettings=()=>{
+    const c=qlJellyCfg(),set=(id,fn)=>{const el=document.querySelector(id);if(el)fn(el);};
+    set('#ql-jelly-on',el=>{el.value=c.on?'on':'off';});set('#ql-jelly-scope',el=>{el.value=c.scope;});
+    set('#ql-jelly-tap',el=>{el.checked=c.tap;});set('#ql-jelly-drag',el=>{el.checked=c.drag;});set('#ql-jelly-shake',el=>{el.checked=c.shake;});
+   };
+   const rebind=()=>{qlAttachJelly(overlay.querySelector('img'));paintBar();syncSettings();};
+   bar.addEventListener('click',async e=>{
+    const b=e.target.closest('button');if(!b)return;e.preventDefault();e.stopPropagation();
+    const c=cfg(),img=overlay.querySelector('img'),S=qlJellyState(img),d=b.dataset;
+    if(d.jb==='power'){qlJellyCfg();c.jellyOn=!c.jellyOn;if(!c.jellyOn)S.selecting=false;save();rebind();return;}
+    if(d.jb==='more'){const p=$b('.ql-jb-panel');p.hidden=!p.hidden;paintBar();return;}
+    if(d.jb==='sel'){qlJellyCfg();if(!c.jellyOn){c.jellyOn=true;save();}S.selecting=true;rebind();return;}
+    if(d.jb==='done'){S.selecting=false;rebind();return;}
+    if(d.jb==='clr'||d.jb==='clr2'){qlJellyClearSelection(img);if(d.jb==='clr')S.selecting=true;rebind();return;}
+    if(d.jbScope){qlJellyCfg();c.jellyScope=d.jbScope;c.jellyOn=true;save();rebind();return;}
+    if(d.jbIn){
+     qlJellyCfg();const key={tap:'jellyTap',drag:'jellyDrag',shake:'jellyShake'}[d.jbIn];c[key]=!c[key];if(c[key])c.jellyOn=true;save();
+     if(d.jbIn==='shake'&&c.jellyShake){setMsg('');await qlJellyEnableMotion(setMsg);}
+     else if(d.jbIn==='shake')setMsg('');
+     rebind();
+    }
    });
-   overlay._qlPaintJellyBar=paintBar;overlay.append(bar);
+   overlay._qlPaintJellyBar=paintBar;overlay._qlJellyMsg=setMsg;overlay.append(bar);
   }
   overlay.addEventListener('click',event=>{if(event.target===overlay||event.target.closest('.ql-viewfinder-lightbox-close')){if(overlay.open)overlay.close();else overlay.removeAttribute('open');}});
   overlay.addEventListener('close',()=>{overlay.querySelector('img')?.removeAttribute('src');$('#ql-result-enlarge')?.classList.remove('is-enlarged');});
@@ -3982,6 +4142,7 @@ function openViewfinderImage(url){
  }
  applyChatTheme(overlay);
  overlay.querySelector('img').src=url;
+ qlJellyClearSelection(overlay.querySelector('img'));{const jp=overlay.querySelector('.ql-jb-panel');if(jp)jp.hidden=true;}overlay._qlJellyMsg?.('');
  qlAttachJelly(overlay.querySelector('img'));overlay._qlPaintJellyBar?.();
  if(!overlay.open){
   if(typeof overlay.showModal==='function')overlay.showModal();
@@ -4275,7 +4436,13 @@ $('#ql-character-card').onchange=()=>{if($('#ql-character-save').dataset.edit!==
 $('#ql-character-save').onclick=()=>{const select=$('#ql-character-card'),characterKey=select?.value||'',name=$('#ql-character-name').value.trim(),appearance=$('#ql-character-appearance').value.trim(),isUserAppearance=characterKey==='__user__';if(!name){$('#ql-character-status').textContent='请填写条目名称。';return;}const card=!isUserAppearance&&characterKey!==''?(getContext()?.characters||[])[Number(characterKey)]:null;const item={name,characterKey:isUserAppearance?'__user__':characterKey===''?null:String(characterKey),characterName:isUserAppearance?'用户外貌':card?.name||card?.avatar||'',characterAvatar:isUserAppearance?'':card?.avatar||'',appearance,gender:$('#ql-character-gender')?.value||'',updatedAt:Date.now()};const edit=$('#ql-character-save').dataset.edit;const existing=edit!==undefined?cfg().characters[Number(edit)]:null;if(edit!==undefined&&existing)cfg().characters[Number(edit)]={...existing,...item};else if(isUserAppearance)cfg().characters.push(item);else cfg().characters.unshift(item);cfg().characters=isUserAppearance?cfg().characters.slice(-100):cfg().characters.slice(0,100);save();if(characterKey!=='')activeCharacterCardKey=String(characterKey);else activeCharacterCardKey='__unbound';delete $('#ql-character-save').dataset.edit;$('#ql-character-save').textContent='保存角色词条';$('#ql-character-name').readOnly=false;$('#ql-character-editor').hidden=true;renderLibrary();$('#ql-character-status').textContent=isUserAppearance?'已保存用户外貌条目：'+item.name:(characterKey!==''?'已保存，并绑定到角色卡：'+item.characterName:'已保存角色词条（尚未绑定角色卡）。');};$('#ql-character-cancel').onclick=()=>{delete $('#ql-character-save').dataset.edit;$('#ql-character-save').textContent='保存角色词条';$('#ql-character-name').readOnly=false;$('#ql-character-name').value='';$('#ql-character-appearance').value='';$('#ql-character-card').value='';$('#ql-character-editor').hidden=true;$('#ql-character-status').textContent='已切换到新建模式。';};$('#ql-character-card').onchange=()=>{activeCharacterCardKey=$('#ql-character-card').value||'';characterLibraryStarted=false;$('#ql-character-editor').hidden=true;renderLibrary();};
 qlBindGenericWordsUi();
 {const cb=$('#ql-vf-generic'),st=$('#ql-vf-generic-state');const paint=()=>{if(st){st.textContent=cb.checked?'　✓ 已开启':'　已关闭';st.classList.toggle('is-on',cb.checked);}};if(cb){cb.checked=cfg().viewfinderGeneric!==false;paint();cb.onchange=()=>{cfg().viewfinderGeneric=cb.checked;save();paint();qlUpdateFinalPreview();};}}
-{const jm=$('#ql-jelly-mode'),js=$('#ql-jelly-strength');if(jm){jm.value=['squish','pull','both','wobble'].includes(cfg().jellyMode)?cfg().jellyMode:'off';jm.onchange=()=>{cfg().jellyMode=jm.value;save();};}{const sc=$('#ql-jelly-scope');if(sc){sc.value=['smudge','whole'].includes(cfg().jellyScope)?cfg().jellyScope:'local';sc.onchange=()=>{cfg().jellyScope=sc.value;save();};}}if(js){js.value=['soft','bouncy'].includes(cfg().jellyStrength)?cfg().jellyStrength:'mid';js.onchange=()=>{cfg().jellyStrength=js.value;save();};}}
+{const c0=qlJellyCfg(),on=$('#ql-jelly-on'),sc=$('#ql-jelly-scope'),tp=$('#ql-jelly-tap'),dr=$('#ql-jelly-drag'),sk=$('#ql-jelly-shake'),js=$('#ql-jelly-strength'),msg=$('#ql-jelly-shake-msg');
+ if(on){on.value=c0.on?'on':'off';on.onchange=()=>{qlJellyCfg();cfg().jellyOn=on.value==='on';save();};}
+ if(sc){sc.value=c0.scope;sc.onchange=()=>{qlJellyCfg();cfg().jellyScope=sc.value;save();};}
+ if(tp){tp.checked=c0.tap;tp.onchange=()=>{qlJellyCfg();cfg().jellyTap=tp.checked;save();};}
+ if(dr){dr.checked=c0.drag;dr.onchange=()=>{qlJellyCfg();cfg().jellyDrag=dr.checked;save();};}
+ if(sk){sk.checked=c0.shake;sk.onchange=async()=>{qlJellyCfg();cfg().jellyShake=sk.checked;save();if(sk.checked){if(msg)msg.textContent='';await qlJellyEnableMotion(t=>{if(msg)msg.textContent=t;});}else if(msg)msg.textContent='';};}
+ if(js){js.value=['soft','bouncy'].includes(cfg().jellyStrength)?cfg().jellyStrength:'mid';js.onchange=()=>{cfg().jellyStrength=js.value;save();};}}
 {const b=$('#ql-diag-restore');if(b)b.onclick=()=>qlDialog({title:'图片恢复排查',message:qlDiagnoseRestore(),showCancel:false});}
 {const sel=$('#ql-missing-name-action');if(sel){sel.value=cfg().missingNameAction==='go'?'go':'ask';sel.onchange=()=>{cfg().missingNameAction=sel.value;save();};}}
 $('#ql-character-start').onclick=()=>{const key=$('#ql-character-card').value||'';if(key===''){$('#ql-character-status').textContent='请先选择一张角色卡或「用户外貌」。';return;}activeCharacterCardKey=key;characterLibraryStarted=true;$('#ql-character-editor').hidden=true;renderLibrary();$('#ql-character-status').textContent=key==='__user__'?'已进入用户外貌分组。':'已进入所选角色卡的编辑界面。';};
