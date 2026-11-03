@@ -3933,11 +3933,12 @@ function qlAttachJelly(img){
  const local=e=>{const r=img.getBoundingClientRect(),bx=box();return [Math.max(0,Math.min(boxW,e.clientX-r.left-bx.left)),Math.max(0,Math.min(boxH,e.clientY-r.top-bx.top))];};
  // 涂选区：自由手绘，高斯笔刷取最大值，边缘柔和
  const paintAt=(x,y)=>{
-  const u=x/boxW,v=y/boxH,rad=qlJellyBrush()*Math.min(boxW,boxH),rr=rad*rad*1.3;
+  const erase=S.tool==='erase',u=x/boxW,v=y/boxH,rad=qlJellyBrush()*Math.min(boxW,boxH),rr=rad*rad*1.3;
   for(let j=0;j<MH;j++){const dy=(j/(MH-1)-v)*boxH;if(Math.abs(dy)>rad*2.2)continue;
    for(let i=0;i<MW;i++){const dx=(i/(MW-1)-u)*boxW;if(Math.abs(dx)>rad*2.2)continue;
-    const w=Math.exp(-(dx*dx+dy*dy)/rr);if(w>S.mask[j*MW+i])S.mask[j*MW+i]=Math.min(1,w*1.15);}}
-  S.has=true;paintSel();rebuildWeights();
+    const w=Math.exp(-(dx*dx+dy*dy)/rr);{const q=j*MW+i;if(erase)S.mask[q]=Math.max(0,S.mask[q]-w*1.3);else if(w>S.mask[q])S.mask[q]=Math.min(1,w*1.15);}}}
+  if(erase){let any=false;for(let q=0;q<S.mask.length;q++){if(S.mask[q]<.04)S.mask[q]=0;else any=true;}S.has=any;}else S.has=true;
+  paintSel();rebuildWeights();
  };
  img.addEventListener('pointerdown',e=>{
   if(e.pointerType==='mouse'&&e.button!==0)return;
@@ -4094,7 +4095,7 @@ function openViewfinderImage(url){
   {
    // 放大图下方的果冻面板：范围 / 选区 / 交互，不用回设置页。
    const bar=document.createElement('div');bar.className='ql-jelly-bar';bar.setAttribute('role','group');bar.setAttribute('aria-label','果冻互动');
-   bar.innerHTML='<div class="ql-jb-head"><button type="button" data-jb="power"></button><button type="button" data-jb="more">设置 ▴</button><button type="button" data-jb="done" hidden>✓ 完成选区</button><button type="button" data-jb="clr" hidden>清除选区</button><label class="ql-jb-brush" hidden>粗细<input type="range" min="2" max="20" step="1" data-jb-brush aria-label="画笔粗细"></label></div>'
+   bar.innerHTML='<div class="ql-jb-head"><button type="button" data-jb="power"></button><button type="button" data-jb="more">设置 ▴</button><button type="button" data-jb-tool="add" aria-label="增加选区（画笔）" title="增加选区" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 3 3L8 19z"/><path d="M14 7l3 3"/></svg></button><button type="button" data-jb-tool="erase" aria-label="擦除选区（橡皮）" title="擦除选区" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 20h12"/><path d="M5 15l8-8a2 2 0 0 1 3 0l3 3a2 2 0 0 1 0 3l-6 6H9z"/><path d="M9 11l6 6"/></svg></button><button type="button" data-jb="clr" aria-label="清除全部选区" title="清除全部选区" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button><button type="button" data-jb="done" aria-label="完成选区" title="完成" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg></button><label class="ql-jb-brush" hidden title="画笔粗细"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/></svg><input type="range" min="2" max="20" step="1" data-jb-brush aria-label="画笔粗细"></label></div>'
     +'<div class="ql-jb-panel" hidden><div class="ql-jb-row"><b>范围</b><button type="button" data-jb-scope="local">局部</button><button type="button" data-jb-scope="smudge">抹开</button><button type="button" data-jb-scope="whole">全屏</button></div>'
     +'<div class="ql-jb-row"><b>选区</b><button type="button" data-jb="sel">✎ 涂选区</button><button type="button" data-jb="clr2">清除</button><em class="ql-jb-hint"></em></div>'
     +'<div class="ql-jb-row"><b>交互</b><button type="button" data-jb-in="tap">点击</button><button type="button" data-jb-in="drag">拖动</button><button type="button" data-jb-in="shake">摇晃</button></div>'
@@ -4109,7 +4110,7 @@ function openViewfinderImage(url){
     const ins={tap:c.tap,drag:c.drag,shake:c.shake};bar.querySelectorAll('[data-jb-in]').forEach(b=>b.classList.toggle('is-active',!!ins[b.dataset.jbIn]));
     $b('[data-jb=sel]').classList.toggle('is-active',!!S.selecting);
     $b('.ql-jb-hint').textContent=S.has?'已选区（只有选中的地方会动）':'未选区（整张图都会动）';
-    $b('.ql-jb-brush').hidden=!S.selecting;{const bi=$b('[data-jb-brush]');if(bi&&document.activeElement!==bi)bi.value=String(Math.round(qlJellyBrush()*100));}
+    $b('.ql-jb-brush').hidden=!S.selecting;bar.querySelectorAll('[data-jb-tool]').forEach(t=>{t.hidden=!S.selecting;t.classList.toggle('is-active',(S.tool||'add')===t.dataset.jbTool);});$b('[data-jb=power]').hidden=!!S.selecting;{const bi=$b('[data-jb-brush]');if(bi&&document.activeElement!==bi)bi.value=String(Math.round(qlJellyBrush()*100));}
     $b('[data-jb=done]').hidden=!S.selecting;$b('[data-jb=clr]').hidden=!S.selecting;$b('[data-jb=more]').hidden=!!S.selecting;
     if(S.selecting)$b('.ql-jb-panel').hidden=true;
     $b('[data-jb=more]').textContent=$b('.ql-jb-panel').hidden?'设置 ▴':'收起 ▾';
@@ -4135,7 +4136,8 @@ function openViewfinderImage(url){
     const c=cfg(),img=overlay.querySelector('img'),S=qlJellyState(img),d=b.dataset;
     if(d.jb==='power'){qlJellyCfg();c.jellyOn=!c.jellyOn;if(!c.jellyOn)S.selecting=false;save();rebind();return;}
     if(d.jb==='more'){const p=$b('.ql-jb-panel');p.hidden=!p.hidden;paintBar();return;}
-    if(d.jb==='sel'){qlJellyCfg();if(!c.jellyOn){c.jellyOn=true;save();}S.selecting=true;rebind();return;}
+    if(d.jb==='sel'){qlJellyCfg();if(!c.jellyOn){c.jellyOn=true;save();}S.selecting=true;S.tool='add';rebind();return;}
+    if(d.jbTool){S.tool=d.jbTool;paintBar();return;}
     if(d.jb==='done'){S.selecting=false;rebind();return;}
     if(d.jb==='clr'||d.jb==='clr2'){qlJellyClearSelection(img);if(d.jb==='clr')S.selecting=true;rebind();return;}
     if(d.jbScope){qlJellyCfg();c.jellyScope=d.jbScope;c.jellyOn=true;save();rebind();return;}
