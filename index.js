@@ -3815,7 +3815,7 @@ function qlAttachJelly(img){
  let accent=null;
  const accentRgb=()=>{
   if(accent)return accent;
-  let col='';try{col=getComputedStyle(img.closest('dialog')||img).getPropertyValue('--ql-accent').trim();}catch{}
+  let col='';try{if(document.documentElement.hasAttribute('data-ql-style'))col=getComputedStyle(document.documentElement).getPropertyValue('--qp-sig').trim();if(!col)col=getComputedStyle(img.closest('dialog')||img).getPropertyValue('--ql-accent').trim();}catch{}
   try{const c=document.createElement('canvas');c.width=c.height=1;const x=c.getContext('2d');x.fillStyle='#e58aa8';if(col)x.fillStyle=col;x.fillRect(0,0,1,1);const d=x.getImageData(0,0,1,1).data;accent=[d[0],d[1],d[2]];}catch{accent=[229,138,168];}
   return accent;
  };

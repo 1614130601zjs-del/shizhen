@@ -5604,3 +5604,12 @@ dialog.ql-viewfinder-lightbox .ql-jelly-bar.is-selecting .ql-jb-head{border-colo
 #shizhen-panel .ql-check input[type="checkbox"]:focus-visible{box-shadow:0 0 0 3px color-mix(in srgb,var(--ql-accent,#b9a) 35%,transparent)!important}
 #shizhen-panel .ql-check-state{font-weight:600;font-size:12px;opacity:.6;white-space:nowrap}
 #shizhen-panel .ql-check-state.is-on{opacity:1;color:var(--ql-accent,#b9a)}
+
+/* 果冻小面板：跟着当前界面风格（像素 / CCD / 拍立得 / 螃蟹…）的底色、文字、边框、圆角和点缀色走 */
+html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar{font-family:var(--qp-font)}
+html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-head,html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-panel{background:var(--qp-bg)!important;color:var(--qp-text)!important;border:var(--qp-bw) solid var(--qp-line)!important;border-radius:var(--qp-radius)!important;box-shadow:var(--qp-shadow)}
+html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-head{border-radius:calc(var(--qp-radius) + 2px)!important;box-shadow:none}
+html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-row b,html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-hint,html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-msg{color:var(--qp-muted)!important}
+html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar button{color:var(--qp-text)!important;background:var(--qp-btn-bg,transparent)!important;border:var(--qp-bw) solid var(--qp-line)!important;border-radius:var(--qp-btn-radius)!important;font-family:var(--qp-font)!important}
+html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar button.is-active{background:var(--qp-sig)!important;color:var(--qp-on-sig)!important;border-color:var(--qp-sig)!important}
+html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar.is-selecting .ql-jb-head{border-color:var(--qp-sig)!important}
