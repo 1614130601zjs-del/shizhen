@@ -3894,13 +3894,28 @@ function openViewfinderImage(url){
  if(!overlay){
   overlay=document.createElement('dialog');overlay.className='ql-viewfinder-lightbox';overlay.setAttribute('aria-label','放大查看图片');
   overlay.innerHTML='<div class="ql-album-paper is-flip"><div class="ql-album-single-page"><button type="button" class="ql-viewfinder-lightbox-close" aria-label="关闭图片" title="关闭"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="ql-album-single-photo"><img alt="放大查看的生成图片"></div></div></div>';
+  {
+   // 放大图底部的果冻快速切换：不用回设置页。
+   const bar=document.createElement('div');bar.className='ql-jelly-bar';bar.setAttribute('role','group');bar.setAttribute('aria-label','果冻互动');
+   bar.innerHTML='<button type="button" data-jelly="off">关</button><button type="button" data-jelly="local">局部</button><button type="button" data-jelly="smudge">涂抹</button><button type="button" data-jelly="whole">整体</button>';
+   const paintBar=()=>{const c=cfg(),on=['squish','pull','both','wobble'].includes(c.jellyMode),scope=['smudge','whole'].includes(c.jellyScope)?c.jellyScope:'local';bar.querySelectorAll('button').forEach(b=>{const v=b.dataset.jelly;b.classList.toggle('is-active',v==='off'?!on:(on&&v===scope));});};
+   bar.addEventListener('click',e=>{
+    const b=e.target.closest('button[data-jelly]');if(!b)return;e.preventDefault();e.stopPropagation();
+    const c=cfg(),v=b.dataset.jelly;
+    if(v==='off'){if(['squish','pull','both','wobble'].includes(c.jellyMode))c.jellyModeLast=c.jellyMode;c.jellyMode='off';}
+    else{c.jellyScope=v==='local'?'local':v;if(!['squish','pull','both','wobble'].includes(c.jellyMode))c.jellyMode=['squish','pull','both','wobble'].includes(c.jellyModeLast)?c.jellyModeLast:'both';}
+    save();paintBar();qlAttachJelly(overlay.querySelector('img'));
+    const jm=document.querySelector('#ql-jelly-mode'),sc=document.querySelector('#ql-jelly-scope');if(jm)jm.value=['squish','pull','both','wobble'].includes(c.jellyMode)?c.jellyMode:'off';if(sc)sc.value=['smudge','whole'].includes(c.jellyScope)?c.jellyScope:'local';
+   });
+   overlay._qlPaintJellyBar=paintBar;overlay.append(bar);
+  }
   overlay.addEventListener('click',event=>{if(event.target===overlay||event.target.closest('.ql-viewfinder-lightbox-close')){if(overlay.open)overlay.close();else overlay.removeAttribute('open');}});
   overlay.addEventListener('close',()=>{overlay.querySelector('img')?.removeAttribute('src');$('#ql-result-enlarge')?.classList.remove('is-enlarged');});
   document.body.append(overlay);
  }
  applyChatTheme(overlay);
  overlay.querySelector('img').src=url;
- qlAttachJelly(overlay.querySelector('img'));
+ qlAttachJelly(overlay.querySelector('img'));overlay._qlPaintJellyBar?.();
  if(!overlay.open){
   if(typeof overlay.showModal==='function')overlay.showModal();
   else{overlay.setAttribute('open','');overlay.style.position='fixed';}

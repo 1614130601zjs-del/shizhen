@@ -5578,3 +5578,8 @@ a.ql-prompt-source-badge:hover{text-decoration:underline}
 .ql-gw-status{margin:6px 0 8px;padding:6px 10px;border-radius:10px;font-size:12px;line-height:1.7;border:1px solid color-mix(in srgb,var(--ql-accent,#c9a) 30%,transparent)}
 .ql-gw-status.is-on{background:color-mix(in srgb,var(--ql-accent,#c9a) 14%,transparent)}
 .ql-gw-status.is-off{opacity:.75}
+
+/* 放大图底部：果冻快速切换 */
+dialog.ql-viewfinder-lightbox .ql-jelly-bar{position:absolute!important;top:100%!important;left:50%!important;transform:translateX(-50%)!important;display:flex!important;width:max-content;max-width:100vw;margin:10px 0 0!important;z-index:6;gap:4px;padding:3px;border-radius:999px;background:color-mix(in srgb,var(--ql-panel,#fff) 86%,transparent);border:1px solid var(--ql-border,rgba(0,0,0,.15));box-sizing:border-box}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar button{all:unset!important;box-sizing:border-box!important;display:inline-block!important;width:auto!important;min-width:46px!important;height:auto!important;padding:4px 12px!important;border-radius:999px!important;font-size:12px!important;line-height:1.4!important;text-align:center!important;white-space:nowrap!important;color:var(--ql-text,#444)!important;cursor:pointer;-webkit-tap-highlight-color:transparent}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar button.is-active{background:var(--ql-accent,#b9a)!important;color:#fff!important}
