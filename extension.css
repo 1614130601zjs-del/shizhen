@@ -5613,3 +5613,7 @@ html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-row b,htm
 html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar button{color:var(--qp-text)!important;background:var(--qp-btn-bg,transparent)!important;border:var(--qp-bw) solid var(--qp-line)!important;border-radius:var(--qp-btn-radius)!important;font-family:var(--qp-font)!important}
 html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar button.is-active{background:var(--qp-sig)!important;color:var(--qp-on-sig)!important;border-color:var(--qp-sig)!important}
 html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar.is-selecting .ql-jb-head{border-color:var(--qp-sig)!important}
+
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-brush{display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;padding:0 6px;color:var(--qp-text,var(--ql-text,#444))}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-brush[hidden]{display:none!important}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-brush input{width:84px;accent-color:var(--qp-sig,var(--ql-accent,#b9a))}

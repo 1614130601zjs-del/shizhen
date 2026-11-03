@@ -3751,6 +3751,7 @@ function qlJellyCfg(){
  if(typeof c.jellyShake!=='boolean')c.jellyShake=false;
  return {on:c.jellyOn,scope:['smudge','whole'].includes(c.jellyScope)?c.jellyScope:'local',tap:c.jellyTap,drag:c.jellyDrag,shake:c.jellyShake,amp:{soft:.6,mid:1,bouncy:1.5}[c.jellyStrength]||1};
 }
+function qlJellyBrush(){const b=Number(cfg().jellyBrush);return Number.isFinite(b)&&b>0?Math.max(.02,Math.min(.2,b)):.075;}
 function qlJellyState(img){
  if(!img._qlJ)img._qlJ={mask:new Float32Array(QL_JELLY_MW*QL_JELLY_MH),has:false,selecting:false};
  return img._qlJ;
@@ -3932,7 +3933,7 @@ function qlAttachJelly(img){
  const local=e=>{const r=img.getBoundingClientRect(),bx=box();return [Math.max(0,Math.min(boxW,e.clientX-r.left-bx.left)),Math.max(0,Math.min(boxH,e.clientY-r.top-bx.top))];};
  // 涂选区：自由手绘，高斯笔刷取最大值，边缘柔和
  const paintAt=(x,y)=>{
-  const u=x/boxW,v=y/boxH,rad=.075*Math.min(boxW,boxH),rr=rad*rad*1.3;
+  const u=x/boxW,v=y/boxH,rad=qlJellyBrush()*Math.min(boxW,boxH),rr=rad*rad*1.3;
   for(let j=0;j<MH;j++){const dy=(j/(MH-1)-v)*boxH;if(Math.abs(dy)>rad*2.2)continue;
    for(let i=0;i<MW;i++){const dx=(i/(MW-1)-u)*boxW;if(Math.abs(dx)>rad*2.2)continue;
     const w=Math.exp(-(dx*dx+dy*dy)/rr);if(w>S.mask[j*MW+i])S.mask[j*MW+i]=Math.min(1,w*1.15);}}
@@ -4093,7 +4094,7 @@ function openViewfinderImage(url){
   {
    // 放大图下方的果冻面板：范围 / 选区 / 交互，不用回设置页。
    const bar=document.createElement('div');bar.className='ql-jelly-bar';bar.setAttribute('role','group');bar.setAttribute('aria-label','果冻互动');
-   bar.innerHTML='<div class="ql-jb-head"><button type="button" data-jb="power"></button><button type="button" data-jb="more">设置 ▴</button><button type="button" data-jb="done" hidden>✓ 完成选区</button><button type="button" data-jb="clr" hidden>清除选区</button></div>'
+   bar.innerHTML='<div class="ql-jb-head"><button type="button" data-jb="power"></button><button type="button" data-jb="more">设置 ▴</button><button type="button" data-jb="done" hidden>✓ 完成选区</button><button type="button" data-jb="clr" hidden>清除选区</button><label class="ql-jb-brush" hidden>粗细<input type="range" min="2" max="20" step="1" data-jb-brush aria-label="画笔粗细"></label></div>'
     +'<div class="ql-jb-panel" hidden><div class="ql-jb-row"><b>范围</b><button type="button" data-jb-scope="local">局部</button><button type="button" data-jb-scope="smudge">抹开</button><button type="button" data-jb-scope="whole">全屏</button></div>'
     +'<div class="ql-jb-row"><b>选区</b><button type="button" data-jb="sel">✎ 涂选区</button><button type="button" data-jb="clr2">清除</button><em class="ql-jb-hint"></em></div>'
     +'<div class="ql-jb-row"><b>交互</b><button type="button" data-jb-in="tap">点击</button><button type="button" data-jb-in="drag">拖动</button><button type="button" data-jb-in="shake">摇晃</button></div>'
@@ -4108,6 +4109,7 @@ function openViewfinderImage(url){
     const ins={tap:c.tap,drag:c.drag,shake:c.shake};bar.querySelectorAll('[data-jb-in]').forEach(b=>b.classList.toggle('is-active',!!ins[b.dataset.jbIn]));
     $b('[data-jb=sel]').classList.toggle('is-active',!!S.selecting);
     $b('.ql-jb-hint').textContent=S.has?'已选区（只有选中的地方会动）':'未选区（整张图都会动）';
+    $b('.ql-jb-brush').hidden=!S.selecting;{const bi=$b('[data-jb-brush]');if(bi&&document.activeElement!==bi)bi.value=String(Math.round(qlJellyBrush()*100));}
     $b('[data-jb=done]').hidden=!S.selecting;$b('[data-jb=clr]').hidden=!S.selecting;$b('[data-jb=more]').hidden=!!S.selecting;
     if(S.selecting)$b('.ql-jb-panel').hidden=true;
     $b('[data-jb=more]').textContent=$b('.ql-jb-panel').hidden?'设置 ▴':'收起 ▾';
@@ -4118,6 +4120,16 @@ function openViewfinderImage(url){
     set('#ql-jelly-tap',el=>{el.checked=c.tap;});set('#ql-jelly-drag',el=>{el.checked=c.drag;});set('#ql-jelly-shake',el=>{el.checked=c.shake;});
    };
    const rebind=()=>{qlAttachJelly(overlay.querySelector('img'));paintBar();syncSettings();};
+   bar.addEventListener('input',e=>{
+    const bi=e.target.closest('[data-jb-brush]');if(!bi)return;e.stopPropagation();
+    cfg().jellyBrush=Number(bi.value)/100;save();
+    // 临时画一个圈让你看到当前粗细
+    const img=overlay.querySelector('img'),host=img.offsetParent||img.parentElement;if(!host)return;
+    let ring=host.querySelector('.ql-jb-ring');if(!ring){ring=document.createElement('div');ring.className='ql-jb-ring';host.appendChild(ring);}
+    const d=2.2*qlJellyBrush()*Math.min(img.clientWidth,img.clientHeight);
+    ring.style.cssText='position:absolute;pointer-events:none;z-index:4;border-radius:50%;border:2px solid var(--qp-sig,var(--ql-accent,#e58aa8));background:color-mix(in srgb,var(--qp-sig,var(--ql-accent,#e58aa8)) 25%,transparent);width:'+d+'px;height:'+d+'px;left:'+(img.offsetLeft+img.clientWidth/2-d/2)+'px;top:'+(img.offsetTop+img.clientHeight/2-d/2)+'px';
+    clearTimeout(ring._t);ring._t=setTimeout(()=>ring.remove(),800);
+   });
    bar.addEventListener('click',async e=>{
     const b=e.target.closest('button');if(!b)return;e.preventDefault();e.stopPropagation();
     const c=cfg(),img=overlay.querySelector('img'),S=qlJellyState(img),d=b.dataset;
