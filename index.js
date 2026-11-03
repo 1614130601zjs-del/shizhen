@@ -3625,7 +3625,141 @@ function importChatu8Candidate(){
 
 
 // ===== 放大图小互动（果冻）：弹簧动画，只在触摸 / 拖动时跑，松手停稳后自动结束 =====
+// 局部果冻：只有按到的那一小块凹下去 / 被拉起来（WebGL 网格形变）；不支持 WebGL 时退回整张图一起弹。
 function qlAttachJelly(img){
+ if(!img)return;
+ const mode=['squish','pull','both','wobble'].includes(cfg().jellyMode)?cfg().jellyMode:'off';
+ const amp={soft:.6,mid:1,bouncy:1.5}[cfg().jellyStrength]||1;
+ img._qlJellyAbort?.abort();img._qlJellyAbort=null;
+ img.style.transform='';img.style.touchAction='';img.style.willChange='';
+ if(mode==='off')return;
+ let probeOk=false;
+ try{const pc=document.createElement('canvas');probeOk=!!(pc.getContext('webgl')||pc.getContext('experimental-webgl'));}catch{}
+ if(!probeOk)return qlAttachJellyWhole(img);
+ const ac=new AbortController();img._qlJellyAbort=ac;const sig={signal:ac.signal};
+ img.draggable=false;img.style.touchAction='none';img.style.webkitUserDrag='none';
+ let canvas=null,gl=null,prog=null,posBuf=null,idxCount=0,tex=null,texSrc='',cols=0,rows=0,pos=null,uvs=null,locPos=0,boxW=0,boxH=0,failed=false;
+ let raf=0,press=null,cx=0,cy=0;
+ const dep={x:0,v:0,t:0,k:.3,d:.6},ox={x:0,v:0,t:0,k:.3,d:.7},oy={x:0,v:0,t:0,k:.3,d:.7},rip={a:0,t:0};
+ const destroy=()=>{cancelAnimationFrame(raf);raf=0;try{canvas?.remove();}catch{}canvas=null;gl=null;};
+ ac.signal.addEventListener('abort',destroy);
+ const box=()=>{
+  const r=img.getBoundingClientRect(),cs=getComputedStyle(img);
+  const f=n=>parseFloat(cs[n])||0;
+  const l=f('paddingLeft')+f('borderLeftWidth'),t=f('paddingTop')+f('borderTopWidth'),rr=f('paddingRight')+f('borderRightWidth'),b=f('paddingBottom')+f('borderBottomWidth');
+  return {left:l,top:t,w:Math.max(10,r.width-l-rr),h:Math.max(10,r.height-t-b)};
+ };
+ const compile=(type,src)=>{const sh=gl.createShader(type);gl.shaderSource(sh,src);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw new Error('shader');return sh;};
+ const ensure=()=>{
+  if(failed)return false;
+  try{
+   const bx=box();
+   if(!canvas){
+    const host=img.offsetParent||img.parentElement;if(!host)throw new Error('no host');
+    canvas=document.createElement('canvas');canvas.className='ql-jelly-canvas';canvas.style.cssText='position:absolute;pointer-events:none;display:none;z-index:2;';
+    host.appendChild(canvas);
+    gl=canvas.getContext('webgl',{alpha:true,premultipliedAlpha:true,antialias:true})||canvas.getContext('experimental-webgl');
+    if(!gl)throw new Error('no gl');
+    prog=gl.createProgram();
+    gl.attachShader(prog,compile(gl.VERTEX_SHADER,'attribute vec2 aPos;attribute vec2 aUv;uniform vec2 uSize;varying vec2 vUv;void main(){vUv=aUv;gl_Position=vec4(aPos.x/uSize.x*2.0-1.0,1.0-aPos.y/uSize.y*2.0,0.0,1.0);}'));
+    gl.attachShader(prog,compile(gl.FRAGMENT_SHADER,'precision mediump float;uniform sampler2D uTex;varying vec2 vUv;void main(){gl_FragColor=texture2D(uTex,vUv);}'));
+    gl.linkProgram(prog);if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error('link');
+    gl.useProgram(prog);
+    tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    posBuf=gl.createBuffer();
+    locPos=gl.getAttribLocation(prog,'aPos');
+   }
+   const dpr=Math.min(2,window.devicePixelRatio||1);
+   if(Math.abs(bx.w-boxW)>.5||Math.abs(bx.h-boxH)>.5||!pos){
+    boxW=bx.w;boxH=bx.h;canvas.width=Math.round(bx.w*dpr);canvas.height=Math.round(bx.h*dpr);
+    cols=20;rows=Math.max(12,Math.min(40,Math.round(cols*bx.h/bx.w)));
+    const n=(cols+1)*(rows+1);pos=new Float32Array(n*2);uvs=new Float32Array(n*2);
+    const idx=[];
+    for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){const k=j*(cols+1)+i;uvs[k*2]=i/cols;uvs[k*2+1]=j/rows;}
+    for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){const a=j*(cols+1)+i,b=a+1,c=a+cols+1,d=c+1;idx.push(a,b,c,b,d,c);}
+    idxCount=idx.length;
+    const ib=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);
+    const ub=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,ub);gl.bufferData(gl.ARRAY_BUFFER,uvs,gl.STATIC_DRAW);
+    const locUv=gl.getAttribLocation(prog,'aUv');gl.enableVertexAttribArray(locUv);gl.vertexAttribPointer(locUv,2,gl.FLOAT,false,0,0);
+    gl.viewport(0,0,canvas.width,canvas.height);
+   }
+   canvas.style.left=(img.offsetLeft+bx.left)+'px';canvas.style.top=(img.offsetTop+bx.top)+'px';canvas.style.width=bx.w+'px';canvas.style.height=bx.h+'px';
+   if(texSrc!==(img.currentSrc||img.src)){
+    gl.bindTexture(gl.TEXTURE_2D,tex);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
+    texSrc=img.currentSrc||img.src;
+   }
+   return true;
+  }catch(e){failed=true;destroy();console.warn('[拾帧] 局部果冻不可用，改用整图弹动',e);return false;}
+ };
+ const draw=()=>{
+  const R=.17*Math.min(boxW,boxH),R2=.22*Math.min(boxW,boxH),RR=R*R,RR2=R2*R2;
+  const ripOn=rip.a*Math.exp(-rip.t*.045)>.05;
+  const fall=Math.exp;
+  for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){
+   const k=j*(cols+1)+i,px=i/cols*boxW,py=j/rows*boxH;
+   const dx=px-cx,dy=py-cy,d2=dx*dx+dy*dy;
+   const w=fall(-d2/RR),w2=fall(-d2/RR2);
+   const f=1-dep.x*w;
+   let x=cx+dx*f+ox.x*w2,y=cy+dy*f+oy.x*w2;
+   if(ripOn){const d=Math.sqrt(d2)+1e-3,a=rip.a*Math.exp(-rip.t*.045)*Math.exp(-d/(R*2.2))*Math.sin(d*.075-rip.t*.45);x+=dx/d*a;y+=dy/d*a;}
+   pos[k*2]=x;pos[k*2+1]=y;
+  }
+  gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.bindBuffer(gl.ARRAY_BUFFER,posBuf);gl.bufferData(gl.ARRAY_BUFFER,pos,gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(locPos);gl.vertexAttribPointer(locPos,2,gl.FLOAT,false,0,0);
+  gl.uniform2f(gl.getUniformLocation(prog,'uSize'),boxW,boxH);
+  gl.drawElements(gl.TRIANGLES,idxCount,gl.UNSIGNED_SHORT,0);
+ };
+ const step=s=>{s.v+=(s.t-s.x)*s.k;s.v*=s.d;s.x+=s.v;return Math.abs(s.v)>.0006||Math.abs(s.t-s.x)>.0006;};
+ const tick=()=>{
+  if(!canvas||!gl){raf=0;return;}
+  let live=false;
+  live=step(dep)||live;live=step(ox)||live;live=step(oy)||live;
+  if(rip.a*Math.exp(-rip.t*.045)>.05){rip.t++;live=true;}
+  draw();
+  if(live||press)raf=requestAnimationFrame(tick);
+  else{raf=0;canvas.style.display='none';dep.x=dep.v=ox.x=ox.v=oy.x=oy.v=0;rip.a=0;}
+ };
+ const kick=()=>{if(!raf)raf=requestAnimationFrame(tick);};
+ img.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  if(!ensure()){if(failed)qlAttachJellyWhole(img);return;}
+  const r=img.getBoundingClientRect(),bx=box();
+  cx=Math.max(0,Math.min(boxW,e.clientX-r.left-bx.left));cy=Math.max(0,Math.min(boxH,e.clientY-r.top-bx.top));
+  press={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),moved:false};
+  try{img.setPointerCapture(e.pointerId);}catch{}
+  e.preventDefault();
+  canvas.style.display='block';
+  Object.assign(dep,{k:.3,d:.6});Object.assign(ox,{k:.3,d:.7});Object.assign(oy,{k:.3,d:.7});
+  ox.t=ox.x=0;oy.t=oy.x=0;ox.v=oy.v=0;
+  if(mode==='squish'||mode==='both')dep.t=Math.min(.5,.3*amp);
+  kick();
+ },sig);
+ img.addEventListener('pointermove',e=>{
+  if(!press||e.pointerId!==press.id||!canvas)return;
+  const dx=e.clientX-press.x,dy=e.clientY-press.y;
+  if(!press.moved&&Math.hypot(dx,dy)<6)return;
+  press.moved=true;press.dx=dx;
+  if(mode==='squish'||mode==='wobble')return;
+  dep.t=0;
+  const damp=v=>Math.sign(v)*Math.pow(Math.abs(v),.8)*.7*amp;
+  ox.t=damp(dx);oy.t=damp(dy);kick();
+ },sig);
+ const end=e=>{
+  if(!press||(e&&e.pointerId!==press.id))return;
+  const p=press;press=null;try{img.releasePointerCapture(p.id);}catch{}
+  Object.assign(dep,{k:.15,d:.78});Object.assign(ox,{k:.13,d:.8});Object.assign(oy,{k:.13,d:.8});
+  dep.t=0;ox.t=0;oy.t=0;
+  if(mode==='wobble'){rip.a=11*amp*(p.moved?1.3:1);rip.t=0;}
+  kick();
+ };
+ img.addEventListener('pointerup',end,sig);img.addEventListener('pointercancel',end,sig);
+ img.addEventListener('contextmenu',e=>{if(press)e.preventDefault();},sig);
+}
+function qlAttachJellyWhole(img){
  if(!img)return;
  const mode=['squish','pull','both','wobble'].includes(cfg().jellyMode)?cfg().jellyMode:'off';
  const amp={soft:.6,mid:1,bouncy:1.5}[cfg().jellyStrength]||1;
