@@ -253,7 +253,7 @@ function qfbRenderSettings(container){
    if(k.ballIcon==='custom:'+del.dataset.del){k.ballIcon=QFB_BUILTIN_ICONS[0]||'default';k.ballIconPicked=true;}
    qfbSave();paintIcons();qfbRefreshBall();msg.textContent='已删除';return;
   }
-  const b=e.target.closest('.ql-fb-icon-opt');if(!b)return;{const k=qfbCfg();k.ballIcon=b.dataset.id;k.ballIconPicked=true;}qfbSave();paintIcons();qfbRefreshBall();};
+  const b=e.target.closest('.ql-fb-icon-opt');if(!b)return;{const k=qfbCfg();k.ballIcon=b.dataset.id;k.ballIconPicked=true;}qfbSave();paintIcons();qfbRefreshBall();msg.textContent='已选择这个图标（关掉面板就能在悬浮球上看到）';};
  const file=box.querySelector('#ql-fb-icon-file');
  box.querySelector('#ql-fb-icon-upload').onclick=()=>file.click();
  file.onchange=async()=>{

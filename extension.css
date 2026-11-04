@@ -5649,3 +5649,6 @@ body.ql-modal-open .ql-fb-ball{display:none}
 #shizhen-panel .ql-fb-icon-del.is-armed{background:#e0446a;font-size:11px}
 .ql-fb-ball .ql-fb-cv{position:absolute;display:block;pointer-events:none;width:auto;height:auto}
 .ql-fb-ball img.ql-fb-gif{object-fit:contain;pointer-events:none;-webkit-user-select:none;user-select:none}
+#shizhen-panel .ql-fb-icon-opt{position:relative}
+#shizhen-panel .ql-fb-icon-opt.is-on{border-color:var(--qp-sig,var(--ql-accent,#e0446a));background:color-mix(in srgb,var(--qp-sig,var(--ql-accent,#e0446a)) 16%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--qp-sig,var(--ql-accent,#e0446a)) 35%,transparent)}
+#shizhen-panel .ql-fb-icon-opt.is-on::after{content:"✓";position:absolute;right:-5px;bottom:-5px;width:16px;height:16px;border-radius:50%;background:var(--qp-sig,var(--ql-accent,#e0446a));color:#fff;font-size:11px;line-height:16px;text-align:center;font-weight:700}
