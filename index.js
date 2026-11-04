@@ -3752,6 +3752,7 @@ function qlJellyCfg(){
  if(typeof c.jellyShake!=='boolean')c.jellyShake=false;
  return {on:c.jellyOn,scope:['smudge','whole'].includes(c.jellyScope)?c.jellyScope:'local',tap:false,drag:c.jellyDrag,shake:c.jellyShake,amp:{soft:.35,mid:.5,bouncy:.65}[c.jellyStrength]||.5};
 }
+function qlJellyReach(){const r=Number(cfg().jellyReach);return Number.isFinite(r)&&r>0?Math.max(.4,Math.min(2.2,r)):1;}
 function qlJellyBrush(){const b=Number(cfg().jellyBrush);return Number.isFinite(b)&&b>0?Math.max(.02,Math.min(.2,b)):.075;}
 function qlJellyState(img){
  if(!img._qlJ)img._qlJ={mask:new Float32Array(QL_JELLY_MW*QL_JELLY_MH),has:false,selecting:false};
@@ -3874,7 +3875,7 @@ function qlAttachJelly(img){
   }catch(e){failed=true;destroy();console.warn('[拾帧] 局部果冻不可用，改用整图弹动',e);return false;}
  };
  const draw=()=>{
-  const m=Math.min(boxW,boxH),R=.17*m,R2=.22*m,RR=R*R,RR2=R2*R2,shAmp=.05*m*amp;
+  const m=Math.min(boxW,boxH),R=.17*m*qlJellyReach(),R2=.22*m*qlJellyReach(),RR=R*R,RR2=R2*R2,shAmp=.05*m*amp;
   const useLocal=scope!=='whole',useAff=scope==='whole';
   const [tx,ty,sx,sy,rot]=aff.x,cr=Math.cos(rot*Math.PI/180),sr=Math.sin(rot*Math.PI/180),mx0=boxW/2,my0=boxH/2;
   const shOn=Math.abs(shk.x)>.0005||Math.abs(shk.y)>.0005;
@@ -4095,6 +4096,7 @@ function openViewfinderImage(url){
     +'<div class="ql-jb-row"><b>选区</b><button type="button" data-jb="sel">✎ 涂选区</button><button type="button" data-jb="clr2">清除</button><em class="ql-jb-hint"></em></div>'
     +'<div class="ql-jb-row"><b>交互</b><button type="button" data-jb-in="drag">拖动</button><button type="button" data-jb-in="shake">摇晃</button>'
     +'<span class="ql-jb-dd"><button type="button" class="ql-jb-dd-btn" data-jb-dd aria-haspopup="listbox" aria-expanded="false"><span data-jb-dd-label>Q弹</span> ▾</button><span class="ql-jb-dd-list" role="listbox" hidden><button type="button" role="option" data-jb-strength="soft">软糯</button><button type="button" role="option" data-jb-strength="mid">Q弹</button><button type="button" role="option" data-jb-strength="bouncy">DUANG</button></span></span></div>'
+    +'<div class="ql-jb-row"><b>反馈</b><span class="ql-jb-brush ql-jb-reach"><small>小</small><input type="range" min="40" max="220" step="5" data-jb-reach aria-label="反馈范围"><small>大</small></span><em class="ql-jb-hint">手指按下去影响多大一块</em></div>'
     +'<div class="ql-jb-msg" role="status"></div></div>';
    const $b=sel=>bar.querySelector(sel);
    const setMsg=t=>{$b('.ql-jb-msg').textContent=t||'';};
@@ -4104,6 +4106,7 @@ function openViewfinderImage(url){
     bar.classList.toggle('is-off',!c.on);bar.classList.toggle('is-selecting',!!S.selecting);
     bar.querySelectorAll('[data-jb-scope]').forEach(b=>b.classList.toggle('is-active',b.dataset.jbScope===c.scope));
     const ins={tap:c.tap,drag:c.drag,shake:c.shake};const stv=['soft','bouncy'].includes(cfg().jellyStrength)?cfg().jellyStrength:'mid';bar.querySelectorAll('[data-jb-strength]').forEach(b=>b.classList.toggle('is-active',b.dataset.jbStrength===stv));{const lab=$b('[data-jb-dd-label]');if(lab)lab.textContent={soft:'软糯',mid:'Q弹',bouncy:'DUANG'}[stv];}bar.querySelectorAll('[data-jb-in]').forEach(b=>b.classList.toggle('is-active',!!ins[b.dataset.jbIn]));
+    {const ri=$b('[data-jb-reach]');if(ri&&document.activeElement!==ri)ri.value=Math.round(qlJellyReach()*100);}
     $b('[data-jb=sel]').classList.toggle('is-active',!!S.selecting);
     $b('.ql-jb-hint').textContent=S.has?'已选区（只有选中的地方会动）':'未选区（整张图都会动）';
     $b('.ql-jb-brush').hidden=!S.selecting;bar.querySelectorAll('[data-jb-tool]').forEach(t=>{t.hidden=!S.selecting;t.classList.toggle('is-active',(S.tool||'add')===t.dataset.jbTool);});$b('[data-jb=power]').hidden=!!S.selecting;{const bi=$b('[data-jb-brush]');if(bi&&document.activeElement!==bi)bi.value=String(Math.round(qlJellyBrush()*100));}
@@ -4118,6 +4121,13 @@ function openViewfinderImage(url){
    };
    const rebind=()=>{qlAttachJelly(overlay.querySelector('img'));paintBar();syncSettings();};
    bar.addEventListener('input',e=>{
+    const rr=e.target.closest('[data-jb-reach]');
+    if(rr){e.stopPropagation();cfg().jellyReach=Number(rr.value)/100;save();
+     const img=overlay.querySelector('img'),host=img&&(img.offsetParent||img.parentElement);if(!host)return;
+     let ring=host.querySelector('.ql-jb-ring');if(!ring){ring=document.createElement('div');ring.className='ql-jb-ring';host.appendChild(ring);}
+     const d=2*.19*qlJellyReach()*Math.min(img.clientWidth,img.clientHeight);
+     ring.style.cssText='position:absolute;pointer-events:none;z-index:4;border-radius:50%;border:2px dashed #ff4081;background:rgba(255,64,129,.18);width:'+d+'px;height:'+d+'px;left:'+(img.offsetLeft+img.clientWidth/2-d/2)+'px;top:'+(img.offsetTop+img.clientHeight/2-d/2)+'px';
+     clearTimeout(ring._t);ring._t=setTimeout(()=>ring.remove(),800);return;}
     const bi=e.target.closest('[data-jb-brush]');if(!bi)return;e.stopPropagation();
     cfg().jellyBrush=Number(bi.value)/100;save();
     // 临时画一个圈让你看到当前粗细

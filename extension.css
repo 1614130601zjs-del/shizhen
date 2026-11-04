@@ -5648,3 +5648,4 @@ body.ql-modal-open .ql-fb-ball{display:none}
 #shizhen-panel .ql-fb-icon-del{all:unset;position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;line-height:18px;text-align:center;cursor:pointer}
 #shizhen-panel .ql-fb-icon-del.is-armed{background:#e0446a;font-size:11px}
 .ql-fb-ball .ql-fb-cv{position:absolute;display:block;pointer-events:none;width:auto;height:auto}
+.ql-fb-ball img.ql-fb-gif{object-fit:contain;pointer-events:none;-webkit-user-select:none;user-select:none}

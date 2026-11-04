@@ -42,8 +42,15 @@ function qfbBallHtml(){return '<canvas class="ql-fb-bl ql-fb-cv"></canvas>';}
 const qfbDimCache={};
 let qfbCv=null;
 function qfbSvgSrc(){return 'data:image/svg+xml;utf8,'+encodeURIComponent(QFB_BALL_SVG.replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" '));}
+function qfbIsGif(u){return /^data:image\/gif/i.test(u||'')||/\.gif(\?|#|$)/i.test(u||'');}
 function qfbSetupCanvas(ball){
  const cv=ball.querySelector('canvas.ql-fb-cv');if(!cv)return;
+ const src0=qfbIconSrc();
+ // 动图（gif）画布只能画第一帧，所以改用原图直接显示，摇晃时整张以底边为轴歪
+ if(src0&&qfbIsGif(src0)){
+  const im=document.createElement('img');im.className='ql-fb-bl ql-fb-gif';im.alt='';im.draggable=false;im.src=src0;
+  cv.replaceWith(im);qfbCv={gif:im};return;
+ }
  const bw=ball.offsetWidth||56,bh=ball.offsetHeight||56,dpr=Math.min(2,window.devicePixelRatio||1);
  const padX=bw*.4,padT=bh*.4,padB=bh*.05;
  cv.width=Math.round((bw+padX*2)*dpr);cv.height=Math.round((bh+padT+padB)*dpr);
@@ -52,7 +59,9 @@ function qfbSetupCanvas(ball){
  const im=new Image();im.onload=()=>{if(qfbCv===st){st.img=im;qfbDraw(0,0);}};im.src=qfbIconSrc()||qfbSvgSrc();
 }
 function qfbDraw(r,s){
- const st=qfbCv;if(!st||!st.img||!document.body.contains(st.cv))return;
+ const st=qfbCv;
+ if(st&&st.gif){st.gif.style.transformOrigin='50% 100%';st.gif.style.transform=(r||s)?'skewX('+(-r).toFixed(2)+'deg) scale('+(1-s*.5).toFixed(3)+','+(1+s).toFixed(3)+')':'';return;}
+ if(!st||!st.img||!document.body.contains(st.cv))return;
  const {cv,bw,bh,dpr,padX,padT,img}=st,ctx=cv.getContext('2d');
  ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv.height);
  ctx.setTransform(dpr,0,0,dpr,padX*dpr,padT*dpr);
