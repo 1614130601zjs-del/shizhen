@@ -5622,3 +5622,11 @@ dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-head button[data-jb-tool],dia
 dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-head button[hidden]{display:none!important}
 dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-head svg{display:block;pointer-events:none}
 dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-brush svg{opacity:.7}
+
+/* 果冻面板：弹性下拉（向下展开，不用浏览器自带的选择气泡） */
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-dd{position:relative;display:inline-block}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-dd-list{position:absolute;top:calc(100% + 4px);left:0;z-index:8;display:flex;flex-direction:column;gap:3px;padding:4px;min-width:100%;box-sizing:border-box;border-radius:12px;background:var(--ql-panel,#fff);border:1px solid var(--ql-border,rgba(0,0,0,.15));box-shadow:0 4px 14px rgba(0,0,0,.25)}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-dd-list[hidden]{display:none!important}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-dd-list button{text-align:left!important;display:block!important;border-radius:8px!important}
+dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-panel.is-dd-open{padding-bottom:118px}
+html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-dd-list{background:var(--qp-bg)!important;border:var(--qp-bw) solid var(--qp-line)!important;border-radius:var(--qp-radius)!important}
