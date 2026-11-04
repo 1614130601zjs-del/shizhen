@@ -37,16 +37,45 @@ function qfbBallOneHtml(){
  return QFB_BALL_SVG;
 }
 function qfbIconSrc(){const c=qfbCfg();{const u=qfbCustomUrl(c.ballIcon);if(u)return u;}if(QFB_BUILTIN_ICONS.includes(c.ballIcon))return qfbIconUrl(c.ballIcon);return '';}
-// 悬浮球分上下两层：下半（固定线以下）原地不动，上半在固定线上摇摆 / 压扁拉长，所以摇晃时底边始终贴着原位
-function qfbBallHtml(){
- const one=qfbBallOneHtml(),fixed=Math.max(0,Math.min(70,Number(qfbCfg().ballFixed)||0)),pin=100-fixed;
- const F=fixed>0?Math.min(14,pin/2):0,a=(pin-F).toFixed(1),b=pin.toFixed(1);
- const mk=(g)=>'-webkit-mask-image:'+g+';mask-image:'+g+';';
- const botM=fixed>0?mk('linear-gradient(to bottom,transparent '+a+'%,#000 '+b+'%)'):'visibility:hidden;';
- const topM=fixed>0?mk('linear-gradient(to bottom,#000 '+a+'%,transparent '+b+'%)'):'';
- return '<span class="ql-fb-bl ql-fb-bl-bot" style="'+botM+'">'+one+'</span><span class="ql-fb-bl ql-fb-bl-top" style="'+topM+'transform-origin:50% '+pin+'%">'+one+'</span>';
-}
+// 悬浮球用一张画布画：把图标切成很多细条，越靠上的条被摇得越远，固定线上就是连着的，像一整块果冻被拉扯，而不是上下两块分开
+function qfbBallHtml(){return '<canvas class="ql-fb-bl ql-fb-cv"></canvas>';}
 const qfbDimCache={};
+let qfbCv=null;
+function qfbSvgSrc(){return 'data:image/svg+xml;utf8,'+encodeURIComponent(QFB_BALL_SVG.replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" '));}
+function qfbSetupCanvas(ball){
+ const cv=ball.querySelector('canvas.ql-fb-cv');if(!cv)return;
+ const bw=ball.offsetWidth||56,bh=ball.offsetHeight||56,dpr=Math.min(2,window.devicePixelRatio||1);
+ const padX=bw*.4,padT=bh*.4,padB=bh*.05;
+ cv.width=Math.round((bw+padX*2)*dpr);cv.height=Math.round((bh+padT+padB)*dpr);
+ cv.style.cssText='left:'+(-padX)+'px;top:'+(-padT)+'px;width:'+(bw+padX*2)+'px;height:'+(bh+padT+padB)+'px';
+ const st={cv,bw,bh,dpr,padX,padT,img:null};qfbCv=st;
+ const im=new Image();im.onload=()=>{if(qfbCv===st){st.img=im;qfbDraw(0,0);}};im.src=qfbIconSrc()||qfbSvgSrc();
+}
+function qfbDraw(r,s){
+ const st=qfbCv;if(!st||!st.img||!document.body.contains(st.cv))return;
+ const {cv,bw,bh,dpr,padX,padT,img}=st,ctx=cv.getContext('2d');
+ ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv.height);
+ ctx.setTransform(dpr,0,0,dpr,padX*dpr,padT*dpr);
+ const fixed=Math.max(0,Math.min(70,Number(qfbCfg().ballFixed)||0)),pinY=bh*(1-fixed/100);
+ if(!r&&!s){ctx.drawImage(img,0,0,bw,bh);return;}
+ const N=40,ih=img.naturalHeight||1,iw=img.naturalWidth||1,tr=Math.tan(r*Math.PI/180),sxTop=1-s*.5,cx=bw/2;
+ // 固定线以下原样画
+ const bot=Math.max(0,Math.min(1,pinY/bh));
+ if(bot<1)ctx.drawImage(img,0,bot*ih,iw,ih*(1-bot),0,pinY,bw,bh-pinY);
+ for(let i=0;i<N;i++){
+  const y0=pinY*i/N,y1=pinY*(i+1)/N;               // 盒子里这一条的上下边（未变形）
+  const d0=pinY-y0,d1=pinY-y1;                    // 离固定线的距离
+  const Y0=pinY-d0*(1+s),Y1=pinY-d1*(1+s);        // 变形后的位置：越靠上拉得越开
+  const xo0=tr*d0,xo1=tr*d1;                      // 越靠上，横向偏得越多
+  const um=((d0+d1)/2)/pinY,a=1+(sxTop-1)*um;
+  const hs=y1-y0,hd=Y1-Y0;if(Math.abs(hd)<1e-3)continue;
+  const sy=(y0/bh)*ih,sh=Math.min(ih-sy,(hs/bh)*ih+1);
+  ctx.save();
+  ctx.transform(a,0,(xo1-xo0)/hs,hd/hs,cx*(1-a)+xo0,Y0);
+  ctx.drawImage(img,0,sy,iw,sh,0,0,bw,sh/ih*bh);
+  ctx.restore();
+ }
+}
 function qfbMeasure(src){
  return new Promise(res=>{
   if(!src){res([1,1]);return;}
@@ -63,7 +92,7 @@ async function qfbRefreshBall(){
  if(my!==qfbRefreshTick||!document.body.contains(ball))return;
  const k=size/Math.max(w,h);
  ball.style.setProperty('--ql-fb-ball-w',Math.round(w*k)+'px');ball.style.setProperty('--ql-fb-ball-h',Math.round(h*k)+'px');
- ball.innerHTML=qfbBallHtml();qfbPlaceBall(ball);
+ ball.innerHTML=qfbBallHtml();qfbPlaceBall(ball);qfbSetupCanvas(ball);
 }
 // 上传：优先把原图原样传到酒馆的用户文件目录（不压缩、不撑大设置文件，动图也保留）；传不上去时才退回存进设置里。
 function qfbFileToDataUrl(file){
@@ -125,8 +154,7 @@ function qfbStartBallShake(){
   st.vr+=-st.r*.1;st.vr*=.9;st.r+=st.vr;
   st.vs+=-st.s*.14;st.vs*=.86;st.s+=st.vs;
   const live=Math.abs(st.r)+Math.abs(st.vr)+Math.abs(st.s*30)+Math.abs(st.vs*30)>.08;
-  const el=document.querySelector('.ql-fb-bl-top');
-  if(el)el.style.transform=live?'skewX('+(-st.r).toFixed(2)+'deg) scale('+(1-st.s*.5).toFixed(3)+','+(1+st.s).toFixed(3)+')':'';
+  if(live)qfbDraw(st.r,st.s);else{qfbDraw(0,0);st.r=st.vr=st.s=st.vs=0;}
   raf=live?requestAnimationFrame(tick):0;
  };
  window.addEventListener('devicemotion',e=>{
