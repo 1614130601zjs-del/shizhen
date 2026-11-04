@@ -5630,3 +5630,20 @@ dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-dd-list[hidden]{display:none!
 dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-dd-list button{text-align:left!important;display:block!important;border-radius:8px!important}
 dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-panel.is-dd-open{padding-bottom:118px}
 html[data-ql-style] dialog.ql-viewfinder-lightbox .ql-jelly-bar .ql-jb-dd-list{background:var(--qp-bg)!important;border:var(--qp-bw) solid var(--qp-line)!important;border-radius:var(--qp-radius)!important}
+
+/* 悬浮球（小萌物）：点击打开拾帧，摇晃手机时底部固定、上半摇摆 */
+.ql-fb-ball{position:fixed;z-index:9990;width:var(--ql-fb-ball-w,56px);height:var(--ql-fb-ball-h,56px);padding:0;border:0;border-radius:50%;background:none;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;filter:drop-shadow(0 3px 6px rgba(0,0,0,.35));transition:transform .18s cubic-bezier(.3,1.6,.5,1),left .25s ease;opacity:.95;color:var(--ql-accent,#e58aa8)}
+.ql-fb-ball:active,.ql-fb-ball.is-dragging{transform:scale(1.06,.95)}
+.ql-fb-ball.is-dragging{transition:none}
+body.ql-modal-open .ql-fb-ball{display:none}
+.ql-fb-ball .ql-fb-bl{position:absolute;left:0;top:0;width:100%;height:100%;display:block;pointer-events:none}
+.ql-fb-ball .ql-fb-bl svg,.ql-fb-ball .ql-fb-bl img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#shizhen-panel .ql-fb-set-row{display:flex;align-items:center;gap:8px;margin:6px 0}
+#shizhen-panel .ql-fb-set-row input[type=range]{flex:1;min-width:0}
+#shizhen-panel .ql-fb-icons{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px}
+#shizhen-panel .ql-fb-icon-opt{all:unset;box-sizing:border-box;width:46px;height:46px;padding:4px;border-radius:10px;border:2px solid transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;background:rgba(127,127,127,.15);color:var(--ql-accent,#e58aa8)}
+#shizhen-panel .ql-fb-icon-opt.is-on{border-color:var(--ql-accent,#e58aa8)}
+#shizhen-panel .ql-fb-icon-opt svg,#shizhen-panel .ql-fb-icon-opt img{width:100%;height:100%;object-fit:contain;pointer-events:none}
+#shizhen-panel .ql-fb-icon-wrap{position:relative;display:inline-block}
+#shizhen-panel .ql-fb-icon-del{all:unset;position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;line-height:18px;text-align:center;cursor:pointer}
+#shizhen-panel .ql-fb-icon-del.is-armed{background:#e0446a;font-size:11px}
