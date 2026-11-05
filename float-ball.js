@@ -51,7 +51,7 @@ function qfbSetupCanvas(ball){
   const im=document.createElement('img');im.className='ql-fb-bl ql-fb-gif';im.alt='';im.draggable=false;im.src=src0;
   cv.replaceWith(im);qfbCv={gif:im};return;
  }
- const bw=ball.offsetWidth||56,bh=ball.offsetHeight||56,dpr=Math.min(2,window.devicePixelRatio||1);
+ const bw=parseFloat(ball.style.getPropertyValue('--ql-fb-ball-w'))||ball.offsetWidth||56,bh=parseFloat(ball.style.getPropertyValue('--ql-fb-ball-h'))||ball.offsetHeight||56,dpr=Math.min(2,window.devicePixelRatio||1);
  const padX=bw*.4,padT=bh*.4,padB=bh*.05;
  cv.width=Math.round((bw+padX*2)*dpr);cv.height=Math.round((bh+padT+padB)*dpr);
  cv.style.cssText='left:'+(-padX)+'px;top:'+(-padT)+'px;width:'+(bw+padX*2)+'px;height:'+(bh+padT+padB)+'px';
@@ -62,9 +62,11 @@ function qfbDraw(r,s){
  const st=qfbCv;
  if(st&&st.gif){st.gif.style.transformOrigin='50% 100%';st.gif.style.transform=(r||s)?'skewX('+(-r).toFixed(2)+'deg) scale('+(1-s*.5).toFixed(3)+','+(1+s).toFixed(3)+')':'';return;}
  if(!st||!st.img||!document.body.contains(st.cv))return;
- const {cv,bw,bh,dpr,padX,padT,img}=st,ctx=cv.getContext('2d');
+ const {cv,dpr,padX,padT,img}=st,ctx=cv.getContext('2d');
  ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv.height);
- ctx.setTransform(dpr,0,0,dpr,padX*dpr,padT*dpr);
+ // 图永远按自己的比例画（contain，贴底居中），不管外框被主题样式改成什么形状
+ const iw0=img.naturalWidth||1,ih0=img.naturalHeight||1,kf=Math.min(st.bw/iw0,st.bh/ih0),bw=iw0*kf,bh=ih0*kf;
+ ctx.setTransform(dpr,0,0,dpr,(padX+(st.bw-bw)/2)*dpr,(padT+(st.bh-bh))*dpr);
  const fixed=Math.max(0,Math.min(70,Number(qfbCfg().ballFixed)||0)),pinY=bh*(1-fixed/100);
  if(!r&&!s){ctx.drawImage(img,0,0,bw,bh);return;}
  const N=40,ih=img.naturalHeight||1,iw=img.naturalWidth||1,tr=Math.tan(r*Math.PI/180),sxTop=1-s*.5,cx=bw/2;
@@ -96,11 +98,12 @@ let qfbRefreshTick=0;
 async function qfbRefreshBall(){
  const ball=document.querySelector('.ql-fb-ball');if(!ball)return;
  const my=++qfbRefreshTick;
- const size=Math.max(28,Math.min(200,Number(qfbCfg().ballSize)||56));
+ const size=Math.max(28,Math.min(400,Number(qfbCfg().ballSize)||56));
  const [w,h]=await qfbMeasure(qfbIconSrc());
  if(my!==qfbRefreshTick||!document.body.contains(ball))return;
  const k=size/Math.max(w,h);
  ball.style.setProperty('--ql-fb-ball-w',Math.round(w*k)+'px');ball.style.setProperty('--ql-fb-ball-h',Math.round(h*k)+'px');
+ for(const [p,v] of [['width',Math.round(w*k)+'px'],['height',Math.round(h*k)+'px'],['min-width','0'],['min-height','0'],['max-width','none'],['max-height','none'],['padding','0'],['box-sizing','border-box']])ball.style.setProperty(p,v,'important');
  ball.innerHTML=qfbBallHtml();qfbPlaceBall(ball);qfbSetupCanvas(ball);
 }
 // 上传：优先把原图原样传到酒馆的用户文件目录（不压缩、不撑大设置文件，动图也保留）；传不上去时才退回存进设置里。
@@ -224,7 +227,7 @@ function qfbRenderSettings(container){
   +'<div class="ql-fb-set-row"><label>悬浮球图标</label></div><div id="ql-fb-icons" class="ql-fb-icons"></div>'
   +'<p class="ql-muted">换图标建议用<b>透明底的 PNG</b>，不然悬浮球会带着一块底色。上传的是<b>原图，不压缩</b>（保存在酒馆的用户文件里），GIF / 动图 WebP 也能动。</p>'
   +'<div class="ql-row"><button id="ql-fb-icon-upload" type="button" class="menu_button">上传图片</button><button id="ql-fb-icon-reset" type="button" class="menu_button">恢复默认图标</button><input id="ql-fb-icon-file" type="file" accept="image/*" hidden></div>'
-  +'<div class="ql-fb-set-row"><label for="ql-fb-size">大小</label><input id="ql-fb-size" type="range" min="28" max="200" step="2"><span id="ql-fb-size-v"></span></div>'
+  +'<div class="ql-fb-set-row"><label for="ql-fb-size">大小</label><input id="ql-fb-size" type="range" min="28" max="400" step="2"><span id="ql-fb-size-v"></span></div>'
   +'<div class="ql-fb-set-row"><label for="ql-fb-fixed">底部固定</label><input id="ql-fb-fixed" type="range" min="0" max="70" step="2"><span id="ql-fb-fixed-v"></span></div>'
   +'<p class="ql-muted">摇晃手机时，图标下面这一段不动，只有上面摇，更像果冻。0 = 只固定最底边。</p>'
   +'<div class="ql-row"><button id="ql-fb-ball-reset" type="button" class="menu_button">重置悬浮球位置</button></div><p id="ql-fb-icon-msg" class="ql-muted" role="status"></p>';
@@ -270,7 +273,7 @@ function qfbRenderSettings(container){
  };
  box.querySelector('#ql-fb-icon-reset').onclick=()=>{const k=qfbCfg();k.ballIcon='default';k.ballIconPicked=true;qfbSave();paintIcons();qfbRefreshBall();msg.textContent='';};
  const sz=box.querySelector('#ql-fb-size'),szv=box.querySelector('#ql-fb-size-v');
- sz.value=String(Math.max(28,Math.min(200,Number(c.ballSize)||56)));szv.textContent=sz.value+'px';
+ sz.value=String(Math.max(28,Math.min(400,Number(c.ballSize)||56)));szv.textContent=sz.value+'px';
  {const fx=box.querySelector('#ql-fb-fixed'),fv=box.querySelector('#ql-fb-fixed-v');fx.value=String(Math.max(0,Math.min(70,Number(c.ballFixed)||0)));fv.textContent=fx.value+'%';fx.oninput=()=>{fv.textContent=fx.value+'%';qfbCfg().ballFixed=Number(fx.value);qfbSave();qfbRefreshBall();};}
  sz.oninput=()=>{szv.textContent=sz.value+'px';qfbCfg().ballSize=Number(sz.value);qfbSave();qfbRefreshBall();};
  box.querySelector('#ql-fb-ball-reset').onclick=()=>{const k=qfbCfg();k.ballX=1;k.ballY=.62;qfbSave();const b=document.querySelector('.ql-fb-ball');if(b)qfbPlaceBall(b);};
