@@ -717,7 +717,8 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
     const first=qlParseNameTag(group[0]);
     const h=first.core?index.get(qlNormName(first.core)):null;
     if(h){hit=h;core=first.core;weight=first.weight;extras=group.slice(1);}
-    else if(first.core&&hasCjk(first.core)&&!/[,，]/.test(first.core)){
+    else if(first.core&&!/[,，]/.test(first.core)&&(hasCjk(first.core)||(group.length>=2&&/^[A-Z]/.test(first.core)&&!PERSON_HEAD.test(first.core)&&PERSON_HEAD.test(qlParseNameTag(group[1]).core)))){
+     // 中文名，或「首字母大写的英文名 + 紧跟 1boy/1girl」这种明显是名字的写法
      missing.push(first.core);
      // 去掉模式：词库外的名字丢掉，括号里其余的 tag（外貌、表情、动作…）仍然算这个人物
      if(strip){
