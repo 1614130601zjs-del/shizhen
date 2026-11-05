@@ -748,9 +748,9 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
  const missingUnique=[...new Set(missing)];
  if(missingUnique.length&&!opts.silent)qlWarnMissingNames(missingUnique,strip);
  const restAll=restItems.map(x=>x.t).join(', ');
- if(!used.size){const t=dropped?restAll:prompt;return {...none,text:t,rest:t,missing:missingUnique};}
+ if(!used.size&&!(qlNameReplaceMode(s)==='characters'&&persons.length>=2)){const t=dropped?restAll:prompt;return {...none,text:t,rest:t,missing:missingUnique};}
  const named=persons.filter(x=>x.named);
- // 多角色：名单内命中 + 至少两个人物 → 所有人物括号（含没写名字的）一起变成 NAI 角色提示词，主提示词只留公共部分。
+ // 多角色：至少两个人物括号（名单内的、没写名字的原创角色都算）→ 一起变成 NAI 角色提示词，主提示词只留公共部分。
  // 只有一个人物时直接合在主提示词里，不拆。
  const useChars=qlNameReplaceMode(s)==='characters'&&persons.length>=2;
  const restTags=useChars?restItems.filter(x=>!x.p).map(x=>x.t):restItems.map(x=>x.t);
