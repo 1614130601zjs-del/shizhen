@@ -562,6 +562,15 @@ function qlParseNameTag(tag){
  const d=t.match(/^\$([\s\S]+)\$$/);if(d)t=d[1];
  return {core:t.trim(),weight};
 }
+// 「用户外貌」可以有好几条（对应不同的 persona）。每次只有「当前 persona」那一条算数：
+// 名字能对上当前用户名的那条；都对不上就取第一条（当作“我的固定外貌”，当前用户名算它的别名）。
+// 其余的用户外貌不进角色名单、也不参与名字替换，免得别的 persona 的名字被模型写进剧情或提示词。
+function qlActiveUserEntry(s,userName){
+ const users=(s.characters||[]).filter(e=>e&&typeof e==='object'&&e.characterKey==='__user__'&&String(e.name||'').trim()&&String(e.appearance||'').trim());
+ if(users.length<=1)return users[0]||null;
+ const un=qlNormName(userName||'');
+ return (un&&users.find(e=>String(e.name).split('|').map(qlNormName).includes(un)))||users[0];
+}
 function qlNameReplaceMode(s=cfg()){
  if(s.nameReplaceEnabled===false)return 'off';
  return ['inline','characters'].includes(s.nameReplaceMode)?s.nameReplaceMode:'characters';
@@ -680,8 +689,9 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
   if(e.characterKey==null||e.characterKey==='')return 1;
   return String(e.characterKey)===cardKey?0:3;
  };
- const index=new Map();
+ const index=new Map(),activeUser=qlActiveUserEntry(s,context?.name1||'');
  for(const e of entries){
+  if(e.characterKey==='__user__'&&e!==activeUser)continue;
   const names=String(e.name).split('|').map(qlNormName).filter(Boolean);
   if(e.characterKey==='__user__'&&userName)names.push(userName);
   for(const n of names){const g=groupOf(e);const old=index.get(n);if(!old||g<old.g)index.set(n,{e,g});}
@@ -2612,6 +2622,7 @@ function qlRosterText(context=getContext()){
   const names=String(e.name||'').split('|').map(x=>x.trim()).filter(Boolean);
   if(!names.length||!String(e.appearance||'').trim())continue;
   const isUser=e.characterKey==='__user__';
+  if(isUser&&e!==qlActiveUserEntry(s,userName))continue;
   const unbound=e.characterKey==null||e.characterKey==='';
   if(!isUser&&!unbound&&String(e.characterKey)!==cardKey)continue;
   if(isUser&&userName&&!names.some(n=>n.toLowerCase()===userName.toLowerCase()))names.push(userName);
