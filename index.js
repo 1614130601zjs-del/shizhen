@@ -562,14 +562,17 @@ function qlParseNameTag(tag){
  const d=t.match(/^\$([\s\S]+)\$$/);if(d)t=d[1];
  return {core:t.trim(),weight};
 }
-// 「用户外貌」可以有好几条（对应不同的 persona）。每次只有「当前 persona」那一条算数：
-// 名字能对上当前用户名的那条；都对不上就取第一条（当作“我的固定外貌”，当前用户名算它的别名）。
-// 其余的用户外貌不进角色名单、也不参与名字替换，免得别的 persona 的名字被模型写进剧情或提示词。
+// 「用户外貌」按名字对应当前 persona：名字（含 | 别名）能对上当前用户名的那一条算数。
+// 对不上时：只有名叫「用户 / user / {{user}}」的通用条目才当作“我的固定外貌”；否则当前用户按原创角色处理
+// （不进角色名单、不替换名字，让模型按人设自己写外貌），不会再默认拿第一条。
 function qlActiveUserEntry(s,userName){
  const users=(s.characters||[]).filter(e=>e&&typeof e==='object'&&e.characterKey==='__user__'&&String(e.name||'').trim()&&String(e.appearance||'').trim());
- if(users.length<=1)return users[0]||null;
+ if(!users.length)return null;
+ const namesOf=e=>String(e.name).split('|').map(qlNormName).filter(Boolean);
  const un=qlNormName(userName||'');
- return (un&&users.find(e=>String(e.name).split('|').map(qlNormName).includes(un)))||users[0];
+ const match=un&&users.find(e=>namesOf(e).includes(un));
+ if(match)return match;
+ return users.find(e=>namesOf(e).some(n=>['用户','user','{{user}}'].includes(n)))||null;
 }
 function qlNameReplaceMode(s=cfg()){
  if(s.nameReplaceEnabled===false)return 'off';
@@ -2628,6 +2631,7 @@ function qlRosterText(context=getContext()){
   if(isUser&&userName&&!names.some(n=>n.toLowerCase()===userName.toLowerCase()))names.push(userName);
   lines.push(names.length>1?names[0]+'（也可写：'+names.slice(1).join(' / ')+'）':names[0]);
  }
+ if(userName&&!qlActiveUserEntry(s,userName))lines.push('（当前用户角色「'+userName+'」不在名单里：不要写名字，按人设直接写外貌 tag）');
  return lines.length?lines.join('\n'):'（角色词库里暂时没有可用的角色词条）';
 }
 // 生图前拦截：提示词里有「词库里没有的中文角色名」时弹窗，让用户去补外貌，而不是把名字原样交给 NAI（会白花点数）。
