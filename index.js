@@ -574,6 +574,8 @@ function qlActiveUserEntry(s,userName){
  if(match)return match;
  return users.find(e=>namesOf(e).some(n=>['用户','user','{{user}}'].includes(n)))||null;
 }
+// 词库外的名字怎么处理：没选过时默认「去掉名字继续生成」（外貌交给模型按人设写）；选过 ask / go 才弹窗 / 保留。
+function qlMissingAction(){const v=cfg().missingNameAction;return ['ask','go','strip'].includes(v)?v:'strip';}
 function qlNameReplaceMode(s=cfg()){
  if(s.nameReplaceEnabled===false)return 'off';
  return ['inline','characters'].includes(s.nameReplaceMode)?s.nameReplaceMode:'characters';
@@ -702,7 +704,7 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
  }
  const globalCtx=qlSplitTags(prompt).filter(t=>!qlUnwrapGroup(t)).join(', ');
  const used=new Set(),inline=[],restItems=[],persons=[],missing=[];
- const strip=cfg().missingNameAction==='strip';let dropped=0;
+ const strip=qlMissingAction()==='strip';let dropped=0;
  const hasCjk=x=>/[㐀-鿿豈-﫿]/.test(x);
  // 外貌词自带 1.2::…:: 权重时不能再外包一层，否则变成嵌套权重。
  const wrap=(text,weight)=>weight!=null&&weight!==1&&!text.includes('::')?weight+'::'+text+'::':text;
@@ -2716,7 +2718,7 @@ function qlOpenCharacterEditorFor(name){
  }catch(e){console.warn('[拾帧] 打开角色词条编辑失败',e);}
 }
 async function qlGuardMissingNames(prompt,context=getContext()){
- if(['go','strip'].includes(cfg().missingNameAction))return true;
+ if(['go','strip'].includes(qlMissingAction()))return true;
  let missing=[];
  try{missing=qlReplaceCharacterNames(prompt,context,{silent:true}).missing||[];}catch{}
  if(!missing.length)return true;
@@ -4566,7 +4568,7 @@ try{renderFloatBallSettings($('#ql-fb-settings'));}catch(err){console.warn('[拾
  if(sk){sk.checked=c0.shake;sk.onchange=async()=>{qlJellyCfg();cfg().jellyShake=sk.checked;save();if(sk.checked){if(msg)msg.textContent='';await qlJellyEnableMotion(t=>{if(msg)msg.textContent=t;});}else if(msg)msg.textContent='';};}
  if(js){js.value=['soft','bouncy'].includes(cfg().jellyStrength)?cfg().jellyStrength:'mid';js.onchange=()=>{cfg().jellyStrength=js.value;save();};}}
 {const b=$('#ql-diag-restore');if(b)b.onclick=()=>qlDialog({title:'图片恢复排查',message:qlDiagnoseRestore(),showCancel:false});}
-{const sel=$('#ql-missing-name-action');if(sel){sel.value=['go','strip'].includes(cfg().missingNameAction)?cfg().missingNameAction:'ask';sel.onchange=()=>{cfg().missingNameAction=sel.value;save();};}}
+{const sel=$('#ql-missing-name-action');if(sel){sel.value=qlMissingAction();sel.onchange=()=>{cfg().missingNameAction=sel.value;save();};}}
 $('#ql-character-start').onclick=()=>{const key=$('#ql-character-card').value||'';if(key===''){$('#ql-character-status').textContent='请先选择一张角色卡或「用户外貌」。';return;}activeCharacterCardKey=key;characterLibraryStarted=true;$('#ql-character-editor').hidden=true;renderLibrary();$('#ql-character-status').textContent=key==='__user__'?'已进入用户外貌分组。':'已进入所选角色卡的编辑界面。';};
 $('#ql-preset-save').onclick=()=>{const name=$('#ql-preset-name').value.trim(),positive=$('#ql-preset-positive').value.trim();if(!name||!positive){status('预设名称和正向画风串不能为空。');return;}const item={name,positive,negative:$('#ql-preset-negative').value.trim(),updatedAt:Date.now()};const edit=$('#ql-preset-save').dataset.edit;if(edit!==undefined&&cfg().presets[Number(edit)]?.id)item.id=cfg().presets[Number(edit)].id;if(edit!==undefined){cfg().presets[Number(edit)]=item;delete $('#ql-preset-save').dataset.edit;}else cfg().presets.unshift(item);cfg().presets=cfg().presets.slice(0,100);$('#ql-preset-edit-select').value=String(cfg().presets.findIndex(x=>x.name===item.name&&x.positive===item.positive));const savedIndex=cfg().presets.findIndex(x=>x.name===item.name&&x.positive===item.positive);if(savedIndex>=0){$('#ql-preset-save').dataset.edit=String(savedIndex);$('#ql-preset-save').textContent='保存修改';}save();renderLibrary();status('画师串已保存，可通过上方下拉框切换编辑。');};
 
