@@ -700,54 +700,115 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
   for(const n of names){const g=groupOf(e);const old=index.get(n);if(!old||g<old.g)index.set(n,{e,g});}
  }
  const globalCtx=qlSplitTags(prompt).filter(t=>!qlUnwrapGroup(t)).join(', ');
- const used=new Set(),inline=[],rest=[],characters=[],missing=[];
+ const used=new Set(),inline=[],restItems=[],persons=[],missing=[];
  const strip=cfg().missingNameAction==='strip';let dropped=0;
- const hasCjk=x=>/[㐀-鿿豈-﫿]/.test(x);
+ const hasCjk=x=>/[㐀-鿿豈-﫿]/.test(x);
  // 外貌词自带 1.2::…:: 权重时不能再外包一层，否则变成嵌套权重。
  const wrap=(text,weight)=>weight!=null&&weight!==1&&!text.includes('::')?weight+'::'+text+'::':text;
+ const PERSON_HEAD=/^(?:\d\s*)?(?:adult\s+|mature\s+)?(?:girl|boy|other|wom[ae]n|m[ae]n|female|male)$/i;
+ const pushPlain=t=>{inline.push(t);restItems.push({t,p:null});};
  for(const tag of qlSplitTags(prompt)){
   // 先按“整个 tag 就是名字”处理；不行再看是不是 (名字:权重, 其他词…) 的括号组。
-  let {core,weight}=qlParseNameTag(tag),extras=[];
+  let {core,weight}=qlParseNameTag(tag),extras=[],group=null;
   let hit=core?index.get(qlNormName(core)):null;
   if(!hit){
-   const group=qlUnwrapGroup(tag);
+   group=qlUnwrapGroup(tag);
    if(group&&group.length){
     const first=qlParseNameTag(group[0]);
     const h=first.core?index.get(qlNormName(first.core)):null;
     if(h){hit=h;core=first.core;weight=first.weight;extras=group.slice(1);}
     else if(first.core&&hasCjk(first.core)&&!/[,，]/.test(first.core)){
      missing.push(first.core);
-     // 去掉模式：词库外的名字丢掉，括号里其余的 tag（外貌、表情、动作…）照常保留
-     if(strip){dropped++;for(const x of group.slice(1)){inline.push(x);rest.push(x);}continue;}
+     // 去掉模式：词库外的名字丢掉，括号里其余的 tag（外貌、表情、动作…）仍然算这个人物
+     if(strip){
+      dropped++;
+      const person={named:false,tags:group.slice(1)};persons.push(person);
+      for(const x of person.tags){inline.push(x);restItems.push({t:x,p:person});}
+      continue;
+     }
+    }else if(first.core&&PERSON_HEAD.test(first.core)){
+     // 没写名字的人物括号 (1boy:1.2, 外貌…)：同样是一个人物，稍后和名单内的人物一起处理
+     const person={named:false,tags:group};persons.push(person);
+     inline.push(tag);restItems.push({t:tag,p:person});continue;
     }
    }else if(core&&hasCjk(core)&&!/\s/.test(core)){
     missing.push(core);
     if(strip){dropped++;continue;}
    }
   }
-  if(!hit){inline.push(tag);rest.push(tag);continue;}
+  if(!hit){pushPlain(tag);continue;}
   if(used.has(hit.e))continue;
   used.add(hit.e);
   const text=qlApplyConditional(String(hit.e.appearance).trim(),extras.join(', ')+', '+globalCtx).trim().replace(/[,，\s]+$/,'');
   const body=[wrap(text,weight),...extras].filter(Boolean).join(', ');
   const gender=qlDetectGender(hit.e);
-  characters.push({key:String(hit.e.name).split('|')[0].trim(),prompt:body,gender,slot:inline.length});inline.push(body);
+  const person={named:true,key:String(hit.e.name).split('|')[0].trim(),body,text,weight,extras,gender,slot:inline.length};
+  persons.push(person);inline.push(body);
  }
  const missingUnique=[...new Set(missing)];
  if(missingUnique.length&&!opts.silent)qlWarnMissingNames(missingUnique,strip);
- if(!used.size){const t=dropped?rest.join(', '):prompt;return {...none,text:t,rest:t,missing:missingUnique};}
+ const restAll=restItems.map(x=>x.t).join(', ');
+ if(!used.size){const t=dropped?restAll:prompt;return {...none,text:t,rest:t,missing:missingUnique};}
+ const named=persons.filter(x=>x.named);
+ // 多角色：名单内命中 + 至少两个人物 → 所有人物括号（含没写名字的）一起变成 NAI 角色提示词，主提示词只留公共部分。
+ // 只有一个人物时直接合在主提示词里，不拆。
+ const useChars=qlNameReplaceMode(s)==='characters'&&persons.length>=2;
+ const restTags=useChars?restItems.filter(x=>!x.p).map(x=>x.t):restItems.map(x=>x.t);
+ let characters=[];
+ if(useChars){
+  characters=persons.map((p,i)=>{
+   if(p.named){const {head,rest}=qlNaiCharSplit(qlSplitTags(p.text),p.gender);return {key:p.key,prompt:[head,wrap(rest.join(', '),p.weight),...p.extras].filter(Boolean).join(', '),gender:p.gender};}
+   const g=qlDetectGender({appearance:p.tags.join(', ')});
+   const {head,rest}=qlNaiCharSplit(p.tags,g);
+   return {key:'人物'+(i+1),prompt:[head,...rest].filter(Boolean).join(', '),gender:g};
+  });
+ }
+ // 人数标签按人物数量校对（所有人物性别都认得出来时）
+ let restFixed=restTags;
+ if(useChars&&characters.every(c=>c.gender==='female'||c.gender==='male'))restFixed=qlFixCountTags(restTags,characters.map(c=>c.gender));
+ const restText=restFixed.join(', ');
  // 通用词：画面里的人全是同一性别 → 只在公共区写一遍；男女混合（或认不出性别）→ 各自写进自己的角色提示词。
- const restText=rest.join(', ');
- const kinds=new Set(characters.map(c=>c.gender).filter(Boolean));
+ const kinds=new Set((useChars?characters:named).map(c=>c.gender).filter(Boolean));
  if(/\b(?:[1-9]girls?|girls?|females?|wom[ae]n)\b/i.test(restText))kinds.add('female');
  if(/\b(?:[1-9]boys?|boys?|males?|m[ae]n)\b/i.test(restText))kinds.add('male');
  let common='';
  if(kinds.size===1){common=qlPickedWords([...kinds][0],cardKey);}
  else if(kinds.size>1){
-  for(const c of characters){c.prompt=qlWithGenderWords(c.prompt,c.gender,cardKey);inline[c.slot]=c.prompt;}
+  if(useChars){for(const c of characters)c.prompt=qlWithGenderWords(c.prompt,c.gender,cardKey);}
+  else{for(const c of named){c.body=qlWithGenderWords(c.body,c.gender,cardKey);inline[c.slot]=c.body;}}
   return {text:inline.join(', '),rest:restText,characters,missing:missingUnique,common:''};
  }
  return {text:inline.join(', '),rest:restText,characters,missing:missingUnique,common};
+}
+// NAI V4 角色提示词以 girl / boy / other 开头（不带数字）：1girl→girl、1boy→boy，保留权重；去掉 solo；开头词缺失且性别已知时补上。
+function qlNaiCharSplit(tags,gender){
+ const rest=[];let head='';
+ for(const t of tags){
+  const {core,weight}=qlParseNameTag(t);
+  if(/^solo$/i.test(core))continue;
+  const m=/^(?:1\s*)?(girl|boy|other)$/i.exec(core);
+  if(m&&!head){const w=m[1].toLowerCase();head=weight!=null&&weight!==1?weight+'::'+w+'::':w;continue;}
+  rest.push(t);
+ }
+ if(!head&&(gender==='female'||gender==='male'))head=gender==='female'?'girl':'boy';
+ return {head,rest};
+}
+// 主提示词里的人数标签与人物括号数不一致时，按人物括号重写（如 2girls → 1girl, 1boy）；没有人数标签就补在最前。
+function qlFixCountTags(tags,genders){
+ const nF=genders.filter(g=>g==='female').length,nM=genders.filter(g=>g==='male').length;
+ const label=(n,w)=>n===1?'1'+w:n+w+'s';
+ const want=[];if(nF)want.push(label(nF,'girl'));if(nM)want.push(label(nM,'boy'));
+ const isCount=t=>/^(\d{1,2})\s*(girl|boy)s?$/i.test(qlTagCore(t));
+ let have={girl:0,boy:0};
+ for(const t of tags){const m=/^(\d{1,2})\s*(girl|boy)s?$/i.exec(qlTagCore(t));if(m)have[m[2].toLowerCase()]+=Number(m[1]);}
+ if(have.girl===nF&&have.boy===nM)return tags;
+ const out=[];let placed=false;
+ for(const t of tags){
+  if(isCount(t)){if(!placed){out.push(...want);placed=true;}continue;}
+  out.push(t);
+ }
+ if(!placed)out.unshift(...want);
+ return out;
 }
 function resolveChatImageGeneration(prompt, context=getContext()){
  const s=cfg(),characterId=context?.characterId==null?'':String(context.characterId);
