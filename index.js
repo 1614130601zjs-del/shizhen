@@ -783,6 +783,16 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
  // 人数标签按人物数量校对（所有人物性别都认得出来时）
  let restFixed=restTags;
  if(useChars&&characters.every(c=>c.gender==='female'||c.gender==='male'))restFixed=qlFixCountTags(restTags,characters.map(c=>c.gender));
+ // 不拆角色（单人或 inline 模式）：性别已知而提示词里没有任何人数 / 性别标签时，补 1boy / 1girl（单人再补 solo），否则 NAI 默认画女生。
+ if(!useChars&&persons.length){
+  const gs=persons.map(p=>p.gender||(p.named?'':qlDetectGender({appearance:(p.tags||[]).join(', ')})));
+  if(gs.every(g=>g==='female'||g==='male')&&!/(?:^|[\s,(:])[1-9]?\s*(?:girls?|boys?|wom[ae]n|m[ae]n)(?![A-Za-z])/i.test(inline.join(', '))){
+   const nF=gs.filter(g=>g==='female').length,nM=gs.filter(g=>g==='male').length,pre=[];
+   if(nF)pre.push(nF===1?'1girl':nF+'girls');if(nM)pre.push(nM===1?'1boy':nM+'boys');
+   if(persons.length===1&&!/(?:^|[\s,])solo(?![A-Za-z])/i.test(inline.join(', ')))pre.push('solo');
+   inline.unshift(...pre);restFixed=[...pre,...restFixed];
+  }
+ }
  const restText=restFixed.join(', ');
  // 通用词：画面里的人全是同一性别 → 只在公共区写一遍；男女混合（或认不出性别）→ 各自写进自己的角色提示词。
  const kinds=new Set((useChars?characters:named).map(c=>c.gender).filter(Boolean));
