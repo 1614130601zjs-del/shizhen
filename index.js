@@ -703,7 +703,7 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
   for(const n of names){const g=groupOf(e);const old=index.get(n);if(!old||g<old.g)index.set(n,{e,g});}
  }
  const globalCtx=qlSplitTags(prompt).filter(t=>!qlUnwrapGroup(t)).join(', ');
- const used=new Set(),inline=[],restItems=[],persons=[],missing=[];
+ const used=new Set(),inline=[],restItems=[],persons=[],missing=[],noLook=[];
  const strip=qlMissingAction()==='strip';let dropped=0;
  const hasCjk=x=>/[㐀-鿿豈-﫿]/.test(x);
  // 外貌词自带 1.2::…:: 权重时不能再外包一层，否则变成嵌套权重。
@@ -727,6 +727,7 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
      if(strip){
       dropped++;
       const person={named:false,tags:group.slice(1)};persons.push(person);
+      if(!person.tags.some(x=>PERSON_HEAD.test(qlParseNameTag(x).core)||/\bhair\b|\beyes\b/i.test(x)))noLook.push(first.core);
       for(const x of person.tags){inline.push(x);restItems.push({t:x,p:person});}
       continue;
      }
@@ -751,6 +752,7 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
  }
  const missingUnique=[...new Set(missing)];
  if(missingUnique.length&&!opts.silent)qlWarnMissingNames(missingUnique,strip);
+ if(noLook.length&&!opts.silent){const w='「'+[...new Set(noLook)].join('、')+'」不在词库里，括号里也没写外貌（没有人数性别词和发色瞳色），这个人物会被随机画。可以在「词库 → 角色词条库」给他加一条最简词条，比如 1boy, black short hair。';console.warn('[拾帧] '+w);try{window.toastr?.warning(w,'拾帧',{timeOut:9000});}catch{}}
  const restAll=restItems.map(x=>x.t).join(', ');
  if(!used.size&&!(qlNameReplaceMode(s)==='characters'&&persons.length>=2)){const t=dropped?restAll:prompt;return {...none,text:t,rest:t,missing:missingUnique};}
  const named=persons.filter(x=>x.named);
