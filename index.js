@@ -697,9 +697,10 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
  };
  const index=new Map(),activeUser=qlActiveUserEntry(s,context?.name1||'');
  for(const e of entries){
-  if(e.characterKey==='__user__'&&e!==activeUser)continue;
+  // 用户外貌：提示词里明确写了它自己的名字（如 孙二牛:1.2）就照样替换，哪怕当前 persona 不是这个人（比如拉回旧图重 roll）；
+  // 只有「当前用户名」这个叫法，才只对应当前 persona 那一条。
   const names=String(e.name).split('|').map(qlNormName).filter(Boolean);
-  if(e.characterKey==='__user__'&&userName)names.push(userName);
+  if(e.characterKey==='__user__'&&userName&&e===activeUser)names.push(userName);
   for(const n of names){const g=groupOf(e);const old=index.get(n);if(!old||g<old.g)index.set(n,{e,g});}
  }
  const globalCtx=qlSplitTags(prompt).filter(t=>!qlUnwrapGroup(t)).join(', ');
