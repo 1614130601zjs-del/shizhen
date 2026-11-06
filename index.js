@@ -618,8 +618,8 @@ function qlMergeWords(base,extra,position){
 function qlDetectGender(entry){
  const m=entry&&entry.gender;if(m==='male'||m==='female')return m;
  const t=String(entry&&entry.appearance||'').toLowerCase();
- const f=/\b(?:[1-9]girls?|girls?|females?|wom[ae]n|lady)\b/.test(t)||/(?:女性|女生|少女|女孩|女人)/.test(t);
- const ml=/\b(?:[1-9]boys?|boys?|males?|m[ae]n|guy)\b/.test(t)||/(?:男性|男生|少年|男孩|男人)/.test(t);
+ const f=/\b(?:[1-9]girls?|girls?|females?|[1-9]?wom[ae]n|lady)\b/.test(t)||/(?:女性|女生|少女|女孩|女人)/.test(t);
+ const ml=/\b(?:[1-9]boys?|boys?|males?|[1-9]?m[ae]n|guy)\b/.test(t)||/(?:男性|男生|少年|男孩|男人)/.test(t);
  if(f&&!ml)return 'female';if(ml&&!f)return 'male';return '';
 }
 function qlPickedWords(kind,cardKey){
@@ -773,8 +773,8 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
  const restText=restFixed.join(', ');
  // 通用词：画面里的人全是同一性别 → 只在公共区写一遍；男女混合（或认不出性别）→ 各自写进自己的角色提示词。
  const kinds=new Set((useChars?characters:named).map(c=>c.gender).filter(Boolean));
- if(/\b(?:[1-9]girls?|girls?|females?|wom[ae]n)\b/i.test(restText))kinds.add('female');
- if(/\b(?:[1-9]boys?|boys?|males?|m[ae]n)\b/i.test(restText))kinds.add('male');
+ if(/\b(?:[1-9]girls?|girls?|females?|[1-9]?wom[ae]n)\b/i.test(restText))kinds.add('female');
+ if(/\b(?:[1-9]boys?|boys?|males?|[1-9]?m[ae]n)\b/i.test(restText))kinds.add('male');
  let common='';
  if(kinds.size===1){common=qlPickedWords([...kinds][0],cardKey);}
  else if(kinds.size>1){
@@ -790,6 +790,8 @@ function qlNaiCharSplit(tags,gender){
  for(const t of tags){
   const {core,weight}=qlParseNameTag(t);
   if(/^solo$/i.test(core))continue;
+  const mw=/^1\s*(wom[ae]n|m[ae]n)$/i.exec(core);
+  if(mw){const w=mw[1].toLowerCase();rest.push(weight!=null&&weight!==1?weight+'::'+w+'::':w);continue;}
   const m=/^(?:1\s*)?(girl|boy|other)$/i.exec(core);
   if(m&&!head){const w=m[1].toLowerCase();head=weight!=null&&weight!==1?weight+'::'+w+'::':w;continue;}
   // 括号拆开后，第一项 adult man:1.2 这种裸权重 NAI 不认，改成 1.2::adult man::
@@ -804,9 +806,11 @@ function qlFixCountTags(tags,genders){
  const nF=genders.filter(g=>g==='female').length,nM=genders.filter(g=>g==='male').length;
  const label=(n,w)=>n===1?'1'+w:n+w+'s';
  const want=[];if(nF)want.push(label(nF,'girl'));if(nM)want.push(label(nM,'boy'));
- const isCount=t=>/^(\d{1,2})\s*(girl|boy)s?$/i.test(qlTagCore(t));
+ const kindOf=w=>/^(?:girl|wom[ae]n)$/i.test(w)?'girl':'boy';
+ const CNT=/^(\d{1,2})\s*(girl|boy|wom[ae]n|m[ae]n)s?$/i;
+ const isCount=t=>CNT.test(qlTagCore(t));
  let have={girl:0,boy:0};
- for(const t of tags){const m=/^(\d{1,2})\s*(girl|boy)s?$/i.exec(qlTagCore(t));if(m)have[m[2].toLowerCase()]+=Number(m[1]);}
+ for(const t of tags){const m=CNT.exec(qlTagCore(t));if(m)have[kindOf(m[2])]+=Number(m[1]);}
  if(have.girl===nF&&have.boy===nM)return tags;
  const out=[];let placed=false;
  for(const t of tags){
