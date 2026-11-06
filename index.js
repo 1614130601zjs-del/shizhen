@@ -792,7 +792,9 @@ function qlNaiCharSplit(tags,gender){
   if(/^solo$/i.test(core))continue;
   const m=/^(?:1\s*)?(girl|boy|other)$/i.exec(core);
   if(m&&!head){const w=m[1].toLowerCase();head=weight!=null&&weight!==1?weight+'::'+w+'::':w;continue;}
-  rest.push(t);
+  // 括号拆开后，第一项 adult man:1.2 这种裸权重 NAI 不认，改成 1.2::adult man::
+  const bw=!/::|[()]/.test(t)&&!/^(?:source|target|mutual)#/i.test(t)?/^(.+?)\s*:\s*(-?\d+(?:\.\d+)?)$/.exec(t):null;
+  rest.push(bw?bw[2]+'::'+bw[1].trim()+'::':t);
  }
  if(!head&&(gender==='female'||gender==='male'))head=gender==='female'?'girl':'boy';
  return {head,rest};
