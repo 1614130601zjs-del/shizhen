@@ -2194,6 +2194,8 @@ let statusbarObserver=null;
 const statusbarObservedDocs=new WeakSet();
 function parseStatusbarMarker(text){const match=String(text||'').match(/image###([\s\S]*?)###/);return match?.[1]?.trim()||'';}
 function statusbarPromptForTarget(target){
+ // 声明了 data-ql-stable 的舞台（抽卡页）：只认自己的 data-tag；里面拾帧渲染出的卡片文字（含旧提示词）不能当成新提示词。
+ if(target?.hasAttribute?.('data-ql-stable'))return parseStatusbarMarker(target.getAttribute('data-tag'));
  const direct=[
   target?.textContent,
   target?.getAttribute?.('data-tag'),
@@ -2213,7 +2215,8 @@ function statusbarTaskKey(target,prompt,doc){
  const messageId=message?.getAttribute('mesid')||message?.dataset?.mesid||'no-message-id';
  const scope=message||doc;
  const targets=Array.from(scope.querySelectorAll('[class~="scanning"], [data-qlPrompt]')).filter(el=>statusbarPromptForTarget(el)||el.dataset.qlPrompt);
- const ordinal=Math.max(0,targets.indexOf(target));
+ // data-ql-stable：外部页面（如抽卡状态栏）声明「只按提示词缓存、不按在消息里的序号区分」，同一条提示词无论出现几次都对上同一张缓存图。
+ const ordinal=target.hasAttribute?.('data-ql-stable')?0:Math.max(0,targets.indexOf(target));
  let hash=2166136261;
  for(let i=0;i<prompt.length;i++){hash^=prompt.charCodeAt(i);hash=Math.imul(hash,16777619);}
  return 'statusbar:'+String(getContext()?.chatId||'chat')+':'+messageId+':'+ordinal+':'+(hash>>>0).toString(36);
@@ -2442,6 +2445,8 @@ async function processStatusbarFrames(){
    continue;
   }
   // 没有缓存图：等用户点“定格此刻”再生图。
+  // data-ql-autoarm：由页面自己的按钮（如抽卡）决定什么时候出图，不再多点一次「定格此刻」。
+  if(frame.dataset.qlArmed!=='1'&&frame.hasAttribute('data-ql-autoarm'))frame.dataset.qlArmed='1';
   if(frame.dataset.qlArmed!=='1'){ensureStatusbarTrigger(frame,prompt);frame.dataset.qlBusy='0';continue;}
   if(!await qlGuardMissingNames(prompt,getContext())){frame.dataset.qlArmed='0';frame.dataset.qlBusy='0';continue;}
   const accepted=triggerRegistry.begin(taskKey,{prompt,source:'statusbar'});
