@@ -5673,8 +5673,14 @@ body.ql-modal-open .ql-fb-ball{display:none}
 .ql-char-thumb-row{display:flex;gap:10px;align-items:flex-start;margin:6px 0}
 .ql-char-thumb-row>img{width:72px;height:72px;object-fit:cover;border-radius:12px;flex:none}
 .ql-char-thumb-row .menu_button{margin:0 6px 6px 0}
-.ql-char-thumb-s{width:44px;height:44px;object-fit:cover;border-radius:10px;flex:none;margin-right:8px}
-.ql-character-role-heading:has(.ql-char-thumb-s){display:flex;align-items:center;flex-wrap:wrap}
+.ql-char-thumb-s{width:84px;height:84px;object-fit:cover;border-radius:14px;cursor:zoom-in;grid-row:1/3;grid-column:1;align-self:center}
+.ql-library-record:has(>.ql-char-thumb-s){display:grid;grid-template-columns:auto 1fr;column-gap:12px;row-gap:8px;align-items:center}
+.ql-library-record:has(>.ql-char-thumb-s)>.ql-bulk-check{grid-column:1/-1}
+.ql-library-record:has(>.ql-char-thumb-s)>.ql-character-role-heading{grid-column:2;grid-row:1}
+.ql-library-record:has(>.ql-char-thumb-s)>.ql-row{grid-column:2;grid-row:2;flex-wrap:wrap}
+.ql-char-thumb-row>img{cursor:zoom-in}
+.ql-thumb-zoom{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
+.ql-thumb-zoom img{max-width:100%;max-height:100%;border-radius:12px;object-fit:contain}
 
 /* 参数页：通用预设 / 角色卡绑定里的 正文·状态栏·彩蛋 三行 */
 .ql-kind-row{border-top:1px dashed rgba(128,128,128,.3);padding-top:8px;margin-top:8px}
@@ -5683,3 +5689,6 @@ body.ql-modal-open .ql-fb-ball{display:none}
 .ql-combo-list-card summary{cursor:pointer;list-style:none}
 .ql-combo-list-card summary::-webkit-details-marker{display:none}
 .ql-combo-list-card summary .ql-section-heading{margin:0}
+.ql-library-record:has(>.ql-bulk-check):has(>.ql-char-thumb-s)>.ql-char-thumb-s{grid-row:2/4}
+.ql-library-record:has(>.ql-bulk-check):has(>.ql-char-thumb-s)>.ql-character-role-heading{grid-row:2}
+.ql-library-record:has(>.ql-bulk-check):has(>.ql-char-thumb-s)>.ql-row{grid-row:3}

@@ -567,7 +567,7 @@ function qlShiftComboRefs(s,mapFn){
 }
 let qlEditThumb='';
 function qlShowEditThumb(){const img=$('#ql-char-thumb'),clr=$('#ql-char-thumb-clear');if(!img)return;if(qlEditThumb){img.src=qlEditThumb;img.hidden=false;if(clr)clr.hidden=false;}else{img.removeAttribute('src');img.hidden=true;if(clr)clr.hidden=true;}}
-async function qlThumbFromSrc(src){const im=await qlLoadImageSrc(src);return qlImageToCanvas(im,256).toDataURL('image/jpeg',0.82);}
+async function qlThumbFromSrc(src){const im=await qlLoadImageSrc(src);return qlImageToCanvas(im,512).toDataURL('image/jpeg',0.85);}
 // 有正在编辑的已有词条就直接写进去；新词条先放着，点“保存角色词条”时一起存。
 function qlApplyEditThumb(){const edit=$('#ql-character-save')?.dataset.edit;if(edit!==undefined){const c=cfg(),item=c.characters[Number(edit)];if(item){item.thumb=qlEditThumb;save();renderLibrary();return true;}}return false;}
 function findCharacterBinding(characterId, characterName, settings=cfg()){
@@ -3703,7 +3703,7 @@ function renderLibrary(){
    if(cardAvatar&&String(p.characterAvatar||'')===cardAvatar)return true;
    return Boolean(cardName&&String(p.characterName||'')===cardName);
   });
-  const userPanel='<div class="ql-character-role-panel"><h4>用户外貌分组</h4><p class="ql-muted">在这个分组中添加多个用户形象；每个条目都有独立名称与外貌提示词，取景区会按条目名称提供选择。</p><button type="button" class="menu_button ql-character-add" data-character-add>＋ 新建用户外貌</button>'+(selectedRecords.map(({p,index})=>'<div class="ql-record ql-library-record">'+(libraryEditMode?'<label class="ql-bulk-check"><input type="checkbox" data-character-select="'+index+'" '+(selectedCharacters.has(index)?'checked':'')+'>选择</label>':'')+'<div class="ql-character-role-heading">'+(p.thumb?'<img class="ql-char-thumb-s" alt="" src="'+esc(p.thumb)+'">':'')+'<strong>'+esc(p.name||'未命名用户外貌')+'</strong><small>'+esc(p.appearance?'已填写生图词':'尚未填写生图词')+'</small></div><div class="ql-row"><button class="menu_button" data-character-apply="'+index+'">追加生图词</button><button class="menu_button" data-character-edit="'+index+'">编辑</button><button class="menu_button" data-character-delete="'+index+'">删除词条</button></div></div>').join('')||'<p class="ql-muted">这个分组还没有用户外貌条目，点击「新建用户外貌」添加。</p>')+'</div>';
+  const userPanel='<div class="ql-character-role-panel"><h4>用户外貌分组</h4><p class="ql-muted">在这个分组中添加多个用户形象；每个条目都有独立名称与外貌提示词，取景区会按条目名称提供选择。</p><button type="button" class="menu_button ql-character-add" data-character-add>＋ 新建用户外貌</button>'+(selectedRecords.map(({p,index})=>'<div class="ql-record ql-library-record">'+(libraryEditMode?'<label class="ql-bulk-check"><input type="checkbox" data-character-select="'+index+'" '+(selectedCharacters.has(index)?'checked':'')+'>选择</label>':'')+''+(p.thumb?'<img class="ql-char-thumb-s" alt="头像" src="'+esc(p.thumb)+'">':'')+'<div class="ql-character-role-heading"><strong>'+esc(p.name||'未命名用户外貌')+'</strong><small>'+esc(p.appearance?'已填写生图词':'尚未填写生图词')+'</small></div><div class="ql-row"><button class="menu_button" data-character-apply="'+index+'">追加生图词</button><button class="menu_button" data-character-edit="'+index+'">编辑</button><button class="menu_button" data-character-delete="'+index+'">删除词条</button></div></div>').join('')||'<p class="ql-muted">这个分组还没有用户外貌条目，点击「新建用户外貌」添加。</p>')+'</div>';
   if(!characterLibraryStarted){
    chars.innerHTML=isUserAppearance?userPanel:(card?'<div class="ql-character-role-panel"><h4>已选择：'+esc(cardName||'未命名角色卡')+'</h4><p class="ql-muted">点击「开始编辑」后查看这张卡的角色词条。</p></div>':'<p class="ql-muted">请选择一张角色卡或「用户外貌」，再点击「开始编辑」。</p>');
   }else if(isUserAppearance){
@@ -3711,7 +3711,7 @@ function renderLibrary(){
   }else if(!card){
    chars.innerHTML='<p class="ql-muted">请先选择一张有效的角色卡。</p>';
   }else{
-   chars.innerHTML='<div class="ql-character-role-panel"><h4>'+esc(cardName)+' 的角色词库</h4><button type="button" class="menu_button ql-character-add" data-character-add>＋ 新建角色词条</button>'+(selectedRecords.map(({p,index})=>'<div class="ql-record ql-library-record">'+(libraryEditMode?'<label class="ql-bulk-check"><input type="checkbox" data-character-select="'+index+'" '+(selectedCharacters.has(index)?'checked':'')+'>选择</label>':'')+'<div class="ql-character-role-heading">'+(p.thumb?'<img class="ql-char-thumb-s" alt="" src="'+esc(p.thumb)+'">':'')+'<strong>'+esc(p.name||'未命名角色')+'</strong><small>'+esc(p.appearance?'已填写生图词':'尚未填写生图词')+'</small></div><div class="ql-row"><button class="menu_button" data-character-apply="'+index+'">追加生图词</button><button class="menu_button" data-character-edit="'+index+'">编辑</button><button class="menu_button" data-character-delete="'+index+'">删除词条</button></div></div>').join('')||'<p class="ql-muted">这张角色卡还没有角色词条。</p>')+'</div>';
+   chars.innerHTML='<div class="ql-character-role-panel"><h4>'+esc(cardName)+' 的角色词库</h4><button type="button" class="menu_button ql-character-add" data-character-add>＋ 新建角色词条</button>'+(selectedRecords.map(({p,index})=>'<div class="ql-record ql-library-record">'+(libraryEditMode?'<label class="ql-bulk-check"><input type="checkbox" data-character-select="'+index+'" '+(selectedCharacters.has(index)?'checked':'')+'>选择</label>':'')+''+(p.thumb?'<img class="ql-char-thumb-s" alt="头像" src="'+esc(p.thumb)+'">':'')+'<div class="ql-character-role-heading"><strong>'+esc(p.name||'未命名角色')+'</strong><small>'+esc(p.appearance?'已填写生图词':'尚未填写生图词')+'</small></div><div class="ql-row"><button class="menu_button" data-character-apply="'+index+'">追加生图词</button><button class="menu_button" data-character-edit="'+index+'">编辑</button><button class="menu_button" data-character-delete="'+index+'">删除词条</button></div></div>').join('')||'<p class="ql-muted">这张角色卡还没有角色词条。</p>')+'</div>';
   }
   chars.querySelectorAll('[data-character-add]').forEach(button=>button.addEventListener('click',()=>{
    delete $('#ql-character-save').dataset.edit;
@@ -4700,6 +4700,7 @@ $('#ql-try-save').onclick=async()=>{
   save();t.saved=true;$('#ql-try-save').textContent='已存到底片';st.textContent='已存到底片。';
  }catch(e){st.textContent='保存失败：'+(e?.message||e);}
 };
+document.addEventListener('click',e=>{const im=e.target?.closest?.('.ql-char-thumb-s,#ql-char-thumb');if(!im||!im.src)return;const ov=document.createElement('div');ov.className='ql-thumb-zoom';ov.innerHTML='<img alt="">';ov.firstChild.src=im.src;ov.onclick=()=>ov.remove();document.body.appendChild(ov);});
 $('#ql-char-thumb-upload').onclick=()=>$('#ql-char-thumb-file').click();
 $('#ql-char-thumb-file').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;try{qlEditThumb=await qlThumbFromSrc(await qlReadFileDataUrl(f));qlShowEditThumb();const done=qlApplyEditThumb();$('#ql-character-status').textContent=done?'词条头像已更新。':'头像已选好，点“保存角色词条”后生效。';}catch(err){$('#ql-character-status').textContent='读取图片失败：'+(err?.message||err);}};
 $('#ql-char-thumb-clear').onclick=()=>{qlEditThumb='';qlShowEditThumb();const done=qlApplyEditThumb();$('#ql-character-status').textContent=done?'已移除词条头像。':'已移除（保存后生效）。';};
