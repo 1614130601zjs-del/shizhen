@@ -264,17 +264,27 @@ function qlRenderMarkers(host,entries){
  const unused=entries.filter(entry=>!present.has(entry.markerKey));
  const slots=qlFindMarkerSlots(host);
  if(!slots.length)return covered;
- // 先按文档顺序把每个位置对应到某一条标记：优先同一条提示词，其次按顺序取下一条。
+ // 先按文档顺序把每个位置对应到某一条标记：优先同一条提示词，其次“只看字母数字”的模糊一致，最后按顺序。
+ // 酒馆的 markdown 渲染会改写正文（*、_、~ 变斜体/删除线，引号变弯引号，-- 变破折号等），
+ // 页面上看到的标记文字就和 message.mes 里的原文对不上；只要有一条被改写，这一条就渲染不成按钮。
+ const fuzzy=v=>String(v||'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'');
  const plan=[];
  for(const slot of slots){
   if(!slot.prompt){plan.push({slot,entry:null,insert:false});continue;}
-  // 只认和消息原文里某条标记提示词一致的位置；对不上的（比如状态栏模板脚本源码里的 'image###'+tag+'###' 字符串）一律不碰，
-  // 否则会把别处的文字/代码当成标记改掉，破坏状态栏 iframe 的内容。
   let idx=unused.findIndex(entry=>qlNormalizePrompt(entry.prompt)===slot.prompt);
-  if(idx>=0){plan.push({slot,entry:unused.splice(idx,1)[0],insert:true});continue;}
-  const dup=entries.find(entry=>qlNormalizePrompt(entry.prompt)===slot.prompt);
+  if(idx<0){const fk=fuzzy(slot.prompt);if(fk)idx=unused.findIndex(entry=>fuzzy(entry.prompt)===fk);}
+  if(idx>=0){plan.push({slot,entry:unused.splice(idx,1)[0],insert:true,fromText:true});continue;}
+  const fk2=fuzzy(slot.prompt);
+  const dup=entries.find(entry=>qlNormalizePrompt(entry.prompt)===slot.prompt||(fk2&&fuzzy(entry.prompt)===fk2));
   // 已经有按钮的同一条提示词又出现了一份原文：只清掉原文，不再多贴一个按钮。
-  if(dup)plan.push({slot,entry:dup,insert:false});
+  if(dup){plan.push({slot,entry:dup,insert:false});continue;}
+  // 仍对不上：留给下面按顺序兜底（只认和原文标记数量吻合的情况，避免误改状态栏模板里的 'image###'+tag+'###' 之类字符串）。
+  plan.push({slot,entry:null,insert:false,orphan:true});
+ }
+ const orphans=plan.filter(p=>p.orphan);
+ if(orphans.length&&orphans.length===unused.length){
+  orphans.forEach((p,i)=>{p.entry=unused[i];p.insert=true;});
+  unused.length=0;
  }
  // 从后往前改 DOM，前面的位置不会被后面的修改影响。
  for(let i=plan.length-1;i>=0;i--){
@@ -286,7 +296,7 @@ function qlRenderMarkers(host,entries){
    if(last.isText)range.setEnd(last.node,slot.end-last.start);else range.setEndAfter(last.node);
   }catch(error){console.warn('[拾帧 Lite] 标记范围异常，已跳过',error);continue;}
   range.deleteContents();
-  if(insert&&entry)range.insertNode(qlMakeInlineButton(entry,slot.prompt));
+  if(insert&&entry)range.insertNode(qlMakeInlineButton(entry,entry.prompt||slot.prompt));
  }
  return covered;
 }
