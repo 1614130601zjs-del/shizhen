@@ -1980,7 +1980,7 @@ function storeChatRecord(url,prompt,taskKey,meta={},generationOverride=null){
  const preset=generationOverride?generationOverride.preset:(presetIndex>=0?c.presets[presetIndex]:null);
  const vibe=resolved.vibe;
  const record={
-  id:taskKey+':'+Date.now(),at:Date.now(),prompt:resolved.prompt,naiPromptData:resolved.naiPromptData&&Array.isArray(resolved.naiPromptData.characters)&&resolved.naiPromptData.characters.length?{basePrompt:String(resolved.naiPromptData.basePrompt||''),characters:resolved.naiPromptData.characters.map(x=>({key:x.key,prompt:x.prompt}))}:null,basePrompt:prompt,negative:resolved.negative||c.negative||'',
+  id:taskKey+':'+Date.now(),at:Date.now(),prompt:resolved.prompt,naiPromptData:resolved.naiPromptData&&Array.isArray(resolved.naiPromptData.characters)&&resolved.naiPromptData.characters.length?{basePrompt:String(resolved.naiPromptData.basePrompt||''),characters:resolved.naiPromptData.characters.map(x=>({key:x.key,prompt:x.prompt}))}:null,basePrompt:prompt,negative:qlWithExtraNeg(resolved.negative||c.negative||'',c),
   provider:c.provider,model:c.provider!=='openai'?c.naiModel:c.model,
   size:c.provider!=='openai'?(c.naiWidth+'x'+c.naiHeight):c.size,
   quality:c.provider==='openai'?c.quality:null,dataUrl:url,characterName:meta.characterName||getContext()?.name2||null,characterKey:meta.characterKey??getContext()?.characterId??null,
