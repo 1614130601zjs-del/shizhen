@@ -5679,8 +5679,8 @@ body.ql-modal-open .ql-fb-ball{display:none}
 .ql-library-record:has(>.ql-char-thumb-s)>.ql-character-role-heading{grid-column:2;grid-row:1}
 .ql-library-record:has(>.ql-char-thumb-s)>.ql-row{grid-column:2;grid-row:2;flex-wrap:wrap}
 .ql-char-thumb-row>img{cursor:zoom-in}
-.ql-thumb-zoom{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
-.ql-thumb-zoom img{max-width:100%;max-height:100%;border-radius:12px;object-fit:contain}
+.ql-thumb-zoom{position:fixed!important;inset:0!important;z-index:2147483647!important;width:100vw;height:100vh;height:100dvh;background:rgba(0,0,0,.85);display:flex!important;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;cursor:zoom-out;transform:none!important}
+.ql-thumb-zoom img{max-width:100%!important;max-height:100%!important;width:auto!important;height:auto!important;border-radius:12px;object-fit:contain}
 
 /* 参数页：通用预设 / 角色卡绑定里的 正文·状态栏·彩蛋 三行 */
 .ql-kind-row{border-top:1px dashed rgba(128,128,128,.3);padding-top:8px;margin-top:8px}

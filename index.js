@@ -4700,7 +4700,7 @@ $('#ql-try-save').onclick=async()=>{
   save();t.saved=true;$('#ql-try-save').textContent='已存到底片';st.textContent='已存到底片。';
  }catch(e){st.textContent='保存失败：'+(e?.message||e);}
 };
-document.addEventListener('click',e=>{const im=e.target?.closest?.('.ql-char-thumb-s,#ql-char-thumb');if(!im||!im.src)return;const ov=document.createElement('div');ov.className='ql-thumb-zoom';ov.innerHTML='<img alt="">';ov.firstChild.src=im.src;ov.onclick=()=>ov.remove();document.body.appendChild(ov);});
+document.addEventListener('click',e=>{const im=e.target?.closest?.('.ql-char-thumb-s,#ql-char-thumb');if(!im||!im.src)return;const ov=document.createElement('div');ov.className='ql-thumb-zoom';ov.innerHTML='<img alt="">';ov.firstChild.src=im.src;ov.onclick=ev=>{ev.stopPropagation();ov.remove();};const host=document.querySelector('#ql-overlay');(host&&!host.hidden?host:document.body).append(ov);});
 $('#ql-char-thumb-upload').onclick=()=>$('#ql-char-thumb-file').click();
 $('#ql-char-thumb-file').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(!f)return;try{qlEditThumb=await qlThumbFromSrc(await qlReadFileDataUrl(f));qlShowEditThumb();const done=qlApplyEditThumb();$('#ql-character-status').textContent=done?'词条头像已更新。':'头像已选好，点“保存角色词条”后生效。';}catch(err){$('#ql-character-status').textContent='读取图片失败：'+(err?.message||err);}};
 $('#ql-char-thumb-clear').onclick=()=>{qlEditThumb='';qlShowEditThumb();const done=qlApplyEditThumb();$('#ql-character-status').textContent=done?'已移除词条头像。':'已移除（保存后生效）。';};
