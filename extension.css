@@ -5652,3 +5652,19 @@ body.ql-modal-open .ql-fb-ball{display:none}
 #shizhen-panel .ql-fb-icon-opt{position:relative}
 #shizhen-panel .ql-fb-icon-opt.is-on{border-color:var(--qp-sig,var(--ql-accent,#e0446a));background:color-mix(in srgb,var(--qp-sig,var(--ql-accent,#e0446a)) 16%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--qp-sig,var(--ql-accent,#e0446a)) 35%,transparent)}
 #shizhen-panel .ql-fb-icon-opt.is-on::after{content:"✓";position:absolute;right:-5px;bottom:-5px;width:16px;height:16px;border-radius:50%;background:var(--qp-sig,var(--ql-accent,#e0446a));color:#fff;font-size:11px;line-height:16px;text-align:center;font-weight:700}
+
+/* 底片页：顶部吸附工具栏 + 清理 */
+#shizhen-panel #ql-cache-footer.ql-cache-bulk-tools{position:sticky;top:0;z-index:20;margin:8px 0 10px;display:flex;flex-direction:column;align-items:stretch;gap:7px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:box-shadow .2s,border-color .2s}
+#shizhen-panel #ql-cache-footer .ql-cache-bar-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+#shizhen-panel #ql-cache-footer .ql-cache-clear-row select{flex:1 1 auto;min-width:0;min-height:34px;border-radius:9px}
+#shizhen-panel #ql-cache-footer .ql-cache-bar-tip{margin:0;font-size:11px;line-height:1.5;opacity:.72}
+#shizhen-panel #ql-cache-footer.is-mode{box-shadow:0 0 0 2px color-mix(in srgb,var(--ql-accent,#91a9a0) 45%,transparent),0 6px 18px rgba(0,0,0,.14)}
+#shizhen-panel #ql-cache-footer.is-selecting [data-ql-bulk-delete]:not([disabled]){border-color:#d96a6a!important;color:#d96a6a!important}
+#shizhen-panel #ql-cache-footer .ql-cache-selected-count.ql-pop{animation:qlPop .28s ease-out}
+@keyframes qlPop{0%{transform:scale(.8);opacity:.4}60%{transform:scale(1.18)}100%{transform:scale(1);opacity:1}}
+#shizhen-panel #ql-history .ql-cache-tile{transition:transform .12s,opacity .2s}
+#shizhen-panel #ql-history .ql-cache-tile:active{transform:scale(.96)}
+#shizhen-panel #ql-history.ql-cache-selection-mode .ql-cache-tile.is-selected{transform:scale(.94)}
+
+#shizhen-panel #ql-history .ql-cache-image{position:relative}
+#shizhen-panel #ql-history .ql-cache-kind{position:absolute;left:4px;top:4px;padding:1px 6px;border-radius:8px;font-size:10px;line-height:1.5;color:#fff;background:rgba(20,20,30,.62);backdrop-filter:blur(4px);pointer-events:none}
