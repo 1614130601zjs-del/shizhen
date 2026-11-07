@@ -5675,3 +5675,11 @@ body.ql-modal-open .ql-fb-ball{display:none}
 .ql-char-thumb-row .menu_button{margin:0 6px 6px 0}
 .ql-char-thumb-s{width:44px;height:44px;object-fit:cover;border-radius:10px;flex:none;margin-right:8px}
 .ql-character-role-heading:has(.ql-char-thumb-s){display:flex;align-items:center;flex-wrap:wrap}
+
+/* 参数页：通用预设 / 角色卡绑定里的 正文·状态栏·彩蛋 三行 */
+.ql-kind-row{border-top:1px dashed rgba(128,128,128,.3);padding-top:8px;margin-top:8px}
+.ql-kind-row:first-of-type{border-top:0;margin-top:0;padding-top:0}
+.ql-kind-row h4{margin:0 0 4px}
+.ql-combo-list-card summary{cursor:pointer;list-style:none}
+.ql-combo-list-card summary::-webkit-details-marker{display:none}
+.ql-combo-list-card summary .ql-section-heading{margin:0}
