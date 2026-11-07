@@ -5668,3 +5668,10 @@ body.ql-modal-open .ql-fb-ball{display:none}
 
 #shizhen-panel #ql-history .ql-cache-image{position:relative}
 #shizhen-panel #ql-history .ql-cache-kind{position:absolute;left:4px;top:4px;padding:1px 6px;border-radius:8px;font-size:10px;line-height:1.5;color:#fff;background:rgba(20,20,30,.62);backdrop-filter:blur(4px);pointer-events:none}
+
+/* 角色词条头像：词库里记录“这套词跑出来长什么样” */
+.ql-char-thumb-row{display:flex;gap:10px;align-items:flex-start;margin:6px 0}
+.ql-char-thumb-row>img{width:72px;height:72px;object-fit:cover;border-radius:12px;flex:none}
+.ql-char-thumb-row .menu_button{margin:0 6px 6px 0}
+.ql-char-thumb-s{width:44px;height:44px;object-fit:cover;border-radius:10px;flex:none;margin-right:8px}
+.ql-character-role-heading:has(.ql-char-thumb-s){display:flex;align-items:center;flex-wrap:wrap}
