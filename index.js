@@ -3063,6 +3063,16 @@ function history(){
   const settings=cfg();if(!settings.albumNames||typeof settings.albumNames!=='object'||Array.isArray(settings.albumNames))settings.albumNames={};
   const uidSnap=(settings.records||[]).map(qlUidOf);
   const favorites=(settings.records||[]).map((record,index)=>({...record,_cacheIndex:index})).filter(record=>record.albumCharacterName&&record.dataUrl&&record.collection!=='prompt-gallery'&&record.collection!=='cache');
+  // 同一个角色的收藏可能被记成不同的键（序号 / 空 / 名字），新开聊天后角色序号或 ID 变了就会拆成两个相册。
+  // 渲染前统一成“角色卡序号”：名字能唯一对上某张角色卡就用它的序号，并把旧键的相册名/封面搬过去。
+  {const chars=getCharacterCards();let changed=false;
+   const canon=r=>{const name=String(r.albumCharacterName||'').trim(),raw=String(r.albumCharacterKey??'').trim();if(!name||raw==='__user__')return raw;const hits=[];chars.forEach((ch,i)=>{if(String(ch?.name||'').trim()===name)hits.push(i);});if(hits.length!==1)return raw;const k=String(hits[0]);return k;};
+   for(const r of settings.records||[]){if(!r||!r.albumCharacterName||!r.dataUrl||r.collection==='prompt-gallery'||r.collection==='cache')continue;
+    const old=String(r.albumCharacterKey??'').trim(),k=canon(r);
+    if(k&&k!==old&&old!==''){const oldName=settings.albumNames?.[old];if(oldName&&!settings.albumNames[k])settings.albumNames[k]=oldName;const oc=settings.albumCovers?.[old];if(oc&&!settings.albumCovers[k])settings.albumCovers[k]=oc;}
+    if(k&&k!==old){r.albumCharacterKey=k;changed=true;}}
+   if(changed){try{save();}catch{}}
+   for(const record of favorites){const live=settings.records[record._cacheIndex];if(live&&live.albumCharacterKey!=null)record.albumCharacterKey=live.albumCharacterKey;}}
   const groups=new Map();
   for(const record of favorites){const key=String(record.albumCharacterKey||record.albumCharacterName||'current');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(record);}
   for(const key of Object.keys(settings.albumNames))if(!groups.has(key))groups.set(key,[]);
