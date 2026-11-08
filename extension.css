@@ -5692,3 +5692,5 @@ body.ql-modal-open .ql-fb-ball{display:none}
 .ql-library-record:has(>.ql-bulk-check):has(>.ql-char-thumb-s)>.ql-char-thumb-s{grid-row:2/4}
 .ql-library-record:has(>.ql-bulk-check):has(>.ql-char-thumb-s)>.ql-character-role-heading{grid-row:2}
 .ql-library-record:has(>.ql-bulk-check):has(>.ql-char-thumb-s)>.ql-row{grid-row:3}
+
+.ql-gen-loader .ql-gen-stop{margin-top:8px;padding:2px 14px}
