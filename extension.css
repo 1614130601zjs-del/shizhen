@@ -37,6 +37,11 @@ html:has(> #ql-overlay:not([hidden])){overflow:hidden}
 #shizhen-panel .ql-tab{min-width:0;margin:0;padding:9px 2px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--SmartThemeBodyColor);font-size:12px;line-height:1.2;white-space:nowrap}
 #shizhen-panel .ql-tab.active{border-color:var(--SmartThemeBorderColor);background:var(--SmartThemeQuoteColor,rgba(127,127,127,.16));font-weight:700}
 #shizhen-panel .ql-page{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 12px 16px;min-width:0}
+/* .ql-page 只设了 overflow-y，按 CSS 规范浏览器会把 overflow-x 隐式算成 auto——平时没关系，
+   但拍立得手账风格给卡片/按钮/装饰加了小角度 rotate()，旋转后的包围盒比本身略宽，
+   在这个风格下就会产生一点点真实的横向可滚动区域，手指一划就卡在偏移的位置回不去了。
+   其它用到负偏移"探出卡片边缘"的页面（相册翻页箭头等）不在这个风格下出现，所以只锁这一个页面是安全的。 */
+#shizhen-panel[data-ql-style="polaroid"] [data-page-panel="history"]{overflow-x:hidden}
 #shizhen-panel .ql-page[hidden]{display:none!important}
 #shizhen-panel .ql-page>.ql-card:first-child{margin-top:8px}
 #shizhen-panel .ql-card{min-width:0}
