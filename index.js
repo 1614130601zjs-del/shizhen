@@ -5,7 +5,7 @@ import { initFloatBall, renderFloatBallSettings } from './float-ball.js';
 
 const EXT = 'shizhen';
 const LEGACY_EXT = 'qinghui_lite';
-const defaults = { enabled:true, activeConfigMode:'combo', downloadFormat:'png', historyColumns:3, chatAlbumStyle:'classic', vibes:[], combinations:[], activeComboIndex:-1, globalComboIndex:-1, sbComboIndex:-1, extraNegative:'', bodySize:'', recordLimit:800, requestTimeoutSec:180, sbSize:'', eggComboIndex:-1, eggSize:'', activeVibeIndex:-1, activePresetIndex:-1, bindings:[], provider:'novelai', endpoint:'', apiKey:'', naiApiKey:'', naiThirdEndpoint:'', naiThirdKey:'', model:'gpt-image-1', size:'auto', quality:'medium', naiModel:'nai-diffusion-4-5-full', naiSteps:28, naiScale:5, naiWidth:832, naiHeight:1216, naiSampler:'k_euler_ancestral', naiScheduler:'karras', naiNormalizeVibeStrengths:true, naiQualityMode:'standard', naiSeed:-1, prompt:'', negative:'', records:[], presets:[], characters:[], prompts:[], viewfinderRoles:[] };
+const defaults = { enabled:true, activeConfigMode:'combo', downloadFormat:'png', historyColumns:3, chatAlbumStyle:'classic', vibes:[], combinations:[], activeComboIndex:-1, globalComboIndex:-1, sbComboIndex:-1, extraNegative:'', bodySize:'', recordLimit:800, requestTimeoutSec:180, sbSize:'', eggComboIndex:-1, eggSize:'', activeVibeIndex:-1, activePresetIndex:-1, bindings:[], provider:'novelai', endpoint:'', apiKey:'', naiApiKey:'', naiThirdEndpoint:'', naiThirdKey:'', model:'gpt-image-1', size:'auto', quality:'medium', naiModel:'nai-diffusion-4-5-full', naiSteps:28, naiScale:5, naiWidth:832, naiHeight:1216, naiSampler:'k_euler_ancestral', naiScheduler:'karras', naiNormalizeVibeStrengths:true, naiQualityMode:'standard', naiSeed:-1, prompt:'', negative:'', records:[], presets:[], characters:[], prompts:[], viewfinderRoles:[], workLibrary:[] };
 const $ = (s, root=document) => root.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // 角色卡相册与提示词图集共用同一套真实的相册工具栏、铺开页 DOM，避免两套排版逐渐分叉。
@@ -651,6 +651,60 @@ function qlWarnMissingNames(names,stripped){
  console.warn('[拾帧] '+msg);
  try{window.toastr?.warning(msg,'拾帧',{timeOut:8000});}catch{}
 }
+// ===== 作品库（同人角色名 → Danbooru 标准 tag 兜底）=====
+// 数据：s.workLibrary=[{id,name,canonical,work}]，name 可用 | 写多个别名（中文/英文都行），
+// canonical 是完整的「英文名(作品名)」写法，和世界书约定的 1.2::英文名(作品名):: 格式里括号内的内容一致。
+// 自用、手动导入，不内置任何默认数据；只在角色词库里找不到名字时才当兜底查这张表，角色词库优先级始终更高。
+// 导入文本格式：一行一条，"中文名=英文名(作品名)"；# 开头或空行会被跳过。
+function qlParseWorkLibraryText(text){
+ const out=[];
+ for(const raw of String(text||'').split(/\r?\n/)){
+  const line=raw.trim();
+  if(!line||line.startsWith('#'))continue;
+  const eq=line.indexOf('=');
+  if(eq<0)continue;
+  const name=line.slice(0,eq).trim(),canonical=line.slice(eq+1).trim();
+  if(!name||!canonical)continue;
+  const m=canonical.match(/^([\s\S]+?)\(([^()]+)\)\s*$/);
+  out.push({name,canonical,work:m?m[2].trim():''});
+ }
+ return out;
+}
+// JSON 导入：接受 {entries:[{name,canonical,work}]} 或直接传入条目数组。
+function qlParseWorkLibraryJson(text){
+ let data;try{data=JSON.parse(text);}catch{throw new Error('不是有效的 JSON');}
+ const arr=Array.isArray(data)?data:Array.isArray(data?.entries)?data.entries:null;
+ if(!arr)throw new Error('JSON 里没找到 entries 数组');
+ return arr.map(e=>({name:String(e?.name||'').trim(),canonical:String(e?.canonical||'').trim(),work:String(e?.work||'').trim()})).filter(e=>e.name&&e.canonical);
+}
+function qlWorkLibraryImport(entries){
+ const s=cfg();
+ if(!Array.isArray(s.workLibrary))s.workLibrary=[];
+ const seen=new Set(s.workLibrary.map(e=>qlNormName(e.name)+'@@'+qlNormName(e.work)));
+ let added=0,skipped=0;
+ for(const e of entries){
+  if(!e||!e.name||!e.canonical)continue;
+  const key=qlNormName(e.name)+'@@'+qlNormName(e.work);
+  if(seen.has(key)){skipped++;continue;}
+  seen.add(key);
+  s.workLibrary.push({id:qlUid(),name:e.name,canonical:e.canonical,work:e.work});
+  added++;
+ }
+ save();
+ return {added,skipped};
+}
+// 别名索引：每条的 | 分隔别名 + canonical 里去掉「(作品名)」后的裸英文名，都能命中。
+function qlWorkLibraryIndex(s=cfg()){
+ const map=new Map();
+ for(const e of (s.workLibrary||[])){
+  if(!e||!e.canonical)continue;
+  const aliases=String(e.name||'').split('|').map(x=>x.trim()).filter(Boolean);
+  const bare=String(e.canonical).replace(/\([^()]*\)\s*$/,'').trim();
+  if(bare)aliases.push(bare);
+  for(const a of aliases){const n=qlNormName(a);if(n&&!map.has(n))map.set(n,e);}
+ }
+ return map;
+}
 // ===== 通用词（质量 / 身体结构）自动注入 =====
 // 数据：s.genericWords={on,position,sets:[{id,name,gender:'female'|'male'|'any',text}],pick:{'*':{female,male,any},[角色卡key]:{…}}}
 // pick 的值：词组 id；'none'＝明确不用；缺省＝跟随全局默认。默认整体关闭。
@@ -754,6 +808,16 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
   if(e.characterKey==='__user__'&&userName&&e===activeUser)names.push(userName);
   for(const n of names){const g=groupOf(e);const old=index.get(n);if(!old||g<old.g)index.set(n,{e,g});}
  }
+ // 作品库兜底：角色词库里没有的名字，再去作品库（同人角色名→Danbooru标准tag）查一次。
+ // 优先级永远比角色词库低（index 里已有就不会走到这里），同一条目多次命中要复用同一个合成对象，
+ // 不然后面的 used.has(hit.e) 去重会失效，同一个角色被拆成两个人物。
+ const workIndex=qlWorkLibraryIndex(s),workSynth=new Map();
+ const qlWorkHit=core=>{
+  const we=core?workIndex.get(qlNormName(core)):null;if(!we)return null;
+  let syn=workSynth.get(we);
+  if(!syn){syn={name:we.name,appearance:we.canonical,characterKey:'__worklib__'};workSynth.set(we,syn);}
+  return {e:syn,g:99};
+ };
  const globalCtx=qlSplitTags(prompt).filter(t=>!qlUnwrapGroup(t)).join(', ');
  const used=new Set(),inline=[],restItems=[],persons=[],missing=[],noLook=[];
  const strip=qlMissingAction()!=='go';let dropped=0;
@@ -765,12 +829,12 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
  for(const tag of qlSplitTags(prompt)){
   // 先按“整个 tag 就是名字”处理；不行再看是不是 (名字:权重, 其他词…) 的括号组。
   let {core,weight}=qlParseNameTag(tag),extras=[],group=null;
-  let hit=core?index.get(qlNormName(core)):null;
+  let hit=core?(index.get(qlNormName(core))||qlWorkHit(core)):null;
   if(!hit){
    group=qlUnwrapGroup(tag);
    if(group&&group.length){
     const first=qlParseNameTag(group[0]);
-    const h=first.core?index.get(qlNormName(first.core)):null;
+    const h=first.core?(index.get(qlNormName(first.core))||qlWorkHit(first.core)):null;
     if(h){hit=h;core=first.core;weight=first.weight;extras=group.slice(1);}
     else if(first.core&&!/[,，]/.test(first.core)&&(hasCjk(first.core)||(group.length>=2&&/^[A-Z]/.test(first.core)&&!PERSON_HEAD.test(first.core)&&PERSON_HEAD.test(qlParseNameTag(group[1]).core)))){
      // 中文名，或「首字母大写的英文名 + 紧跟 1boy/1girl」这种明显是名字的写法
@@ -3099,9 +3163,10 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 <section class="ql-subpage" data-subpage-panel="bindings" hidden><div class="ql-card ql-combo-editor-card"><div class="ql-section-heading"><div><h3>组合编辑器</h3><p class="ql-muted">先给组合命名，再分别选择画师串与 Vibe。两项都可以留空。</p></div><span class="ql-section-index">01</span></div><button type="button" id="ql-combo-new" class="menu_button ql-combo-new-button">＋ 新建组合</button><div id="ql-combo-editor" hidden><label for="ql-combo-name">组合名称</label><input id="ql-combo-name" placeholder="例如：柔和画风 + 氛围参考"><div class="ql-row ql-combo-pair"><div><label for="ql-combo-artist">画师串</label><select id="ql-combo-artist"><option value="-1">不使用画师串</option></select></div><div><label for="ql-combo-vibe">Vibe</label><select id="ql-combo-vibe"><option value="-1">不使用 Vibe</option></select></div></div><div class="ql-row"><button id="ql-combo-save" class="menu_button ql-primary">保存组合</button><button type="button" id="ql-combo-cancel" class="menu_button">取消</button></div></div></div><div class="ql-card ql-combo-list-card"><details id="ql-combos-details"><summary><div class="ql-section-heading"><div><h3>已保存组合</h3><p class="ql-muted">默认收起，点开查看、编辑或删除。</p></div><span class="ql-section-index">02</span></div></summary><div id="ql-combos-list"></div></details></div><div class="ql-card ql-global-default-card"><div class="ql-section-heading"><div><h3>通用预设</h3><p class="ql-muted">正文、状态栏、彩蛋各选一个组合和尺寸。角色卡没有单独绑定时用这里；状态栏、彩蛋不设就跟随正文。切换后自动保存。</p></div><span class="ql-section-index">03</span></div><div class="ql-kind-row"><h4>正文</h4><label for="ql-global-combo-display">组合</label><select id="ql-global-combo-display"><option value="-1">不使用预设</option></select><label for="ql-body-size">尺寸</label><select id="ql-body-size"></select></div><div class="ql-kind-row"><h4>状态栏</h4><label for="ql-sb-combo">组合</label><select id="ql-sb-combo"><option value="-1">跟随正文</option></select><label for="ql-sb-size">尺寸</label><select id="ql-sb-size"></select></div><div class="ql-kind-row"><h4>彩蛋</h4><label for="ql-egg-combo">组合</label><select id="ql-egg-combo"><option value="-1">跟随正文</option></select><label for="ql-egg-size">尺寸</label><select id="ql-egg-size"></select></div><p class="ql-muted">彩蛋怎么标记：让世界书把彩蛋输出成 image###[彩蛋]提示词###，开头的 [彩蛋] 会被拾帧识别并去掉，不会进提示词。</p></div><div hidden aria-hidden="true"><select id="ql-global-combo"><option value="-1">不使用预设</option></select></div><div class="ql-card ql-extra-neg-card"><div class="ql-section-heading"><div><h3>附加负面词</h3><p class="ql-muted">不管用哪个组合/画师串，提交生图时都会自动追加到负面词后面（已有的不重复）。适合写通用的，比如 heavy blush, full-face blush, blush stickers。</p></div></div><textarea id="ql-extra-neg" rows="2" placeholder="heavy blush, full-face blush, blush stickers"></textarea></div><div class="ql-card ql-timeout-card"><div class="ql-section-heading"><div><h3>生图超时</h3><p class="ql-muted">网络不好时，请求超过这个时间没返回就自动中止，不再一直转圈。生成中也可以随时点“停止”。</p></div></div><select id="ql-timeout"><option value="60">60 秒</option><option value="120">120 秒</option><option value="180">180 秒（默认）</option><option value="300">300 秒</option><option value="0">不限制</option></select></div><div class="ql-card ql-binding-default-card"><div class="ql-section-heading"><div><h3>角色卡绑定</h3><p class="ql-muted">给某张角色卡单独指定正文、状态栏、彩蛋的组合和尺寸。没填的项目回退到上面的通用预设。</p></div><span class="ql-section-index">04</span></div><label>角色卡</label><select id="ql-bind-character"><option value="">选择角色卡</option></select><div class="ql-kind-row"><h4>正文</h4><label for="ql-bind-preset">组合</label><select id="ql-bind-preset"><option value="-1">跟随通用预设</option></select><label for="ql-bind-body-size">尺寸</label><select id="ql-bind-body-size"></select></div><div class="ql-kind-row"><h4>状态栏</h4><label for="ql-bind-sb-combo">组合</label><select id="ql-bind-sb-combo"><option value="-1">跟随通用预设</option></select><label for="ql-bind-sb-size">尺寸</label><select id="ql-bind-sb-size"></select></div><div class="ql-kind-row"><h4>彩蛋</h4><label for="ql-bind-egg-combo">组合</label><select id="ql-bind-egg-combo"><option value="-1">跟随通用预设</option></select><label for="ql-bind-egg-size">尺寸</label><select id="ql-bind-egg-size"></select></div><select id="ql-bind-vibe" hidden><option value="-1">组合内 Vibe 自动绑定</option></select><button id="ql-bind-save" class="menu_button">保存这张角色卡的绑定</button><div id="ql-bindings-list"></div></div></section>
 </div>
 <div class="ql-page" data-page-panel="wordbank" role="tabpanel" hidden>
-<nav class="ql-subtabs" role="tablist" aria-label="词库分区"><button type="button" class="ql-subtab active" data-subpage="prompt-library" aria-selected="true">提示词库</button><button type="button" class="ql-subtab" data-subpage="character-library" aria-selected="false">角色词库</button></nav>
+<nav class="ql-subtabs" role="tablist" aria-label="词库分区"><button type="button" class="ql-subtab active" data-subpage="prompt-library" aria-selected="true">提示词库</button><button type="button" class="ql-subtab" data-subpage="character-library" aria-selected="false">角色词库</button><button type="button" class="ql-subtab" data-subpage="work-library" aria-selected="false">作品库</button></nav>
 <section class="ql-subpage active" data-subpage-panel="prompt-library"><div class="ql-card"><h3>提示词库</h3><p class="ql-muted">默认以小图网格浏览；点击某条才展开编辑区。</p><div id="ql-prompt-editor" hidden><section class="ql-library-prompt-field"><div class="ql-library-prompt-field-head"><label for="ql-library-prompt-en"><span class="ql-library-field-kicker">IMAGE PROMPT</span><span>画面提示词</span></label><button type="button" id="ql-library-prompt-copy" class="ql-library-copy-icon" aria-label="复制画面提示词" title="复制画面提示词"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><textarea id="ql-library-prompt-en" placeholder="English prompt tags / description"></textarea></section><div class="ql-row"><input id="ql-prompt-name" placeholder="名称"><select id="ql-prompt-category"><option value="单人">单人</option><option value="双人">双人</option><option value="BG">BG</option><option value="BL">BL</option><option value="GL">GL</option><option value="其他">其他</option><option value="自定义">自定义分类…</option></select><input id="ql-prompt-category-custom" placeholder="输入自定义分类" hidden></div><label>自定义 Tag（用逗号、顿号、斜杠、空格或换行分隔）</label><textarea id="ql-library-prompt-zh" placeholder="例如：年上/暧昧，温柔 眼镜"></textarea><div class="ql-row ql-prompt-source-row"><label for="ql-prompt-source">来源</label><select id="ql-prompt-source"><option value="original">原创</option><option value="other">他人的</option></select></div><textarea id="ql-prompt-source-note" class="ql-prompt-source-note" placeholder="原帖链接，或作者/出处说明（方便以后找回原作者）" hidden></textarea><div class="ql-image-reference-editor"><label for="ql-library-image-file">预览图片</label><input id="ql-library-image-file" type="file" accept="image/*"><div id="ql-library-image-preview" class="ql-library-image-preview" data-image="" role="button" tabindex="0" aria-label="点击添加预览图片" title="点击此处选择图片"><span class="ql-muted">尚未添加预览图</span></div><button type="button" id="ql-library-image-clear" class="menu_button">移除预览图</button></div><div class="ql-row"><button id="ql-prompt-save" class="menu_button">保存提示词</button><button type="button" id="ql-prompt-cancel" class="menu_button">取消</button></div></div><button type="button" id="ql-prompt-add" class="menu_button ql-primary">＋ 添加提示词</button><div class="ql-row ql-library-tools ql-prompt-toolbar"><select id="ql-prompt-filter" aria-label="筛选提示词分类"><option value="">全部分类</option></select><button type="button" id="ql-library-edit-mode" class="menu_button">编辑模式</button><button type="button" id="ql-prompt-bulk-delete" class="menu_button">批量删除</button></div><p class="ql-muted" id="ql-library-edit-hint">提示词可按分类筛选；Tag 自由填写并自动拆分；应用后生成的图片会收录到对应图集。</p><div id="ql-prompts-list"></div></div></section>
 <section class="ql-subpage" data-subpage-panel="character-library" hidden><div class="ql-card"><h3>角色词条库</h3><p class="ql-muted">选择角色卡管理对应的角色词条，或选择「用户外貌」保存自己的固定外貌词；用户外貌不绑定任何角色卡。</p><label for="ql-name-replace">正文 / 状态栏里的角色名处理（取决于你挂载的世界书是否输出角色名）</label><select id="ql-name-replace"><option value="off">关闭（世界书不输出角色名）</option><option value="inline">替换进主提示词</option><option value="characters">拆成 NAI 多角色提示词（V4 / V4.5 / V5，推荐）</option></select><label for="ql-missing-name-action">找不到角色名时</label><select id="ql-missing-name-action"><option value="ask">先弹窗询问（可去添加外貌）</option><option value="go">只提示，名字原样保留（不推荐）</option><option value="strip">去掉词库外的名字，继续生成（适合外貌世界书）</option></select><label class="ql-check"><input type="checkbox" id="ql-nai-auto-coords"> 多角色自动站位（按角色出现顺序从左到右排开，默认关闭）</label><p class="ql-muted">只对 NAI V4 / V4.5 / V5 的多角色提示词生效，单人或不拆角色时不起作用。开启后第一个角色在最左、最后一个在最右：两人是左 / 右，三人是左 / 中 / 右。想让谁站左边，就让他在提示词里排在前面。</p><p class="ql-muted">名字可写 克劳德:1.2、(克劳德:1.2)、1.2::克劳德::、$克劳德$。；也可以写成括号组 (克劳德:1.2, 表情, 服装, source#动作)，括号里的其他词会跟着这个角色走。</p><p class="ql-muted">世界书里写 {{拾帧角色列表}}，发送给模型前会自动换成这里的角色名单（当前角色卡的词条、未绑定词条、用户外貌），让模型直接写名字、不再自己编外貌。</p><p class="ql-muted">外貌词里可以写「条件词」：[吐舌|tongue out]tongue piercing，意思是画面提示词里出现 tongue out 才会带上舌钉，没出现就丢掉。适合舌钉、被衣服遮住的纹身这类不常露出的特征，例如 [shirtless|lifted shirt|nude]stomach tattoo。触发词用 | 分隔，英文不区分大小写。</p><p class="ql-muted">词条名称可用 | 分隔多个别名，例如「克劳德|Cloud」。优先匹配当前角色卡绑定的词条，其次未绑定角色卡的词条，最后才是其他角色卡的词条。</p><div class="ql-card-sub"><button type="button" id="ql-diag-restore" class="menu_button">排查：正文图片为什么没挂回</button></div><div class="ql-generic-words"><h4>通用词自动注入</h4><p class="ql-muted">默认关闭。发图前由插件自动识别每个角色的性别（看词条里选的性别，没选就看外貌词里的 1girl / 1boy 等）。画面里全是男 → 只把你选好的男通用词在公共区写一遍；全是女同理；男女混合时，才分别写进各自角色的提示词。这样男通用词里放体型 / 骨相，角色词条里就只需要留发型发色和特殊标志。不同角色卡可以各选各的词组，已有的同名 tag 不会重复。</p><div id="ql-gw-box"></div></div><label for="ql-character-card">选择角色卡或用户外貌</label><div class="ql-row"><select id="ql-character-card"><option value="">请选择角色卡</option></select><button type="button" id="ql-character-start" class="menu_button">开始编辑</button></div><div id="ql-character-editor" hidden><label for="ql-character-name">角色名称</label><input id="ql-character-name" placeholder="例如：克劳德|Cloud（| 分隔别名）"><label for="ql-character-gender">性别（用于自动注入男 / 女通用词）</label><select id="ql-character-gender"><option value="">自动识别（看外貌词里的 1girl / 1boy）</option><option value="female">女</option><option value="male">男</option></select><div class="ql-char-thumb-row"><img id="ql-char-thumb" alt="" hidden><div><button type="button" class="menu_button" id="ql-char-thumb-upload">上传词条头像</button><button type="button" class="menu_button" id="ql-char-thumb-clear" hidden>移除头像</button><input type="file" id="ql-char-thumb-file" accept="image/*" hidden><p class="ql-muted">词条头像只在这里给你看，记录“这套词跑出来长什么样”，不会进提示词，也不影响相册头像。</p></div></div><label for="ql-character-appearance">生图词 / 固定外貌词</label><textarea id="ql-character-appearance" placeholder="填写外貌、发色、瞳色、服装等固定生图词"></textarea><div class="ql-row"><button id="ql-character-save" class="menu_button">保存角色词条</button><button type="button" id="ql-character-cancel" class="menu_button">取消</button></div><div class="ql-card-sub ql-try-box"><label for="ql-try-scene">原地试画（不用先保存）</label><input id="ql-try-scene" value="upper body, looking at viewer, indoors, window, soft lighting" placeholder="试画用的场景/构图词"><label for="ql-try-config">试画配置</label><select id="ql-try-config"><option value="">跟随取景区当前配置</option></select><div id="ql-try-custom" hidden><label for="ql-try-artist">画师串</label><select id="ql-try-artist"></select><label for="ql-try-vibe">Vibe 分组</label><select id="ql-try-vibe"></select></div><button type="button" id="ql-try-draw" class="menu_button">试画一张</button><p class="ql-muted" id="ql-try-status">用上面正在编辑的外貌词、性别和当前取景区的画师串/Vibe 出一张。走的和正文一样的注入流程（通用词、条件词都会生效），但不会存进底片。</p><img id="ql-try-img" alt="" hidden style="max-width:100%;border-radius:10px"><div class="ql-row" id="ql-try-actions" hidden><button type="button" class="menu_button" id="ql-try-save">存到底片</button><button type="button" class="menu_button" id="ql-try-avatar">设为词条头像</button></div></div></div><p class="ql-muted" id="ql-character-status" role="status"></p><div class="ql-row ql-library-tools"><button type="button" id="ql-character-export" class="menu_button">导出所选</button><button type="button" id="ql-character-bulk-delete" class="menu_button">批量删除</button></div><div id="ql-characters-list"></div></div></section>
+<section class="ql-subpage" data-subpage-panel="work-library" hidden><div class="ql-card"><h3>作品库</h3><p class="ql-muted">给同人角色（原著人物、别人的二创角色等）准备的兜底表：正文里出现「角色名:1.2」这种没按世界书格式写的同人角色名时，角色词库里查不到才会来这里查，查到就换成标准 1.2::英文名(作品名):: 格式。优先级低于角色词库，不会覆盖你自己建的角色词条。按作品分开导入和删除，自用，不内置任何数据。</p><label for="ql-wl-import-text">批量导入（文本）</label><textarea id="ql-wl-import-text" rows="6" placeholder="一行一条，格式：中文名=英文名(作品名)&#10;例如：伏黑惠=fushiguro megumi(jujutsu kaisen)&#10;# 开头的行和空行会被跳过"></textarea><div class="ql-row"><button type="button" id="ql-wl-import-text-btn" class="menu_button">导入上面的文本</button><button type="button" id="ql-wl-import-file-btn" class="menu_button">导入 txt / json 文件</button><input id="ql-wl-import-file" type="file" accept=".txt,.json,text/plain,application/json" hidden></div><p class="ql-muted" id="ql-wl-import-status" role="status"></p><label for="ql-wl-filter">按作品筛选</label><select id="ql-wl-filter"><option value="">全部作品</option></select><div class="ql-row ql-library-tools"><button type="button" id="ql-wl-export" class="menu_button">导出所选作品</button><button type="button" id="ql-wl-delete-work" class="menu_button">删除所选作品</button></div><div id="ql-wl-list"></div></div></section>
 </div>
 <div class="ql-page" data-page-panel="history" role="tabpanel" hidden><div class="ql-card"><h3>影像缓存</h3><p class="ql-muted">这里保存生成过的影像记录；点击缩略图可查看提示词、参考图与生成参数。</p><label for="ql-history-columns">每行影像数量</label><select id="ql-history-columns"><option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option><option value="5">5 张</option></select><div id="ql-cache-footer" class="ql-cache-bulk-tools"><div class="ql-cache-bar-row"><button type="button" class="menu_button" id="ql-cache-select-mode" aria-pressed="false">多选</button><label class="ql-cache-select-all" hidden><input type="checkbox" data-ql-select-all disabled> 全选</label><span class="ql-cache-selected-count" data-ql-selected-count hidden>已选 0 张</span><button type="button" class="menu_button" data-ql-bulk-download disabled hidden>逐张下载</button><button type="button" class="menu_button" data-ql-bulk-delete disabled hidden>删除所选</button></div><div class="ql-cache-bar-row ql-cache-clear-row"><select id="ql-clear-range" aria-label="清理范围"><option value="0">清理全部</option><option value="1">清理 1 天前</option><option value="3">清理 3 天前</option><option value="7">清理 7 天前</option><option value="30">清理 30 天前</option></select><button type="button" class="menu_button" id="ql-clear">清理缓存</button><button type="button" class="menu_button" id="ql-clear-all" title="连正文里每个格子当前的图也一起清掉">彻底清空</button><button type="button" class="menu_button" id="ql-dedupe" title="完全一样的图只留一张">合并重复</button></div><div class="ql-cache-bar-row"><label for="ql-record-limit">自动保留</label><select id="ql-record-limit"><option value="300">最近 300 条</option><option value="500">最近 500 条</option><option value="800">最近 800 条</option><option value="1500">最近 1500 条</option><option value="0">不限制</option></select><span class="ql-muted">超出时自动清掉最旧的缓存</span></div><p class="ql-muted ql-cache-bar-tip" id="ql-clear-tip"></p></div><div id="ql-history"></div></div></div>
 <div class="ql-page" data-page-panel="albums" role="tabpanel" hidden><div class="ql-card ql-album-library-card"><div id="ql-character-albums"></div></div></div>
@@ -4742,6 +4807,57 @@ $('#ql-library-edit-mode').onclick=()=>{libraryEditMode=!libraryEditMode;$('#ql-
 $('#ql-prompt-bulk-delete').onclick=async ()=>{const indexes=[...selectedPrompts].filter(i=>cfg().prompts[i]);if(!indexes.length){status('请先选择要删除的提示词。');return;}if(!await qlConfirm('确定批量删除选中的 '+indexes.length+' 条提示词？'))return;cfg().prompts=indexes.sort((a,b)=>b-a).reduce((arr,i)=>{arr.splice(i,1);return arr;},cfg().prompts.slice());selectedPrompts.clear();save();renderLibrary();status('已批量删除提示词。');};
 $('#ql-character-export').onclick=()=>{const indexes=[...selectedCharacters].filter(i=>cfg().characters[i]);if(!indexes.length){status('请先开启编辑模式并选择要导出的角色。');return;}downloadJson(indexes.map(i=>cfg().characters[i]).filter(Boolean),'shizhen-characters.json');};
 $('#ql-character-bulk-delete').onclick=async ()=>{const indexes=[...new Set([...selectedCharacters].filter(i=>cfg().characters[i]))].sort((a,b)=>a-b);if(!indexes.length){status('请先选择要删除的角色。');return;}if(!await qlConfirm('确定批量删除选中的 '+indexes.length+' 个角色词条？'))return;for(const role of cfg().viewfinderRoles||[]){const selected=Number(role.libraryIndex);if(indexes.includes(selected))role.libraryIndex=-1;else role.libraryIndex-=indexes.filter(i=>i<selected).length;}cfg().characters=indexes.slice().sort((a,b)=>b-a).reduce((arr,i)=>{arr.splice(i,1);return arr;},cfg().characters.slice());selectedCharacters.clear();save();renderLibrary();status('已批量删除角色词条。');};
+// ===== 作品库 UI =====
+function renderWorkLibrary(){
+ const s=cfg();if(!Array.isArray(s.workLibrary))s.workLibrary=[];
+ const list=$('#ql-wl-list'),filterSel=$('#ql-wl-filter');if(!list||!filterSel)return;
+ const works=[...new Set(s.workLibrary.map(e=>e.work||'（未分类）'))].sort();
+ const prior=filterSel.value;
+ filterSel.innerHTML='<option value="">全部作品</option>'+works.map(w=>'<option value="'+esc(w)+'">'+esc(w)+' ('+s.workLibrary.filter(e=>(e.work||'（未分类）')===w).length+')</option>').join('');
+ if(works.includes(prior))filterSel.value=prior;
+ const filterValue=filterSel.value;
+ const rows=s.workLibrary.map((e,i)=>({e,i})).filter(({e})=>!filterValue||(e.work||'（未分类）')===filterValue);
+ list.innerHTML=rows.map(({e,i})=>'<div class="ql-record ql-library-record"><div class="ql-character-role-heading"><strong>'+esc(e.name)+'</strong><small>'+esc(e.canonical)+'</small></div><div class="ql-row"><button class="menu_button" data-wl-delete="'+i+'">删除</button></div></div>').join('')||'<p class="ql-muted">'+(s.workLibrary.length?'这个作品筛选下没有条目。':'作品库还是空的，先导入一份角色清单。')+'</p>';
+ list.querySelectorAll('[data-wl-delete]').forEach(btn=>btn.onclick=async()=>{const i=Number(btn.dataset.wlDelete);const item=cfg().workLibrary[i];if(!item)return;if(!await qlConfirm('删除词条「'+(item.name||'')+'」？'))return;cfg().workLibrary.splice(i,1);save();renderWorkLibrary();});
+}
+$('#ql-wl-import-text-btn').onclick=()=>{
+ const text=$('#ql-wl-import-text').value;
+ const entries=qlParseWorkLibraryText(text);
+ if(!entries.length){$('#ql-wl-import-status').textContent='没有解析到有效条目，检查一下格式是否是「中文名=英文名(作品名)」。';return;}
+ const r=qlWorkLibraryImport(entries);
+ $('#ql-wl-import-status').textContent='导入完成：新增 '+r.added+' 条'+(r.skipped?'，跳过 '+r.skipped+' 条重复':'')+'。';
+ $('#ql-wl-import-text').value='';
+ renderWorkLibrary();
+};
+$('#ql-wl-import-file-btn').onclick=()=>$('#ql-wl-import-file').click();
+$('#ql-wl-import-file').onchange=async e=>{
+ const file=e.target.files?.[0];if(!file)return;
+ try{
+  const text=await file.text();
+  const entries=/\.json$/i.test(file.name)?qlParseWorkLibraryJson(text):qlParseWorkLibraryText(text);
+  if(!entries.length)throw new Error('文件里没有解析到有效条目');
+  const r=qlWorkLibraryImport(entries);
+  $('#ql-wl-import-status').textContent='导入完成：新增 '+r.added+' 条'+(r.skipped?'，跳过 '+r.skipped+' 条重复':'')+'。';
+  renderWorkLibrary();
+ }catch(err){$('#ql-wl-import-status').textContent='导入失败：'+(err?.message||String(err));}
+ $('#ql-wl-import-file').value='';
+};
+$('#ql-wl-filter').onchange=()=>renderWorkLibrary();
+$('#ql-wl-export').onclick=()=>{
+ const s=cfg(),work=$('#ql-wl-filter').value;
+ const entries=(s.workLibrary||[]).filter(e=>!work||(e.work||'（未分类）')===work).map(({name,canonical,work})=>({name,canonical,work}));
+ if(!entries.length){$('#ql-wl-import-status').textContent='没有可导出的条目。';return;}
+ downloadJson({entries},'shizhen-worklibrary'+(work?'-'+work:'')+'.json');
+};
+$('#ql-wl-delete-work').onclick=async()=>{
+ const work=$('#ql-wl-filter').value;
+ if(!work){$('#ql-wl-import-status').textContent='先在上面选一个具体作品，再删除整个作品。';return;}
+ const n=cfg().workLibrary.filter(e=>(e.work||'（未分类）')===work).length;
+ if(!n)return;
+ if(!await qlConfirm('删除「'+work+'」整个作品的 '+n+' 条词条？'))return;
+ cfg().workLibrary=cfg().workLibrary.filter(e=>(e.work||'（未分类）')!==work);
+ save();renderWorkLibrary();
+};
 $('#ql-library-image-file').onchange=e=>{const file=e.target.files?.[0];if(!file)return;if(!file.type.startsWith('image/')){status('请选择图片文件。');return;}const reader=new FileReader();reader.onload=()=>{const preview=$('#ql-library-image-preview');preview.dataset.image=String(reader.result||'');preview.innerHTML=preview.dataset.image?'<img src="'+esc(preview.dataset.image)+'" alt="提示词预览图">':'<span class="ql-muted">尚未添加预览图</span>';};reader.readAsDataURL(file);};
 const qlPromptImagePreview=$('#ql-library-image-preview');qlPromptImagePreview?.addEventListener('click',()=>{if(!qlPromptImagePreview.dataset.image)$('#ql-library-image-file').click();});qlPromptImagePreview?.addEventListener('keydown',e=>{if(!qlPromptImagePreview.dataset.image&&(e.key==='Enter'||e.key===' ')){e.preventDefault();$('#ql-library-image-file').click();}});
 $('#ql-library-image-clear').onclick=()=>{const preview=$('#ql-library-image-preview');preview.dataset.image='';preview.innerHTML='<span class="ql-muted">尚未添加预览图</span>';$('#ql-library-image-file').value='';};
@@ -4944,6 +5060,7 @@ jQuery(()=>{
     const target=tab.dataset.subpage;
     if(!target)return;
     if(target==='character-library')renderLibrary();
+    if(target==='work-library')renderWorkLibrary();
     const scope=tab.closest('.ql-page')||panel;
     scope.querySelectorAll('button.ql-subtab').forEach(item=>{const active=item===tab;item.classList.toggle('active',active);item.setAttribute('aria-selected',String(active));});
     scope.querySelectorAll('[data-subpage-panel]').forEach(page=>{const active=page.dataset.subpagePanel===target;page.hidden=!active;page.classList.toggle('active',active);});
