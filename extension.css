@@ -5670,6 +5670,10 @@ body.ql-modal-open .ql-fb-ball{display:none}
 
 /* 底片页：顶部吸附工具栏 + 清理 */
 #shizhen-panel #ql-cache-footer.ql-cache-bulk-tools{position:sticky;top:0;z-index:20;margin:8px 0 10px;display:flex;flex-direction:column;align-items:stretch;gap:7px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:box-shadow .2s,border-color .2s}
+/* 这张工具条现在默认是隐藏的，靠悬浮球点开——但上面这条规则自己写了 display:flex，
+   而浏览器"hidden 属性就该 display:none"那条只是默认样式，没有 !important，
+   被这里的作者样式盖掉了，所以光加 hidden 属性没用。补一条明确的 [hidden] 规则才行。 */
+#shizhen-panel #ql-cache-footer.ql-cache-bulk-tools[hidden]{display:none!important}
 #shizhen-panel #ql-cache-footer .ql-cache-bar-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 #shizhen-panel #ql-cache-footer .ql-cache-clear-row select{flex:1 1 auto;min-width:0;min-height:34px;border-radius:9px}
 #shizhen-panel #ql-cache-footer .ql-cache-bar-tip{margin:0;font-size:11px;line-height:1.5;opacity:.72}
