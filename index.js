@@ -4858,7 +4858,8 @@ function qlWorkDisplayName(work){
   'yumeiro patissiere':'梦色蛋糕师',
   'yumeiro pâtissière':'梦色蛋糕师'
  };
- return names[tag.toLowerCase()]||tag;
+ const key=tag.toLowerCase();
+ return names[key]||names[key.replace(/_/g,' ')]||tag;
 }
 function renderWorkLibrary(){
  const s=cfg();if(!Array.isArray(s.workLibrary))s.workLibrary=[];
