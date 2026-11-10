@@ -4723,6 +4723,12 @@ html > .ql-album-menu-portal .ql-album-more-menu-panel>button:active{
 #shizhen-panel[data-ql-style="polaroid"] .ql-card{position:relative;background:var(--ql-card)!important;border:1px solid #f0d9d4!important;border-radius:3px!important;box-shadow:0 2px 0 #f0d9d4,0 8px 14px rgba(140,80,90,.12)!important;margin-top:16px!important}
 #shizhen-panel[data-ql-style="polaroid"] .ql-page>.ql-card:nth-child(odd){transform:rotate(-.25deg)}
 #shizhen-panel[data-ql-style="polaroid"] .ql-page>.ql-card:nth-child(even){transform:rotate(.25deg)}
+/* 底片页的卡片里有个 position:sticky 的工具条（#ql-cache-footer）。sticky 元素的"吸顶"位置是按
+   最近的 transform 祖先的坐标系算的，这张卡片被上面两条规则转了 0.25deg，哪怕角度很小，
+   吸顶条也会在这个被转过的坐标系里重新计算位置——垂直滚得越多，这点倾斜换算出来的横向偏移
+   就越大，滚动方向一反，偏移也跟着反向，看起来就是"往下滑整体往右飘、往上滑往左飘"。
+   这张卡片本来也不是用来当"照片"看的，去掉它的倾斜，吸顶条就不再处在被转过的坐标系里了。 */
+#shizhen-panel[data-ql-style="polaroid"] [data-page-panel="history"]>.ql-card{transform:none!important}
 #shizhen-panel[data-ql-style="polaroid"] .ql-card::before{content:"";position:absolute;top:-9px;left:50%;width:60px;height:17px;margin-left:-30px;background:rgba(246,170,186,.62);transform:rotate(-2.5deg);border-left:2px dotted rgba(255,255,255,.7);border-right:2px dotted rgba(255,255,255,.7);pointer-events:none}
 #shizhen-panel[data-ql-style="polaroid"] .ql-page>.ql-card:nth-child(even)::before{transform:rotate(2deg);margin-left:-70px;background:rgba(170,215,196,.66)}
 #shizhen-panel[data-ql-style="polaroid"] .ql-page>.ql-card:nth-child(3n)::before{background:rgba(250,222,140,.7)}
