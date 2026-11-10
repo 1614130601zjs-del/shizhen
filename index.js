@@ -39,7 +39,7 @@ function cfg(){
  if(!['combo','separate'].includes(s.activeConfigMode))s.activeConfigMode='combo';
  if(typeof s.naiNormalizeVibeStrengths!=='boolean')s.naiNormalizeVibeStrengths=true;
  if(s.model==='gpt-image-2.5-sunburst'){s.model='gpt-image-1';saveSettingsDebounced();}
- for(const key of ['records','presets','characters','prompts','vibes','bindings','combinations','customStyles','customAlbumStyles'])if(!Array.isArray(s[key]))s[key]=[];
+ for(const key of ['records','presets','characters','prompts','vibes','bindings','combinations','customStyles','customAlbumStyles','workLibrary'])if(!Array.isArray(s[key]))s[key]=[];
  if(!Array.isArray(s.viewfinderRoles))s.viewfinderRoles=[];
  // 画师串 / Vibe 的稳定 id：组合、角色绑定、当前选中都按 id 记住“是哪一条”，
  // 这样新增（插到最前面）、删除、排序后，各处保存的下标会自动跟着重新对齐，不会再“向上/向下顺一格”。
@@ -4846,6 +4846,7 @@ $('#ql-character-bulk-delete').onclick=async ()=>{const indexes=[...new Set([...
 // ===== 作品库 UI =====
 function renderWorkLibrary(){
  const s=cfg();if(!Array.isArray(s.workLibrary))s.workLibrary=[];
+ s.workLibrary=s.workLibrary.filter(e=>e&&typeof e==='object'); // 防坏数据：有空/非对象条目混进来就直接丢掉，不然下面一读 e.work 就整页崩掉
  const list=$('#ql-wl-list'),filterSel=$('#ql-wl-filter');if(!list||!filterSel)return;
  const works=[...new Set(s.workLibrary.map(e=>e.work||'（未分类）'))].sort();
  const prior=filterSel.value;
@@ -5095,8 +5096,11 @@ jQuery(()=>{
     }
     const target=tab.dataset.subpage;
     if(!target)return;
-    if(target==='character-library')renderLibrary();
-    if(target==='work-library')renderWorkLibrary();
+    // 这两个页面要先刷新列表再切换显示；但刷新函数本身一旦抛错，这个点击处理函数就会在
+    // 还没走到下面「隐藏/显示」那几行之前被中断——表现就是按钮有按压反馈但页面死活切不过去。
+    // 包一层 try/catch：刷新失败也不耽误把 tab 切过去，顺便把真正的报错打到控制台方便排查。
+    if(target==='character-library'){try{renderLibrary();}catch(error){console.error('[拾帧] 角色词库刷新失败',error);}}
+    if(target==='work-library'){try{renderWorkLibrary();}catch(error){console.error('[拾帧] 作品库刷新失败',error);}}
     const scope=tab.closest('.ql-page')||panel;
     scope.querySelectorAll('button.ql-subtab').forEach(item=>{const active=item===tab;item.classList.toggle('active',active);item.setAttribute('aria-selected',String(active));});
     scope.querySelectorAll('[data-subpage-panel]').forEach(page=>{const active=page.dataset.subpagePanel===target;page.hidden=!active;page.classList.toggle('active',active);});
