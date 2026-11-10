@@ -5018,12 +5018,13 @@ jQuery(()=>{
    if(!overlay)return;
    overlay.hidden=false;
    document.body.classList.add('ql-modal-open');
+   try{renderWorkLibrary();}catch(error){console.warn('[拾帧] 作品库打开时刷新失败',error);}
   };
   launch.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();launch.click();}};
   return true;
  };
  ensureLiteLauncher();
- try{initFloatBall({cfg:()=>cfg(),save:()=>save(),amp:()=>qlJellyCfg().amp,onClick:()=>{const overlay=document.querySelector('#ql-overlay');if(!overlay)return;overlay.hidden=false;document.body.classList.add('ql-modal-open');}});}catch(err){console.warn('[拾帧] 悬浮球启动失败',err);}
+ try{initFloatBall({cfg:()=>cfg(),save:()=>save(),amp:()=>qlJellyCfg().amp,onClick:()=>{const overlay=document.querySelector('#ql-overlay');if(!overlay)return;overlay.hidden=false;document.body.classList.add('ql-modal-open');try{renderWorkLibrary();}catch(error){console.warn('[拾帧] 作品库打开时刷新失败',error);}}});}catch(err){console.warn('[拾帧] 悬浮球启动失败',err);}
  // 紧急关闭兜底：热重载时若 #ql-overlay 已存在，初始化块会跳过，
  // 旧弹窗可能没有关闭监听。委托处理关闭按钮、遮罩点击和 Esc，确保随时能退出。
  if(!document.documentElement.dataset.qlEmergencyCloseWatch){
