@@ -4844,10 +4844,11 @@ $('#ql-prompt-bulk-delete').onclick=async ()=>{const indexes=[...selectedPrompts
 $('#ql-character-export').onclick=()=>{const indexes=[...selectedCharacters].filter(i=>cfg().characters[i]);if(!indexes.length){status('请先开启编辑模式并选择要导出的角色。');return;}downloadJson(indexes.map(i=>cfg().characters[i]).filter(Boolean),'shizhen-characters.json');};
 $('#ql-character-bulk-delete').onclick=async ()=>{const indexes=[...new Set([...selectedCharacters].filter(i=>cfg().characters[i]))].sort((a,b)=>a-b);if(!indexes.length){status('请先选择要删除的角色。');return;}if(!await qlConfirm('确定批量删除选中的 '+indexes.length+' 个角色词条？'))return;for(const role of cfg().viewfinderRoles||[]){const selected=Number(role.libraryIndex);if(indexes.includes(selected))role.libraryIndex=-1;else role.libraryIndex-=indexes.filter(i=>i<selected).length;}cfg().characters=indexes.slice().sort((a,b)=>b-a).reduce((arr,i)=>{arr.splice(i,1);return arr;},cfg().characters.slice());selectedCharacters.clear();save();renderLibrary();status('已批量删除角色词条。');};
 // ===== 作品库 UI =====
-// 作品库筛选显示名：保留原始作品 Tag 作为 value，仅增强界面可读性。
+// 作品库筛选显示名：内部仍用原始作品 Tag 区分，界面命中映射时只显示中文标题。
 function qlWorkDisplayName(work){
  const tag=String(work||'（未分类）').trim();
  const names={
+  'tennis_no_oujisama':'网球王子',
   'haikyuu!!':'排球少年!!',
   'haikyuu':'排球少年!!',
   'kuroko no basuke':'黑子的篮球',
@@ -4857,8 +4858,7 @@ function qlWorkDisplayName(work){
   'yumeiro patissiere':'梦色蛋糕师',
   'yumeiro pâtissière':'梦色蛋糕师'
  };
- const zh=names[tag.toLowerCase()];
- return zh&&zh!==tag?zh+'（'+tag+'）':tag;
+ return names[tag.toLowerCase()]||tag;
 }
 function renderWorkLibrary(){
  const s=cfg();if(!Array.isArray(s.workLibrary))s.workLibrary=[];
