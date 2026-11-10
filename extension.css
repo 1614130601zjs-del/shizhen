@@ -20,7 +20,12 @@
 #extensionsMenu #ql-chat-launch svg{color:inherit;stroke:currentColor;flex:0 0 18px}#extensionsMenu #ql-chat-launch:hover{background:var(--SmartThemeQuoteColor,rgba(127,127,127,.16))}#extensionsMenu #ql-chat-launch:focus-visible{outline:2px solid var(--SmartThemeUnderlineColor);outline-offset:-2px}
 #ql-overlay[hidden]{display:none!important}
 /* 独立挂到 documentElement，避免酒馆/移动端容器的 transform 影响 fixed 定位。 */
-#ql-overlay{position:fixed!important;inset:0!important;z-index:2147483000;display:flex;align-items:center;justify-content:center;width:100vw;height:100vh;height:100dvh;min-height:0;padding:12px;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);}
+/* overlay 本身也只设了 overflow-y，同样会被浏览器隐式补成 overflow-x:auto——
+   一旦里面任何页面把自己的横向滚动锁死（比如底片页在拍立得风格下的 overflow-x:hidden），
+   手指划动里残留的一点点横向分量就会顺着滚动链一路交给这一层来处理，
+   于是出现"往下滑整体往右飘，往上滑往左飘"这种跟着滑动方向走的现象。
+   overlay 内容只有居中的 #shizhen-panel，宽度本来就定死，横向滚动用不上，锁掉没有副作用。 */
+#ql-overlay{position:fixed!important;inset:0!important;z-index:2147483000;display:flex;align-items:center;justify-content:center;width:100vw;height:100vh;height:100dvh;min-height:0;padding:12px;box-sizing:border-box;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);}
 #shizhen-panel{position:relative;flex:0 0 auto;width:min(900px,100%);max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);margin:auto;overflow:auto;overscroll-behavior:contain;box-sizing:border-box;border:1px solid var(--SmartThemeBorderColor);border-radius:14px;background:var(--ql-card,var(--SmartThemeBlurTintColor,var(--SmartThemeBodyColor)));box-shadow:0 18px 60px rgba(0,0,0,.4)}
 #ql-close{position:sticky;top:0;z-index:5;float:right;margin:0 0 8px 8px}
 body.ql-modal-open{overflow:hidden!important}
