@@ -4856,7 +4856,9 @@ function qlWorkDisplayName(work){
   'jujutsu kaisen':'咒术回战',
   'jujutsu kaisen 0':'咒术回战 0',
   'yumeiro patissiere':'梦色蛋糕师',
-  'yumeiro pâtissière':'梦色蛋糕师'
+  'yumeiro pâtissière':'梦色蛋糕师',
+  'blue_lock':'蓝色监狱',
+  'blue lock':'蓝色监狱'
  };
  const key=tag.toLowerCase();
  return names[key]||names[key.replace(/_/g,' ')]||tag;
