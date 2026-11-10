@@ -4844,13 +4844,27 @@ $('#ql-prompt-bulk-delete').onclick=async ()=>{const indexes=[...selectedPrompts
 $('#ql-character-export').onclick=()=>{const indexes=[...selectedCharacters].filter(i=>cfg().characters[i]);if(!indexes.length){status('请先开启编辑模式并选择要导出的角色。');return;}downloadJson(indexes.map(i=>cfg().characters[i]).filter(Boolean),'shizhen-characters.json');};
 $('#ql-character-bulk-delete').onclick=async ()=>{const indexes=[...new Set([...selectedCharacters].filter(i=>cfg().characters[i]))].sort((a,b)=>a-b);if(!indexes.length){status('请先选择要删除的角色。');return;}if(!await qlConfirm('确定批量删除选中的 '+indexes.length+' 个角色词条？'))return;for(const role of cfg().viewfinderRoles||[]){const selected=Number(role.libraryIndex);if(indexes.includes(selected))role.libraryIndex=-1;else role.libraryIndex-=indexes.filter(i=>i<selected).length;}cfg().characters=indexes.slice().sort((a,b)=>b-a).reduce((arr,i)=>{arr.splice(i,1);return arr;},cfg().characters.slice());selectedCharacters.clear();save();renderLibrary();status('已批量删除角色词条。');};
 // ===== 作品库 UI =====
+// 作品库筛选显示名：保留原始作品 Tag 作为 value，仅增强界面可读性。
+function qlWorkDisplayName(work){
+ const tag=String(work||'（未分类）').trim();
+ const names={
+  'haikyuu!!':'排球少年!!',
+  'haikyuu':'排球少年!!',
+  'kuroko no basuke':'黑子的篮球',
+  'kuroko no basket':'黑子的篮球',
+  'yumeiro patissiere':'梦色蛋糕师',
+  'yumeiro pâtissière':'梦色蛋糕师'
+ };
+ const zh=names[tag.toLowerCase()];
+ return zh&&zh!==tag?zh+'（'+tag+'）':tag;
+}
 function renderWorkLibrary(){
  const s=cfg();if(!Array.isArray(s.workLibrary))s.workLibrary=[];
  s.workLibrary=s.workLibrary.filter(e=>e&&typeof e==='object'); // 防坏数据：有空/非对象条目混进来就直接丢掉，不然下面一读 e.work 就整页崩掉
  const list=$('#ql-wl-list'),filterSel=$('#ql-wl-filter');if(!list||!filterSel)return;
  const works=[...new Set(s.workLibrary.map(e=>e.work||'（未分类）'))].sort();
  const prior=filterSel.value;
- filterSel.innerHTML='<option value="">全部作品</option>'+works.map(w=>'<option value="'+esc(w)+'">'+esc(w)+' ('+s.workLibrary.filter(e=>(e.work||'（未分类）')===w).length+')</option>').join('');
+ filterSel.innerHTML='<option value="">全部作品</option>'+works.map(w=>'<option value="'+esc(w)+'">'+esc(qlWorkDisplayName(w))+' · '+s.workLibrary.filter(e=>(e.work||'（未分类）')===w).length+' 条</option>').join('');
  if(works.includes(prior))filterSel.value=prior;
  const filterValue=filterSel.value;
  const rows=s.workLibrary.map((e,i)=>({e,i})).filter(({e})=>!filterValue||(e.work||'（未分类）')===filterValue);
