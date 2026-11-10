@@ -605,12 +605,12 @@ function resolveCombinationGeneration(prompt, comboIndex, settings=cfg()){
 // 匹配优先级：当前角色卡绑定的词条 → 未绑定角色卡的词条 → 用户外貌（名字「用户」或当前用户名）→ 其他角色卡的词条（兜底）。
 function qlNormName(x){return String(x||'').toLowerCase().replace(/[\s\u3000"'“”‘’「」『』【】\[\]()（）{}<>《》_\-–—·•.,，。:：;；!！?？$]/g,'');}
 function qlParseNameTag(tag){
- let t=String(tag||'').trim(),weight=null,m;
- if((m=t.match(/^(-?\d+(?:\.\d+)?)::\s*([\s\S]+?)\s*::$/))){weight=Number(m[1]);t=m[2];}
+ let t=String(tag||'').trim(),weight=null,m,wrapped=false;
+ if((m=t.match(/^(-?\d+(?:\.\d+)?)::\s*([\s\S]+?)\s*::$/))){weight=Number(m[1]);t=m[2];wrapped=true;}
  else if((m=t.match(/^[({]+\s*([\s\S]+?)\s*[:：]\s*(-?\d+(?:\.\d+)?)\s*[)}]+$/))){t=m[1];weight=Number(m[2]);}
  else if((m=t.match(/^([\s\S]+?)\s*[:：]\s*(-?\d+(?:\.\d+)?)$/))){t=m[1];weight=Number(m[2]);}
  const d=t.match(/^\$([\s\S]+)\$$/);if(d)t=d[1];
- return {core:t.trim(),weight};
+ return {core:t.trim(),weight,wrapped};
 }
 // 「用户外貌」按名字对应当前 persona：名字（含 | 别名）能对上当前用户名的那一条算数。
 // 对不上时：只有名叫「用户 / user / {{user}}」的通用条目才当作“我的固定外貌”；否则当前用户按原创角色处理
@@ -828,7 +828,7 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
  const pushPlain=t=>{inline.push(t);restItems.push({t,p:null});};
  for(const tag of qlSplitTags(prompt)){
   // 先按“整个 tag 就是名字”处理；不行再看是不是 (名字:权重, 其他词…) 的括号组。
-  let {core,weight}=qlParseNameTag(tag),extras=[],group=null;
+  let {core,weight,wrapped}=qlParseNameTag(tag),extras=[],group=null;
   let hit=core?(index.get(qlNormName(core))||qlWorkHit(core)):null;
   if(!hit){
    group=qlUnwrapGroup(tag);
@@ -836,6 +836,13 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
     const first=qlParseNameTag(group[0]);
     const h=first.core?(index.get(qlNormName(first.core))||qlWorkHit(first.core)):null;
     if(h){hit=h;core=first.core;weight=first.weight;extras=group.slice(1);}
+    else if(first.wrapped){
+     // 世界书/模型自己已经按 1.2::英文名(作品名):: 这种标准 NAI 写法把名字处理好了——
+     // 哪怕角色词库和作品库都没这个名字（比如同人/联动角色没收进作品库），这条 tag 本身
+     // 已经是现成的、能直接当角色提示词用的内容，不算"缺词条"，不能丢掉，也不用弹窗提醒。
+     const person={named:false,tags:group};persons.push(person);
+     inline.push(tag);restItems.push({t:tag,p:person});continue;
+    }
     else if(first.core&&!/[,，]/.test(first.core)&&(hasCjk(first.core)||(group.length>=2&&/^[A-Z]/.test(first.core)&&!PERSON_HEAD.test(first.core)&&PERSON_HEAD.test(qlParseNameTag(group[1]).core)))){
      // 中文名，或「首字母大写的英文名 + 紧跟 1boy/1girl」这种明显是名字的写法
      missing.push(first.core);
@@ -852,6 +859,10 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
      const person={named:false,tags:group};persons.push(person);
      inline.push(tag);restItems.push({t:tag,p:person});continue;
     }
+   }else if(wrapped&&core){
+    // 顶层没有外层括号，直接整条写成 1.2::英文名(作品名):: 的情况，同样当成一个现成人物。
+    const person={named:false,tags:[tag]};persons.push(person);
+    inline.push(tag);restItems.push({t:tag,p:person});continue;
    }else if(core&&hasCjk(core)&&!/\s/.test(core)){
     missing.push(core);
     if(strip){dropped++;continue;}
