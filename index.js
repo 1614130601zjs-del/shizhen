@@ -5061,6 +5061,8 @@ jQuery(()=>{
   const open=()=>{
    overlay.hidden=false;
    document.body.classList.add('ql-modal-open');
+   // 每次打开插件都从持久化设置重绘作品筛选，避免更新/重载后下拉框仍是空白。
+   try{renderWorkLibrary();}catch(error){console.warn('[拾帧] 作品库打开时刷新失败',error);}
    const first=panel.querySelector('textarea,input,select,button');
    first?.focus({preventScroll:true});
   };
