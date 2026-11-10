@@ -4852,6 +4852,8 @@ function qlWorkDisplayName(work){
   'haikyuu':'排球少年!!',
   'kuroko no basuke':'黑子的篮球',
   'kuroko no basket':'黑子的篮球',
+  'jujutsu kaisen':'咒术回战',
+  'jujutsu kaisen 0':'咒术回战 0',
   'yumeiro patissiere':'梦色蛋糕师',
   'yumeiro pâtissière':'梦色蛋糕师'
  };
