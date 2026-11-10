@@ -5679,15 +5679,11 @@ body.ql-modal-open .ql-fb-ball{display:none}
 @keyframes qlPop{0%{transform:scale(.8);opacity:.4}60%{transform:scale(1.18)}100%{transform:scale(1);opacity:1}}
 /* 多选时的「全选/已选N张/逐张下载/删除所选」搬进这个小悬浮球，钉在面板右边，不挡下面的图；
    点一下展开收起，按住圆球可以沿边竖着拖，挪到顺手的高度，松手记住位置。 */
-#shizhen-panel .ql-cache-select-float{position:fixed;z-index:30;display:flex;flex-direction:column;align-items:flex-end;gap:6px;touch-action:none}
-#shizhen-panel .ql-cache-select-float-handle{width:38px;height:38px;flex:0 0 auto;margin:0;padding:0;border-radius:50%;border:1px solid var(--ql-border,rgba(128,128,128,.35));background:var(--ql-card,#fff);color:var(--ql-text,inherit);font-size:19px;line-height:1;box-shadow:0 4px 14px rgba(0,0,0,.24);cursor:grab}
-#shizhen-panel .ql-cache-select-float.is-dragging .ql-cache-select-float-handle{cursor:grabbing;opacity:.85}
-#shizhen-panel .ql-cache-select-float.is-open .ql-cache-select-float-handle{background:color-mix(in srgb,var(--ql-accent,#91a9a0) 22%,var(--ql-card,#fff))}
-#shizhen-panel .ql-cache-select-float-body{display:none;flex-direction:column;align-items:stretch;gap:6px;padding:9px;border-radius:12px;min-width:128px;border:1px solid var(--ql-border,rgba(128,128,128,.3));background:var(--ql-card,#fff);box-shadow:0 8px 22px rgba(0,0,0,.24)}
-#shizhen-panel .ql-cache-select-float.is-open .ql-cache-select-float-body{display:flex}
-#shizhen-panel .ql-cache-select-float .ql-cache-selected-count{margin:0;text-align:center;font-size:12px;opacity:.8}
-#shizhen-panel .ql-cache-select-float .ql-cache-select-all{display:flex;align-items:center;justify-content:center;gap:5px;margin:0}
-#shizhen-panel .ql-cache-select-float button{margin:0;min-height:32px;font-size:12px;padding:4px 8px}
+#shizhen-panel .ql-cache-footer-ball{position:fixed;z-index:30;display:flex;align-items:center;justify-content:center;width:42px;height:42px;margin:0;padding:0;border-radius:50%;border:1px solid var(--ql-border,rgba(128,128,128,.35));background:var(--ql-card,#fff);color:var(--ql-text,inherit);font-size:19px;line-height:1;box-shadow:0 4px 14px rgba(0,0,0,.24);cursor:grab;touch-action:none;appearance:none;-webkit-appearance:none}
+#shizhen-panel .ql-cache-footer-ball.is-dragging{cursor:grabbing;opacity:.85}
+#shizhen-panel .ql-cache-footer-ball.is-open{background:color-mix(in srgb,var(--ql-accent,#91a9a0) 28%,var(--ql-card,#fff))}
+#shizhen-panel .ql-cache-footer-ball.is-selecting{box-shadow:0 0 0 2px color-mix(in srgb,var(--ql-accent,#e0446a) 55%,transparent),0 4px 14px rgba(0,0,0,.24)}
+#shizhen-panel .ql-cache-footer-ball-badge{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 3px;border-radius:9px;background:var(--ql-accent,#e0446a);color:#fff;font-size:10px;font-weight:700;line-height:17px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 #shizhen-panel #ql-history .ql-cache-tile{transition:transform .12s,opacity .2s}
 #shizhen-panel #ql-history .ql-cache-tile:active{transform:scale(.96)}
 #shizhen-panel #ql-history.ql-cache-selection-mode .ql-cache-tile.is-selected{transform:scale(.94)}
