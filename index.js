@@ -3462,7 +3462,17 @@ function history(){
   content.querySelector('[data-copy-positive]').onclick=async()=>{const value=promptText;try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(value);}else{const area=document.createElement('textarea');area.value=value;area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();const ok=document.execCommand('copy');area.remove();if(!ok)throw new Error('浏览器未允许复制');}const button=content.querySelector('[data-copy-positive]');button.classList.add('is-copied');button.setAttribute('title','已复制');button.setAttribute('aria-label','已复制正向提示词');status('已复制画面提示词。');setTimeout(()=>{button.classList.remove('is-copied');button.setAttribute('title','复制画面提示词');button.setAttribute('aria-label','复制画面提示词');},1300);}catch(error){status('复制失败：请长按画面提示词文本手动复制。');}};
   const detailImage=content.querySelector('.ql-cache-large');if(detailImage){detailImage.title='点击放大查看原图';detailImage.style.cursor='zoom-in';detailImage.addEventListener('click',()=>openViewfinderImage(r.dataUrl||detailImage.currentSrc||detailImage.src));}
   content.querySelector('[data-modal-workshop]')?.addEventListener('click',()=>qlWsOpenFromRecord(r,{fromAlbum:!!r.albumCharacterName}));
-  content.querySelector('[data-modal-load]').onclick=()=>{$('#ql-prompt').value=promptText;read();modal.hidden=true;modal.style.display='';{const root=$('#shizhen-panel');root?.querySelector('button.ql-tab[data-page="generate"]')?.click();root?.querySelector('.ql-subtab[data-subpage="viewfinder"]')?.click();try{$('#ql-prompt').scrollIntoView({behavior:'smooth',block:'center'});}catch{}}status('基础提示词已载入；记录中的画师串不会自动切换，请确认当前画师串后再生成。');};
+  content.querySelector('[data-modal-load]').onclick=()=>{$('#ql-prompt').value=promptText;read();modal.hidden=true;modal.style.display='';
+   // 这张照片本来就收藏在某个角色相册里的话，顺手把「收藏目标相册」也指回那个相册——
+   // 从相册里载入提示词接着跑图，十有八九也是想把新图收藏回同一个相册，不用再手动选一遍。
+   let albumTip='';
+   const sourceAlbumKey=String(r.albumCharacterKey||r.albumCharacterName||'');
+   if(sourceAlbumKey&&r.collection==='character-album'){
+    cfg().viewfinderAlbumTargetKey=sourceAlbumKey;save();syncViewfinderAlbumTargets();
+    const select=$('#ql-result-album-target'),albumName=[...(select?.options||[])].find(option=>option.value===sourceAlbumKey)?.textContent;
+    albumTip=albumName?'，收藏目标相册已切到「'+albumName+'」':'';
+   }
+   {const root=$('#shizhen-panel');root?.querySelector('button.ql-tab[data-page="generate"]')?.click();root?.querySelector('.ql-subtab[data-subpage="viewfinder"]')?.click();try{$('#ql-prompt').scrollIntoView({behavior:'smooth',block:'center'});}catch{}}status('基础提示词已载入'+albumTip+'；记录中的画师串不会自动切换，请确认当前画师串后再生成。');};
   content.querySelector('[data-gallery-detail-actions]')?.remove();
   const detailActions=document.createElement('div');
   detailActions.className='ql-cache-detail-actions ql-prompt-gallery-existing-detail-actions';
