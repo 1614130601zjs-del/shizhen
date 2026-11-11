@@ -3328,7 +3328,7 @@ function history(){
    albums.querySelectorAll('[data-album-step]').forEach(button=>button.addEventListener('click',()=>{pageIndex=Math.max(0,Math.min(items.length-1,pageIndex+Number(button.dataset.albumStep)));paintFlip();}));
    let spreadPage=0;const spreadGrid=albums.querySelector('.ql-album-spread-grid'),spreadNumber=albums.querySelector('[data-spread-page-number]');
    const paintSpread=()=>{if(!spreadGrid)return;const totalPages=Math.max(1,Math.ceil(items.length/6));spreadPage=Math.max(0,Math.min(totalPages-1,spreadPage));spreadGrid.innerHTML=items.slice(spreadPage*6,spreadPage*6+6).map(record=>imageTile(record,record._cacheIndex)).join('');if(spreadNumber)spreadNumber.textContent=String(spreadPage+1)+'/'+String(totalPages);const prev=albums.querySelector('[data-spread-step="-1"]'),next=albums.querySelector('[data-spread-step="1"]');if(prev)prev.disabled=spreadPage===0;if(next)next.disabled=spreadPage>=totalPages-1;};
-   const handlePhotoClick=event=>{const photo=event.target?.closest?.('[data-album-photo]');if(!photo)return;if(albums.dataset.albumMoveMode==='select'){event.preventDefault();event.stopPropagation();const index=Number(photo.dataset.albumPhoto),chosen=selectedPhotos();setSelectedPhotos(chosen.includes(index)?chosen.filter(value=>value!==index):[...chosen,index]);photo.closest('.ql-album-photo')?.classList.toggle('is-selected',selectedPhotos().includes(index));const hint=albums.querySelector('.ql-album-toolbar')?.nextElementSibling;if(hint?.matches('.ql-muted'))hint.textContent='已选择 '+selectedPhotos().length+' 张照片，点击照片进行多选；再次点击「完成选择并移动」选择目标相册。';return;}{const idx=Number(photo.dataset.albumPhoto);openDetail(qlResolveRecordIndex(uidSnap[idx],idx),null,'roleAlbum');}};
+   const handlePhotoClick=event=>{const photo=event.target?.closest?.('[data-album-photo]');if(!photo)return;if(albums.dataset.albumMoveMode==='select'){event.preventDefault();event.stopPropagation();const index=Number(photo.dataset.albumPhoto),chosen=selectedPhotos();setSelectedPhotos(chosen.includes(index)?chosen.filter(value=>value!==index):[...chosen,index]);photo.closest('.ql-album-photo')?.classList.toggle('is-selected',selectedPhotos().includes(index));const hint=albums.querySelector('.ql-album-toolbar')?.nextElementSibling;if(hint?.matches('.ql-muted'))hint.textContent='已选择 '+selectedPhotos().length+' 张照片，点击照片进行多选；再次点击「完成选择并移动」选择目标相册。';return;}{const idx=Number(photo.dataset.albumPhoto);openDetail(qlResolveRecordIndex(uidSnap[idx],idx),null,'roleAlbum',key);}};
    // renderAlbums 每次重绘都会走到这里：不先摘掉上一次的监听，监听会越叠越多，偶数个监听让“选中”被反复切回去（表现为选择多张照片始终是 0 张）。
    if(albums._qlPhotoClick)albums.removeEventListener('click',albums._qlPhotoClick);
    albums._qlPhotoClick=handlePhotoClick;albums.addEventListener('click',handlePhotoClick);
@@ -3441,7 +3441,7 @@ function history(){
    if(detail){detail.hidden=true;detail.style.display='none';}
   },true);
  }
- const openDetail=(index,galleryContext=null,detailContext='cache')=>{
+ const openDetail=(index,galleryContext=null,detailContext='cache',explicitAlbumKey=null)=>{
   const r=records[index];if(!r)return;
   const preset=r.preset||null,vibe=r.vibe||null,meta=r.config||{};
   const content=modal.querySelector('.ql-cache-modal-content');
@@ -3466,10 +3466,10 @@ function history(){
    // 这张照片本来就收藏在某个角色相册里的话，顺手把「收藏目标相册」也指回那个相册——
    // 从相册里载入提示词接着跑图，十有八九也是想把新图收藏回同一个相册，不用再手动选一遍。
    let albumTip='';
-   const sourceAlbumKey=String(r.albumCharacterKey||r.albumCharacterName||'');
-   // 跟「角色相册里哪些照片会显示出来」用同一条判断标准（r.collection==='character-album'
-   // 这个字段不少老记录压根没有，之前拿它当必要条件太严格，导致老照片载入提示词时判断不出来源相册）。
-   if(sourceAlbumKey&&r.albumCharacterName&&r.collection!=='prompt-gallery'&&r.collection!=='cache'){
+   // 优先用「这张照片是从哪个相册页面点进来的」——角色相册详情页打开时当场传下来的 key，
+   // 100% 准确；没有这个上下文（比如从底片缓存直接打开的）才退回去猜这张照片自己记录的归属字段。
+   const sourceAlbumKey=String(explicitAlbumKey||r.albumCharacterKey||r.albumCharacterName||'');
+   if(sourceAlbumKey&&(explicitAlbumKey||(r.albumCharacterName&&r.collection!=='prompt-gallery'&&r.collection!=='cache'))){
     cfg().viewfinderAlbumTargetKey=sourceAlbumKey;save();syncViewfinderAlbumTargets();
     const select=$('#ql-result-album-target'),albumName=[...(select?.options||[])].find(option=>option.value===sourceAlbumKey)?.textContent;
     albumTip=albumName?'，收藏目标相册已切到「'+albumName+'」':'';
