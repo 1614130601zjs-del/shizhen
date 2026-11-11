@@ -3965,7 +3965,16 @@ function renderLibrary(){
  prompts?.querySelectorAll('[data-prompt-edit]').forEach(b=>b.onclick=()=>{const p=s.prompts[+b.dataset.promptEdit];$('#ql-prompt-editor').hidden=false;$('#ql-prompt-add').hidden=true;$('#ql-prompt-name').value=p.name||'';const standard=['单人','双人','BG','BL','GL','其他'];if(standard.includes(p.category||'')){$('#ql-prompt-category').value=p.category;$('#ql-prompt-category-custom').value='';$('#ql-prompt-category-custom').hidden=true;}else{$('#ql-prompt-category').value='自定义';$('#ql-prompt-category-custom').value=p.category||'';$('#ql-prompt-category-custom').hidden=false;}$('#ql-library-prompt-zh').value=p.promptZh||'';$('#ql-library-prompt-en').value=p.promptEn||p.prompt||'';qlSetPromptSourceFields(p.source,p.sourceNote);const imagePreview=$('#ql-library-image-preview');if(imagePreview){imagePreview.dataset.image=p.image||'';imagePreview.innerHTML=p.image?'<img src="'+esc(p.image)+'" alt="提示词预览图">':'<span class="ql-muted">尚未添加预览图</span>';}$('#ql-prompt-save').dataset.edit=String(+b.dataset.promptEdit);$('#ql-prompt-save').textContent='保存修改';$('#ql-prompt-editor').scrollIntoView({behavior:'smooth',block:'start'});});
   prompts?.querySelectorAll('[data-prompt-delete]').forEach(b=>b.onclick=()=>{s.prompts.splice(+b.dataset.promptDelete,1);save();renderLibrary();});
  chars?.querySelectorAll('[data-character-select]').forEach(b=>b.onchange=()=>{const i=Number(b.dataset.characterSelect);if(b.checked)selectedCharacters.add(i);else selectedCharacters.delete(i);});
-  chars?.querySelectorAll('[data-character-apply]').forEach(b=>b.onclick=()=>{const p=s.characters[+b.dataset.characterApply];$('#ql-prompt').value=[$('#ql-prompt').value.trim(),p.appearance].filter(Boolean).join(', ');read();status('已追加角色外貌词：'+p.name);});
+  chars?.querySelectorAll('[data-character-apply]').forEach(b=>b.onclick=()=>{const p=s.characters[+b.dataset.characterApply];$('#ql-prompt').value=[$('#ql-prompt').value.trim(),p.appearance].filter(Boolean).join(', ');read();
+  // 追加的这条外貌词绑定着某张角色卡（或用户外貌分组）时，把「收藏目标相册」顺手改成对应的相册——
+  // 不用再手动选一遍再点保存；没绑定角色卡的通用词条不碰这个默认值，保持原样。
+  let appliedAlbumTip='';
+  if(p.characterKey!=null&&String(p.characterKey)!==''){
+   const key=String(p.characterKey);cfg().viewfinderAlbumTargetKey=key;save();syncViewfinderAlbumTargets();
+   const select=$('#ql-result-album-target'),albumName=[...(select?.options||[])].find(option=>option.value===key)?.textContent;
+   appliedAlbumTip=albumName?'，收藏目标相册已切到「'+albumName+'」':'';
+  }
+  status('已追加角色外貌词：'+p.name+appliedAlbumTip);});
  chars?.querySelectorAll('[data-character-edit]').forEach(b=>b.onclick=()=>{const p=s.characters[+b.dataset.characterEdit],select=$('#ql-character-card');if(select)select.value=p.characterKey==null?'':String(p.characterKey);$('#ql-character-name').value=p.name||p.characterName||'';$('#ql-character-appearance').value=p.appearance||'';$('#ql-character-gender').value=p.gender==='male'||p.gender==='female'?p.gender:'';qlEditThumb=p.thumb||'';qlEditFull=p.thumbFull||'';qlShowEditThumb();qlEditOutfits=Array.isArray(p.outfits)?p.outfits.map(o=>({...o})):[];qlRenderOutfits();$('#ql-character-editor').hidden=false;$('#ql-character-save').dataset.edit=String(+b.dataset.characterEdit);$('#ql-character-save').textContent='保存修改';$('#ql-character-status').textContent='正在编辑：'+(p.name||p.characterName||'未命名角色');$('#ql-character-editor').scrollIntoView({behavior:'smooth',block:'start'});});
   chars?.querySelectorAll('[data-character-delete]').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.characterDelete);if(!Number.isInteger(i)||i<0||!s.characters[i])return;s.characters.splice(i,1);for(const role of s.viewfinderRoles||[]){const selected=Number(role.libraryIndex);if(selected===i){role.libraryIndex=-1;}else if(selected>i)role.libraryIndex=selected-1;}save();renderLibrary();});
  presets?.querySelectorAll('[data-preset-apply]').forEach(b=>b.onclick=()=>{const i=+b.dataset.presetApply,p=s.presets[i];s.activeConfigMode='separate';s.activeComboIndex=-1;s.activePresetIndex=i;renderActivePresets();renderActiveArtists();renderActiveConfigMode();syncViewfinderNegativeFromActiveArtist();save();status('已单独选中画师串：'+p.name+'。');});
@@ -4696,13 +4705,7 @@ function syncViewfinderAlbumTargets(){
  }
  const previous=select.value,savedTarget=String(s.viewfinderAlbumTargetKey||'');
  select.innerHTML='<option value="">请选择角色卡相册</option>'+[...albums.entries()].map(([key,name])=>'<option value="'+esc(key)+'">'+esc(name)+'</option>').join('');
- // 当前这张角色卡切没切换过：切换了（或者第一次渲染）就优先回到“这张图是在哪张角色卡下生成的”这个默认值，
- // 不然每次切角色卡都还停在上一张卡保存过的收藏目标，得手动重选。同一张卡内手动选别的相册仍然保留。
- const currentCharKey=String(currentCharacter().id||'');
- const characterChanged=select.dataset.qlLastChar!==undefined&&select.dataset.qlLastChar!==currentCharKey;
- select.dataset.qlLastChar=currentCharKey;
- if(!characterChanged&&previous&&[...select.options].some(option=>option.value===previous))select.value=previous;
- else if(currentCharKey&&[...select.options].some(option=>option.value===currentCharKey))select.value=currentCharKey;
+ if(previous&&[...select.options].some(option=>option.value===previous))select.value=previous;
  else if(savedTarget&&[...select.options].some(option=>option.value===savedTarget))select.value=savedTarget;
  else select.value='';
  const target=select.closest('.ql-viewfinder-album-target');
