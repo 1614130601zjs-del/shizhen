@@ -3467,7 +3467,9 @@ function history(){
    // 从相册里载入提示词接着跑图，十有八九也是想把新图收藏回同一个相册，不用再手动选一遍。
    let albumTip='';
    const sourceAlbumKey=String(r.albumCharacterKey||r.albumCharacterName||'');
-   if(sourceAlbumKey&&r.collection==='character-album'){
+   // 跟「角色相册里哪些照片会显示出来」用同一条判断标准（r.collection==='character-album'
+   // 这个字段不少老记录压根没有，之前拿它当必要条件太严格，导致老照片载入提示词时判断不出来源相册）。
+   if(sourceAlbumKey&&r.albumCharacterName&&r.collection!=='prompt-gallery'&&r.collection!=='cache'){
     cfg().viewfinderAlbumTargetKey=sourceAlbumKey;save();syncViewfinderAlbumTargets();
     const select=$('#ql-result-album-target'),albumName=[...(select?.options||[])].find(option=>option.value===sourceAlbumKey)?.textContent;
     albumTip=albumName?'，收藏目标相册已切到「'+albumName+'」':'';
