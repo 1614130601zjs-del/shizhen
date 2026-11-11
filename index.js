@@ -3470,7 +3470,14 @@ function history(){
    // 100% 准确；没有这个上下文（比如从底片缓存直接打开的）才退回去猜这张照片自己记录的归属字段。
    const sourceAlbumKey=String(explicitAlbumKey||r.albumCharacterKey||r.albumCharacterName||'');
    if(sourceAlbumKey&&(explicitAlbumKey||(r.albumCharacterName&&r.collection!=='prompt-gallery'&&r.collection!=='cache'))){
-    cfg().viewfinderAlbumTargetKey=sourceAlbumKey;save();syncViewfinderAlbumTargets();
+    const conf=cfg();
+    conf.viewfinderAlbumTargetKey=sourceAlbumKey;
+    // 真正卡住"收藏回相册"的根因在这：只要载入的这段提示词文字跟提示词库里任意一条存的内容碰巧
+    // 匹配上，生成时就会被判定成"由提示词库条目生成"，收藏时会直接归入那条提示词的图集，完全不看
+    // 上面刚设置的收藏目标相册。载入相册照片的提示词本来就是想重roll再收藏回同一个相册，不是想
+    // 重新关联提示词库，所以这里顺手清掉 activePromptEntryId 并打开"已取消自动关联"标记。
+    delete conf.activePromptEntryId;delete conf.activePromptEntryAppliedAt;conf.viewfinderPromptUnlinked=true;
+    save();syncViewfinderAlbumTargets();
     const select=$('#ql-result-album-target'),albumName=[...(select?.options||[])].find(option=>option.value===sourceAlbumKey)?.textContent;
     albumTip=albumName?'，收藏目标相册已切到「'+albumName+'」':'';
    }
