@@ -4696,7 +4696,13 @@ function syncViewfinderAlbumTargets(){
  }
  const previous=select.value,savedTarget=String(s.viewfinderAlbumTargetKey||'');
  select.innerHTML='<option value="">请选择角色卡相册</option>'+[...albums.entries()].map(([key,name])=>'<option value="'+esc(key)+'">'+esc(name)+'</option>').join('');
- if(previous&&[...select.options].some(option=>option.value===previous))select.value=previous;
+ // 当前这张角色卡切没切换过：切换了（或者第一次渲染）就优先回到“这张图是在哪张角色卡下生成的”这个默认值，
+ // 不然每次切角色卡都还停在上一张卡保存过的收藏目标，得手动重选。同一张卡内手动选别的相册仍然保留。
+ const currentCharKey=String(currentCharacter().id||'');
+ const characterChanged=select.dataset.qlLastChar!==undefined&&select.dataset.qlLastChar!==currentCharKey;
+ select.dataset.qlLastChar=currentCharKey;
+ if(!characterChanged&&previous&&[...select.options].some(option=>option.value===previous))select.value=previous;
+ else if(currentCharKey&&[...select.options].some(option=>option.value===currentCharKey))select.value=currentCharKey;
  else if(savedTarget&&[...select.options].some(option=>option.value===savedTarget))select.value=savedTarget;
  else select.value='';
  const target=select.closest('.ql-viewfinder-album-target');
@@ -4740,11 +4746,15 @@ function toggleViewfinderFavorite(){
   for(const item of matches){item.promptEntryId=pendingId;item.sourcePromptEntryId=pendingId;item.collection='prompt-gallery';}
   save();history();renderLibrary();syncViewfinderActions();status('已收藏到提示词图集。');return;
  }
- const character=currentCharacter(),defaultName=String(character.name||getContext()?.name2||'当前角色').trim(),target=String(settings.viewfinderAlbumTargetKey||'__current__');
+ const character=currentCharacter(),defaultName=String(character.name||getContext()?.name2||'当前角色').trim();
+ // 优先用「收藏目标相册」下拉框当前显示的值——sync 函数已经把它默认指回这张图的来源角色卡，
+ // 切换角色卡后会跟着换；只有保存过的固定默认值、且下拉框还没能正常取到选项时才退回它。
+ const select=$('#ql-result-album-target');
+ const liveTarget=select&&[...select.options].some(option=>option.value===select.value)?String(select.value||''):'';
+ const target=liveTarget||String(settings.viewfinderAlbumTargetKey||'__current__');
  let key=character.id||'',name=defaultName;
- if(target!=='__current__'){
+ if(target!=='__current__'&&target!==''){
   key=target;
-  const select=$('#ql-result-album-target');
   const selectedName=[...(select?.options||[])].find(option=>option.value===key)?.textContent;
   name=String(selectedName||settings.albumNames?.[key]||(records.find(item=>String(item?.albumCharacterKey||item?.albumCharacterName||'current')===key&&item?.albumCharacterName)?.albumCharacterName)||getCharacterCards()[Number(key)]?.name||getCharacterCards()[Number(key)]?.avatar||key).trim();
  }
