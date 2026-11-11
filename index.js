@@ -856,7 +856,9 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
     const first=qlParseNameTag(group[0]);
     const h=first.core?(index.get(qlNormName(first.core))||qlWorkHit(first.core)):null;
     if(h){hit=h;core=first.core;weight=first.weight;extras=group.slice(1);}
-    else if(first.wrapped){
+    else if(first.wrapped&&/\(/.test(first.core)){
+     // 必须带"(作品名)"这种后缀才当成人物处理——像 2::chibi only:: 这种纯风格/效果 tag
+     // 也是标准的 N::text:: 写法，但没有这个后缀，不能当角色拆出来单独成一个 character prompt。
      // 世界书/模型自己已经按 1.2::英文名(作品名):: 这种标准 NAI 写法把名字处理好了——
      // 哪怕角色词库和作品库都没这个名字（比如同人/联动角色没收进作品库），这条 tag 本身
      // 已经是现成的、能直接当角色提示词用的内容，不算"缺词条"，不能丢掉，也不用弹窗提醒。
@@ -879,8 +881,10 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
      const person={named:false,tags:group};persons.push(person);
      inline.push(tag);restItems.push({t:tag,p:person});continue;
     }
-   }else if(wrapped&&core){
+   }else if(wrapped&&core&&/\(/.test(core)){
     // 顶层没有外层括号，直接整条写成 1.2::英文名(作品名):: 的情况，同样当成一个现成人物。
+    // 同样要求带"(作品名)"后缀，纯风格/效果 tag（比如 2::chibi only::）没有括号，不会走到这里，
+    // 留在公共提示词里，不会被错拆成单独的角色分区。
     const person={named:false,tags:[tag]};persons.push(person);
     inline.push(tag);restItems.push({t:tag,p:person});continue;
    }else if(core&&hasCjk(core)&&!/\s/.test(core)){
