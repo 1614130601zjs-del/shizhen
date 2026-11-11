@@ -5586,6 +5586,11 @@ a.ql-prompt-source-badge:hover{text-decoration:underline}
 .ql-generic-words h4{margin:0 0 4px}
 .ql-generic-words textarea{width:100%;min-height:50px;margin-bottom:6px}
 .ql-generic-words .ql-check{display:flex;align-items:center;gap:6px;margin:6px 0 2px}
+.ql-outfit-library{margin:10px 0;padding:10px;border-radius:var(--ql-radius,12px);border:1px dashed color-mix(in srgb,var(--ql-accent,#c9a) 40%,transparent)}
+.ql-outfit-library h4{margin:0 0 4px}
+.ql-outfit-row{display:flex;flex-direction:column;gap:4px;margin:8px 0;padding:8px;border-radius:8px;background:color-mix(in srgb,var(--ql-card,#fff) 85%,transparent)}
+.ql-outfit-row input,.ql-outfit-row textarea{width:100%}
+.ql-outfit-row textarea{min-height:44px}
 .ql-gw-kind{margin:8px 0;padding-top:6px;border-top:1px dashed color-mix(in srgb,var(--ql-accent,#c9a) 30%,transparent)}
 .ql-gw-kind .ql-row select{flex:1;min-width:0}
 .ql-gw-editor{display:flex;flex-direction:column;gap:6px;margin-top:6px}
