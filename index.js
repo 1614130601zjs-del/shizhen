@@ -133,6 +133,48 @@ function isHostBeingEdited(host){
  if(ta&&ta.offsetParent!==null)return true;
  return false;
 }
+// 临时诊断用：用户是手机上跑酒馆，电脑没搭环境、不方便用浏览器开发者工具看 console，
+// 所以把诊断日志同时画成一个悬浮在页面最上层的小面板，手机上也能直接截图/复制给我看。
+// 定位完问题会把这个面板和相关诊断日志一起删掉，不影响正常使用。
+let qlEggDebugClosed=false;
+function qlEggDebugLog(text){
+ console.log('[拾帧 Lite][诊断] '+text);
+ if(qlEggDebugClosed)return;
+ try{
+  let panel=document.getElementById('ql-egg-debug-panel');
+  if(!panel){
+   panel=document.createElement('div');
+   panel.id='ql-egg-debug-panel';
+   panel.style.cssText='position:fixed;left:6px;right:6px;bottom:6px;max-height:42vh;overflow:auto;z-index:2147483647;background:rgba(10,10,10,.92);color:#8f8;font:11px/1.5 monospace;padding:8px 10px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.5);white-space:pre-wrap;word-break:break-all;';
+   const bar=document.createElement('div');
+   bar.style.cssText='position:sticky;top:-8px;margin:-8px -10px 6px;padding:6px 10px;background:rgba(10,10,10,.92);display:flex;justify-content:space-between;align-items:center;gap:8px;color:#fff;font:12px/1.2 system-ui,sans-serif;';
+   const title=document.createElement('span');title.textContent='拾帧诊断日志（截图/复制给开发者）';
+   const btns=document.createElement('span');btns.style.cssText='display:flex;gap:6px;flex:none;';
+   const copyBtn=document.createElement('button');copyBtn.type='button';copyBtn.textContent='复制';copyBtn.style.cssText='font-size:11px;padding:3px 9px;border-radius:5px;border:none;background:#2a7;color:#fff;';
+   copyBtn.onclick=()=>{
+    const lines=[...panel.querySelectorAll('.ql-egg-debug-line')].map(el=>el.textContent).join('\n');
+    if(navigator.clipboard?.writeText){
+     navigator.clipboard.writeText(lines).then(()=>{copyBtn.textContent='已复制';setTimeout(()=>copyBtn.textContent='复制',1200);}).catch(()=>{copyBtn.textContent='复制失败，请手动长按选中';});
+    }else copyBtn.textContent='请手动长按选中文字';
+   };
+   const closeBtn=document.createElement('button');closeBtn.type='button';closeBtn.textContent='×';closeBtn.style.cssText='font-size:13px;padding:3px 9px;border-radius:5px;border:none;background:#555;color:#fff;';
+   closeBtn.onclick=()=>{qlEggDebugClosed=true;panel.remove();};
+   btns.append(copyBtn,closeBtn);
+   bar.append(title,btns);
+   panel.appendChild(bar);
+   (document.body||document.documentElement).appendChild(panel);
+  }
+  const line=document.createElement('div');
+  line.className='ql-egg-debug-line';
+  const ts=new Date();
+  const pad=(n,len)=>String(n).padStart(len,'0');
+  line.textContent='['+pad(ts.getHours(),2)+':'+pad(ts.getMinutes(),2)+':'+pad(ts.getSeconds(),2)+'.'+pad(ts.getMilliseconds(),3)+'] '+text;
+  panel.appendChild(line);
+  const lines=panel.querySelectorAll('.ql-egg-debug-line');
+  if(lines.length>150)lines[0].remove();
+  panel.scrollTop=panel.scrollHeight;
+ }catch(error){}
+}
 // 酒馆之外的东西（正则/前端美化框架、消息缓存等）可能把消息 HTML 重新序列化后写回：
 // 元素的外观和 data-* 属性都在，但 addEventListener 绑定的监听、挂在元素对象上的 JS 状态（_qlBound / _qlCandidates 等）全丢了。
 // 以前扫描看到“按钮/卡片已经存在”就直接跳过，结果刷新后看起来渲染好了却点不动，必须点小铅笔让酒馆重建消息才恢复。
@@ -2498,7 +2540,7 @@ async function processLatestAssistantMessage(opts={}){
   // 点铅笔看到的也是旧文本，点了还会把图记到这个尚未生成的新页上。待生成状态下整条消息跳过。
   // 临时诊断：带 eggroom### 的消息如果在这几步被跳过，打印是在哪一步、为什么跳过的。
   const qlEggDebugThisMessage=/eggroom###/.test(message.mes);
-  if(qlEggDebugThisMessage&&Array.isArray(message.swipes)&&message.swipes.length>0&&Number(message.swipe_id)>=message.swipes.length)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'因 swipe 待生成被跳过');
+  if(qlEggDebugThisMessage&&Array.isArray(message.swipes)&&message.swipes.length>0&&Number(message.swipe_id)>=message.swipes.length)qlEggDebugLog('消息'+messageIndex+'因 swipe 待生成被跳过');
   if(Array.isArray(message.swipes)&&message.swipes.length>0&&Number(message.swipe_id)>=message.swipes.length)continue;
   const found=markers(message.mes);
   // 以前这里直接 if(!found.length)continue：title###…### 和 eggroom###…### 跟 image###…### 是互相独立的标记，
@@ -2506,18 +2548,18 @@ async function processLatestAssistantMessage(opts={}){
   // qlRenderTitleBadges/qlRenderEggChat 永远轮不到执行，不管后面的兜底重扫重试多少次都没用。
   // 改成：只要带了任意一种标记就往下走到能渲染 title/egg 的位置，真正只影响配图逻辑的提前退出挪到渲染之后。
   const hasTitleOrEgg=/title###|eggroom###/.test(message.mes);
-  if(!found.length&&!hasTitleOrEgg){if(qlEggDebugThisMessage)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'既无配图标记也无title/egg标记，不应该发生');continue;}
+  if(!found.length&&!hasTitleOrEgg){if(qlEggDebugThisMessage)qlEggDebugLog('消息'+messageIndex+'既无配图标记也无title/egg标记，不应该发生');continue;}
   const host=document.querySelector('.mes[mesid="'+messageIndex+'"] .mes_text');
-  if(!host){if(qlEggDebugThisMessage)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'因找不到 host(.mes_text) 被跳过');continue;}
+  if(!host){if(qlEggDebugThisMessage)qlEggDebugLog('消息'+messageIndex+'因找不到 host(.mes_text) 被跳过');continue;}
   // 正在编辑的消息跳过（见 isHostBeingEdited），等编辑结束（保存/取消会触发 DOM 变动）再由下一轮扫描补回按钮。
-  if(isHostBeingEdited(host)){if(qlEggDebugThisMessage)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'因 isHostBeingEdited=true 被跳过');continue;}
-  if(qlEggDebugThisMessage)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'即将调用 qlRenderEggChat，渲染前 DOM 是否已有 .ql-egg-chat：',!!host.querySelector('.ql-egg-chat'));
+  if(isHostBeingEdited(host)){if(qlEggDebugThisMessage)qlEggDebugLog('消息'+messageIndex+'因 isHostBeingEdited=true 被跳过');continue;}
+  if(qlEggDebugThisMessage)qlEggDebugLog('消息'+messageIndex+'即将调用 qlRenderEggChat，渲染前 DOM 是否已有 .ql-egg-chat：'+(!!host.querySelector('.ql-egg-chat')));
   // 先把 title###…### 换成标题标签、eggroom###…###~eggend### 换成聊天室卡片，再处理 image###…###——
   // 几套标记互不影响，谁先谁后都行，但都会改变消息里的文本节点结构，放在最前面一次性处理完，
   // 避免影响下面的位置计算。
   qlRenderTitleBadges(host);
   qlRenderEggChat(host);
-  if(qlEggDebugThisMessage)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'调用完 qlRenderEggChat，渲染后 DOM 是否已有 .ql-egg-chat：',!!host.querySelector('.ql-egg-chat'));
+  if(qlEggDebugThisMessage)qlEggDebugLog('消息'+messageIndex+'调用完 qlRenderEggChat，渲染后 DOM 是否已有 .ql-egg-chat：'+(!!host.querySelector('.ql-egg-chat')));
   if(!found.length)continue;
   const logicalBefore=qlCollectLogicalText(host).text;
   const domMarkerCount=(logicalBefore.match(new RegExp(QL_MARKER_SRC,'g'))||[]).length;
@@ -5443,7 +5485,7 @@ jQuery(()=>{
  };
  const qlLogEggDebug=(label)=>{
   const state=qlEggDebugState();
-  if(state)console.log('[拾帧 Lite][诊断] '+label,JSON.stringify(state));
+  if(state)qlEggDebugLog(label+' '+JSON.stringify(state));
  };
  const qlLatestMessageStillPending=()=>{
   try{
@@ -5510,12 +5552,12 @@ jQuery(()=>{
  // 而不是只依赖 DOM 变动去“猜”是否相关，这样可以明显减少“必须先点一下编辑铅笔才会变得可点”的情况。
  // 流式输出期间不扫描正文；消息结束后单独等待 DOM 稳定再扫描。
  if(event_types.GENERATION_STARTED)eventSource.on(event_types.GENERATION_STARTED,()=>{
-  console.log('[拾帧 Lite][诊断] GENERATION_STARTED 触发',new Date().toISOString());
+  qlEggDebugLog('GENERATION_STARTED 触发');
   qlSetGenerationActive(true);
   inlineScanTimers.forEach(timer=>clearTimeout(timer));inlineScanTimers=[];
  });
  if(event_types.GENERATION_ENDED)eventSource.on(event_types.GENERATION_ENDED,()=>{
-  console.log('[拾帧 Lite][诊断] GENERATION_ENDED 触发',new Date().toISOString());
+  qlEggDebugLog('GENERATION_ENDED 触发');
   qlSetGenerationActive(false);
   setTimeout(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
    qlLogEggDebug('GENERATION_ENDED 350ms 后首次扫描前');
