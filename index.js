@@ -228,10 +228,25 @@ function qlFindMarkerSlots(host){
  });
  return slots;
 }
-// 把消息里的 <img-title>…</img-title> 原地换成一个带主题配色的小标签；跟 image###…### 一样用
-// Range 原位替换，换完原文里就没有这段标记了，不会被重复扫描/重复插入。
+function qlMakeTitleBadge(title){
+ const badge=document.createElement('span');
+ badge.className='ql-chat-image-title ql-album-'+qlResolveAlbumStyle(cfg().chatAlbumStyle||'follow');
+ badge.textContent=title;
+ applyChatTheme(badge);
+ return badge;
+}
+// 把消息里的 <img-title>…</img-title> 原地换成一个带主题配色的小标签。
 function qlRenderTitleBadges(host){
  if(!host||isHostBeingEdited(host))return;
+ // 常见情况：酒馆把消息正文当 HTML 渲染，浏览器解析 innerHTML 时会把 <img-title> 直接认成一个
+ // 真实的自定义标签元素（不是字面文本），所以原来按“跨节点找文字”的方式在 logical text 里根本
+ // 搜不到 "<img-title>" 这串字符——这里直接按标签名选取，更直接也更可靠。
+ host.querySelectorAll('img-title').forEach(node=>{
+  const title=(node.textContent||'').replace(/\s+/g,' ').trim();
+  if(title)node.replaceWith(qlMakeTitleBadge(title));else node.remove();
+ });
+ // 兜底情况：如果因为酒馆内容处理/转义等原因，这段标签被原样留成了纯文本（没被解析成元素），
+ // 再用跨节点文字匹配找一次，逻辑跟 image###…### 完全一样。
  const {text,infos}=qlCollectLogicalText(host);
  const re=new RegExp(QL_TITLE_MARKER_SRC,'g');
  const slots=[];let m;
@@ -251,13 +266,7 @@ function qlRenderTitleBadges(host){
    if(last.isText)range.setEnd(last.node,slot.end-last.start);else range.setEndAfter(last.node);
   }catch(error){console.warn('[拾帧 Lite] 标题标记范围异常，已跳过',error);continue;}
   range.deleteContents();
-  if(slot.title){
-   const badge=document.createElement('span');
-   badge.className='ql-chat-image-title ql-album-'+qlResolveAlbumStyle(cfg().chatAlbumStyle||'follow');
-   badge.textContent=slot.title;
-   applyChatTheme(badge);
-   range.insertNode(badge);
-  }
+  if(slot.title)range.insertNode(qlMakeTitleBadge(slot.title));
  }
 }
 function qlEntryElements(host,entry){
