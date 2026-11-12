@@ -2496,6 +2496,9 @@ async function processLatestAssistantMessage(opts={}){
   // 但 message.mes 仍是上一页的旧文本，直到新回复开始出字才被替换（失败则翻回上一页）。
   // 这时 swipe_id 指向的 swipes 槽位还不存在；照旧文本扫描，会在“...”上贴一个带着上一页提示词的生图按钮，
   // 点铅笔看到的也是旧文本，点了还会把图记到这个尚未生成的新页上。待生成状态下整条消息跳过。
+  // 临时诊断：带 eggroom### 的消息如果在这几步被跳过，打印是在哪一步、为什么跳过的。
+  const qlEggDebugThisMessage=/eggroom###/.test(message.mes);
+  if(qlEggDebugThisMessage&&Array.isArray(message.swipes)&&message.swipes.length>0&&Number(message.swipe_id)>=message.swipes.length)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'因 swipe 待生成被跳过');
   if(Array.isArray(message.swipes)&&message.swipes.length>0&&Number(message.swipe_id)>=message.swipes.length)continue;
   const found=markers(message.mes);
   // 以前这里直接 if(!found.length)continue：title###…### 和 eggroom###…### 跟 image###…### 是互相独立的标记，
@@ -2503,16 +2506,18 @@ async function processLatestAssistantMessage(opts={}){
   // qlRenderTitleBadges/qlRenderEggChat 永远轮不到执行，不管后面的兜底重扫重试多少次都没用。
   // 改成：只要带了任意一种标记就往下走到能渲染 title/egg 的位置，真正只影响配图逻辑的提前退出挪到渲染之后。
   const hasTitleOrEgg=/title###|eggroom###/.test(message.mes);
-  if(!found.length&&!hasTitleOrEgg)continue;
+  if(!found.length&&!hasTitleOrEgg){if(qlEggDebugThisMessage)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'既无配图标记也无title/egg标记，不应该发生');continue;}
   const host=document.querySelector('.mes[mesid="'+messageIndex+'"] .mes_text');
-  if(!host)continue;
+  if(!host){if(qlEggDebugThisMessage)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'因找不到 host(.mes_text) 被跳过');continue;}
   // 正在编辑的消息跳过（见 isHostBeingEdited），等编辑结束（保存/取消会触发 DOM 变动）再由下一轮扫描补回按钮。
-  if(isHostBeingEdited(host))continue;
+  if(isHostBeingEdited(host)){if(qlEggDebugThisMessage)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'因 isHostBeingEdited=true 被跳过');continue;}
+  if(qlEggDebugThisMessage)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'即将调用 qlRenderEggChat，渲染前 DOM 是否已有 .ql-egg-chat：',!!host.querySelector('.ql-egg-chat'));
   // 先把 title###…### 换成标题标签、eggroom###…###~eggend### 换成聊天室卡片，再处理 image###…###——
   // 几套标记互不影响，谁先谁后都行，但都会改变消息里的文本节点结构，放在最前面一次性处理完，
   // 避免影响下面的位置计算。
   qlRenderTitleBadges(host);
   qlRenderEggChat(host);
+  if(qlEggDebugThisMessage)console.log('[拾帧 Lite][诊断] 消息'+messageIndex+'调用完 qlRenderEggChat，渲染后 DOM 是否已有 .ql-egg-chat：',!!host.querySelector('.ql-egg-chat'));
   if(!found.length)continue;
   const logicalBefore=qlCollectLogicalText(host).text;
   const domMarkerCount=(logicalBefore.match(new RegExp(QL_MARKER_SRC,'g'))||[]).length;
@@ -5410,6 +5415,36 @@ jQuery(()=>{
  // 判断“最新一条消息”是不是还有标记原文原封不动地留在当前 DOM 里：有就说明还没渲染成功，兜底重扫
  // 应该继续等；message.mes 里压根没有任何标记，或者 DOM 里已经找不到标记原文，就说明没必要再扫了，
  // 用这个来让下面的滚动重试自己知道什么时候该停，而不是靠瞎猜一个固定时长。
+ // 临时诊断日志：定位“生成结束后彩蛋聊天室不会自动出现”这个问题到底卡在哪一步。
+ // 只在最新一条消息真的带着 eggroom###/title###/image### 标记时才打印，不影响正常使用；
+ // 复现问题后把浏览器控制台里带 [拾帧 Lite][诊断] 的几行整段复制给我就行，定位完会删掉。
+ const qlEggDebugState=()=>{
+  try{
+   const context=getContext();const chat=context?.chat;
+   if(!Array.isArray(chat)||!chat.length)return null;
+   const messageIndex=chat.length-1;const message=chat[messageIndex];
+   if(!message||message.is_user||message.is_system||typeof message.mes!=='string')return null;
+   if(!/image###|title###|eggroom###/.test(message.mes))return null;
+   const host=document.querySelector('.mes[mesid="'+messageIndex+'"] .mes_text');
+   const editing=host?isHostBeingEdited(host):null;
+   const domText=host?qlCollectLogicalText(host).text:'';
+   return {
+    messageIndex,
+    mesHasEgg:/eggroom###/.test(message.mes),
+    mesHasEggEnd:/eggend###/.test(message.mes),
+    hostFound:!!host,
+    editing,
+    domHasEggStart:/eggroom###/.test(domText),
+    domHasEggEnd:/eggend###/.test(domText),
+    eggChatRendered:!!host?.querySelector('.ql-egg-chat'),
+    qlGenerationActive,
+   };
+  }catch(error){return {error:String(error)};}
+ };
+ const qlLogEggDebug=(label)=>{
+  const state=qlEggDebugState();
+  if(state)console.log('[拾帧 Lite][诊断] '+label,JSON.stringify(state));
+ };
  const qlLatestMessageStillPending=()=>{
   try{
    const context=getContext();const chat=context?.chat;
@@ -5424,22 +5459,27 @@ jQuery(()=>{
   }catch(error){return false;}
  };
  const scheduleInlineScan=()=>{
-  if(qlGenerationActive)return;
+  if(qlGenerationActive){qlLogEggDebug('scheduleInlineScan 因 qlGenerationActive=true 被跳过');return;}
   inlineScanTimers.forEach(timer=>clearTimeout(timer));
   // 刷新酒馆页面时，扩展脚本通常比聊天记录的 DOM 渲染更早就绪：原来只到 1200ms 的兜底窗口，
   // 在聊天较长、设备较慢时可能还没等到消息渲染完就已经用完，导致刷新后没有任何一次扫描真正生效，
   // 只能等到用户点一下编辑铅笔（强制触发 DOM 变动）才会被 MutationObserver 捕捉到。这里把兜底窗口拉长，
   // 并加一次较晚的扫描，减少对“手动点一次铅笔”的依赖。
-  inlineScanTimers=[80,250,600,1200,2500,4500,7000,9000].map(delay=>setTimeout(()=>processLatestAssistantMessage().catch(e=>console.warn('[拾帧 Lite] 正文标记扫描失败',e)),delay));
+  inlineScanTimers=[80,250,600,1200,2500,4500,7000,9000].map(delay=>setTimeout(()=>{
+   processLatestAssistantMessage().catch(e=>console.warn('[拾帧 Lite] 正文标记扫描失败',e));
+   qlLogEggDebug('定时兜底扫描 +'+delay+'ms');
+  },delay));
   // 9 秒的固定兜底窗口对彩蛋聊天室这种“一长串 chat_msg + eggroom 整段”的超长消息可能还是不够：
   // 酒馆把这么长的正文重新格式化进 .mes_text 本身花的时间就可能超过 9 秒，9 秒内怎么扫都扫空，
   // 只有等用户之后随便点一下编辑铅笔（这时候早就过了不止 9 秒）才补扫到。9 秒后不直接放弃，
   // 改成每 3 秒检查一下“最新消息是不是还没渲染好”，还没好就继续扫，扫好了自己停，最长等到 60 秒。
   const rollOnce=()=>{
-   if(qlGenerationActive)return;
-   if(!qlLatestMessageStillPending())return;
+   if(qlGenerationActive){qlLogEggDebug('rollOnce 因 qlGenerationActive=true 中止');return;}
+   if(!qlLatestMessageStillPending()){qlLogEggDebug('rollOnce 判定已不需要再扫，停止滚动重试');return;}
    processLatestAssistantMessage().catch(e=>console.warn('[拾帧 Lite] 正文标记扫描失败',e));
+   qlLogEggDebug('滚动兜底扫描 '+Math.round((Date.now()-(rollDeadline-60000))/1000)+'s');
    if(Date.now()<rollDeadline)inlineScanTimers.push(setTimeout(rollOnce,3000));
+   else qlLogEggDebug('滚动兜底重试已到60秒上限，停止');
   };
   const rollDeadline=Date.now()+60000;
   inlineScanTimers.push(setTimeout(rollOnce,12000));
@@ -5470,13 +5510,17 @@ jQuery(()=>{
  // 而不是只依赖 DOM 变动去“猜”是否相关，这样可以明显减少“必须先点一下编辑铅笔才会变得可点”的情况。
  // 流式输出期间不扫描正文；消息结束后单独等待 DOM 稳定再扫描。
  if(event_types.GENERATION_STARTED)eventSource.on(event_types.GENERATION_STARTED,()=>{
+  console.log('[拾帧 Lite][诊断] GENERATION_STARTED 触发',new Date().toISOString());
   qlSetGenerationActive(true);
   inlineScanTimers.forEach(timer=>clearTimeout(timer));inlineScanTimers=[];
  });
  if(event_types.GENERATION_ENDED)eventSource.on(event_types.GENERATION_ENDED,()=>{
+  console.log('[拾帧 Lite][诊断] GENERATION_ENDED 触发',new Date().toISOString());
   qlSetGenerationActive(false);
   setTimeout(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
+   qlLogEggDebug('GENERATION_ENDED 350ms 后首次扫描前');
    processLatestAssistantMessage().catch(e=>console.warn('[拾帧 Lite] 生成结束后正文扫描失败',e));
+   qlLogEggDebug('GENERATION_ENDED 350ms 后首次扫描后');
    processStatusbarFrames().catch(e=>console.warn('[拾帧 Lite] 生成结束后状态栏扫描失败',e));
    // 彩蛋聊天室那段 eggroom…eggend 文字一般是整条消息最后输出的，又经常带一长串 chat_msg，
    // 酒馆把这么长的尾巴渲染进 .mes_text 可能比这里的单次扫描慢——只扫一次很容易刚好扫空。
