@@ -178,10 +178,12 @@ function qlSetGenerationActive(v){qlGenerationActive=v;clearTimeout(qlGeneration
 // 再用 Range 跨节点把标记原位替换成按钮；按钮位置永远就是标记所在的位置。
 // （思路参考智绘姬的 findAndReplaceInElement，代码为自行实现。）
 const QL_MARKER_SRC='image###([\\s\\S]*?)###';
-// 世界书现在会额外输出 <img-title>标题文字</img-title>（配合 {{setglobalvar::小标题::...}} 使用）。
-// 以前要靠用户自己写一条酒馆正则把它渲染成好看的样子；这里直接复用上面 image###…### 同一套
-// “跨节点原位替换”逻辑，把这段标签原地换成一个自带主题配色的小标签，不用再维护额外的正则。
-const QL_TITLE_MARKER_SRC='<img-title>([\\s\\S]*?)<\\/img-title>';
+// 标题标记用跟 image###…### 完全一样的“纯文字口令”写法，不用尖括号标签——
+// 之前试过 <img-title>…</img-title>，结果酒馆把消息当 HTML 渲染时，浏览器/酒馆自带的内容过滤
+// 会把这种看起来像标签的东西直接当成一个未知 HTML 标签处理掉（标签被吃掉，只剩里面的纯文字），
+// 等我们的代码扫描消息 DOM 的时候，原文里早就找不到任何“<img-title>”这几个字符了，所以渲染不出来。
+// title###…### 长得不像任何合法标签，不会被当成 HTML 解析/过滤掉，能完整原样留在消息文字里。
+const QL_TITLE_MARKER_SRC='title###([\\s\\S]*?)###';
 const QL_SKIP_SELECTOR='script,style,textarea,pre,code,button,.ql-chat-image,.ql-inline-image-trigger';
 const QL_BLOCK_SELECTOR='p,div,li,blockquote,h1,h2,h3,h4,h5,h6,pre,tr,td,th';
 const qlNormalizePrompt=value=>String(value||'').replace(/\s+/g,' ').trim();
@@ -235,18 +237,10 @@ function qlMakeTitleBadge(title){
  applyChatTheme(badge);
  return badge;
 }
-// 把消息里的 <img-title>…</img-title> 原地换成一个带主题配色的小标签。
+// 把消息里的 title###标题文字### 原地换成一个带主题配色的小标签，逻辑跟 image###…### 完全一样：
+// 跨节点拼出“逻辑文本”再用 Range 原位替换，标签换完之后原文里就不会再留下这段标记。
 function qlRenderTitleBadges(host){
  if(!host||isHostBeingEdited(host))return;
- // 常见情况：酒馆把消息正文当 HTML 渲染，浏览器解析 innerHTML 时会把 <img-title> 直接认成一个
- // 真实的自定义标签元素（不是字面文本），所以原来按“跨节点找文字”的方式在 logical text 里根本
- // 搜不到 "<img-title>" 这串字符——这里直接按标签名选取，更直接也更可靠。
- host.querySelectorAll('img-title').forEach(node=>{
-  const title=(node.textContent||'').replace(/\s+/g,' ').trim();
-  if(title)node.replaceWith(qlMakeTitleBadge(title));else node.remove();
- });
- // 兜底情况：如果因为酒馆内容处理/转义等原因，这段标签被原样留成了纯文本（没被解析成元素），
- // 再用跨节点文字匹配找一次，逻辑跟 image###…### 完全一样。
  const {text,infos}=qlCollectLogicalText(host);
  const re=new RegExp(QL_TITLE_MARKER_SRC,'g');
  const slots=[];let m;
