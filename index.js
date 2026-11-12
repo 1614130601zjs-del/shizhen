@@ -338,8 +338,14 @@ function qlMakeEggInfoLine(label,value){
 }
 // 整个聊天室只建一次 DOM：默认折叠只显示"进入聊天室"小按钮，点开后展开成面板，跟现有图片卡片
 // 的折叠按钮是同一套思路（classList.toggle 一个 collapsed 类，CSS 负责切换显示哪一块）。
-function qlBuildEggChat(room,messages){
+function qlBuildEggChat(room,messages,ordinal){
  const wrap=document.createElement('div');wrap.className='ql-egg-chat ql-egg-collapsed';
+ // _qlEggLive：标记这个卡片是刚刚现建的、监听还“活着”。酒馆之外的东西（正则/前端美化框架等）
+ // 把消息 HTML 重新序列化写回之后，这个 JS 属性不会跟着序列化留下来——扫描时看到 .ql-egg-chat
+ // 却没有这个属性，就知道这是外观还在但监听已经丢了的“死卡片”，要原地重建。
+ // qlEggOrdinal：这条消息里第几份聊天室（从 0 开始），用于死卡片重建时找回对应的 room/messages。
+ wrap._qlEggLive=true;
+ if(Number.isInteger(ordinal))wrap.dataset.qlEggOrdinal=String(ordinal);
  const trigger=document.createElement('button');trigger.type='button';trigger.className='ql-egg-chat-trigger';trigger.textContent='💬 进入聊天室';
  const panel=document.createElement('div');panel.className='ql-egg-chat-panel';
  const header=document.createElement('div');header.className='ql-egg-chat-header';
@@ -384,40 +390,87 @@ function qlBuildEggChat(room,messages){
  applyChatTheme(wrap);
  return wrap;
 }
-// 把消息里 eggroom###…### 到 eggend### 之间的一整段原地换成上面建好的聊天室卡片；跟 image###…###
-// 一样用 Range 原位替换，换完原文里就不会留下任何标记痕迹。一条消息最多处理一份（多出的忽略）。
-function qlRenderEggChat(host){
- if(!host||isHostBeingEdited(host))return;
- const {text,infos}=qlCollectLogicalText(host);
+// 把 message.mes 原文里所有 eggroom###…### 到 eggend### 的区块，按出现顺序整理成数组；
+// 一条消息完全可能带不止一份聊天室（比如一条消息里发生了两段对话），每份都按顺序编号(ordinal)，
+// 编号用来在"外观还在但 JS 监听丢了"的死卡片上找回对应的 room/messages 原地重建。
+function qlParseEggBlocks(mesText){
+ const blocks=[];
+ if(typeof mesText!=='string'||!mesText)return blocks;
  const re=/eggroom###([\s\S]*?)###|eggmsg###([\s\S]*?)###|eggend###/g;
- let m,room=null,messages=[],start=-1,end=-1;
- while((m=re.exec(text))!==null){
+ let m,room=null,messages=[];
+ while((m=re.exec(mesText))!==null){
   if(m[1]!==undefined){
-   if(room)break;
+   if(room)blocks.push({room,messages}); // 上一份没等到 eggend 就被新的 eggroom 打断，尽量不丢内容
    const parts=m[1].split('|');
    room={roomName:(parts[0]||'').trim(),count:(parts[1]||'').trim(),owner:(parts[2]||'').trim(),narrator:(parts[3]||'').trim(),narratorDesc:(parts[4]||'').trim()};
-   start=m.index;end=m.index+m[0].length;
+   messages=[];
   }else if(m[2]!==undefined){
    if(!room)continue;
    const parts=m[2].split('|');
    messages.push({side:(parts[0]||'').trim()==='right'?'right':'left',speaker:(parts[1]||'').trim(),text:(parts[2]||'').trim()});
-   end=m.index+m[0].length;
-  }else{
-   if(room)end=m.index+m[0].length;
-   break;
+  }else if(room){
+   blocks.push({room,messages});room=null;messages=[];
   }
  }
- if(!room)return;
- const covered=infos.filter(info=>start<info.end&&end>info.start);
- if(!covered.length)return;
- const range=document.createRange();
- const first=covered[0],last=covered[covered.length-1];
- try{
-  if(first.isText)range.setStart(first.node,start-first.start);else range.setStartBefore(first.node);
-  if(last.isText)range.setEnd(last.node,end-last.start);else range.setEndAfter(last.node);
- }catch(error){console.warn('[拾帧 Lite] 聊天室标记范围异常，已跳过',error);return;}
- range.deleteContents();
- range.insertNode(qlBuildEggChat(room,messages));
+ if(room)blocks.push({room,messages}); // 容错：缺了 eggend 收尾也不丢
+ return blocks;
+}
+// 把消息里 eggroom###…### 到 eggend### 之间的一整段原地换成上面建好的聊天室卡片；跟 image###…###
+// 一样用 Range 原位替换，换完原文里就不会留下任何标记痕迹。
+// 以前这里遇到第一份 eggend### 就 break 掉，一条消息里如果有两份聊天室，第二份会被直接忽略——
+// 靠“多扫几次、迟早轮到”去碰运气，而酒馆一旦把 .mes_text 从原文重新渲染一遍（比如点铅笔取消编辑），
+// 两份又会一起变回未渲染状态，只有单次扫描能处理一份，导致第二份永远追不上。改成一次 while 循环
+// 处理完消息里所有还没渲染的区块，不再只处理第一份。
+function qlRenderEggChat(host,mesText){
+ if(!host||isHostBeingEdited(host))return;
+ const blocks=qlParseEggBlocks(mesText);
+ if(!blocks.length)return;
+ // 先找"死卡片"：外观还在（.ql-egg-chat 元素都在），但 _qlEggLive 这个运行时属性没了，
+ // 说明监听被重新序列化冲掉了，按它记的编号从 message.mes 里找回对应的 room/messages 原地换新。
+ host.querySelectorAll('.ql-egg-chat').forEach(el=>{
+  if(el._qlEggLive===true)return;
+  const ordinal=Number(el.dataset.qlEggOrdinal);
+  const data=Number.isInteger(ordinal)?blocks[ordinal]:null;
+  if(!data)return;
+  el.replaceWith(qlBuildEggChat(data.room,data.messages,ordinal));
+ });
+ // 再处理原文里还没被替换掉的区块：每轮处理一份，处理完 DOM 变了就重新拼一次逻辑文本接着找，
+ // 直到原文里再也找不到未渲染的 eggroom###…### 为止，一条消息有几份就都能在这一次调用里处理完。
+ let nextOrdinal=0;
+ while(true){
+  const {text,infos}=qlCollectLogicalText(host);
+  const re=/eggroom###([\s\S]*?)###|eggmsg###([\s\S]*?)###|eggend###/g;
+  let m,room=null,messages=[],start=-1,end=-1;
+  while((m=re.exec(text))!==null){
+   if(m[1]!==undefined){
+    if(room)break;
+    const parts=m[1].split('|');
+    room={roomName:(parts[0]||'').trim(),count:(parts[1]||'').trim(),owner:(parts[2]||'').trim(),narrator:(parts[3]||'').trim(),narratorDesc:(parts[4]||'').trim()};
+    start=m.index;end=m.index+m[0].length;
+   }else if(m[2]!==undefined){
+    if(!room)continue;
+    const parts=m[2].split('|');
+    messages.push({side:(parts[0]||'').trim()==='right'?'right':'left',speaker:(parts[1]||'').trim(),text:(parts[2]||'').trim()});
+    end=m.index+m[0].length;
+   }else{
+    if(room)end=m.index+m[0].length;
+    break;
+   }
+  }
+  if(!room)break;
+  const covered=infos.filter(info=>start<info.end&&end>info.start);
+  if(!covered.length)break;
+  const range=document.createRange();
+  const first=covered[0],last=covered[covered.length-1];
+  try{
+   if(first.isText)range.setStart(first.node,start-first.start);else range.setStartBefore(first.node);
+   if(last.isText)range.setEnd(last.node,end-last.start);else range.setEndAfter(last.node);
+  }catch(error){console.warn('[拾帧 Lite] 聊天室标记范围异常，已跳过',error);break;}
+  range.deleteContents();
+  while(nextOrdinal<blocks.length&&host.querySelector('.ql-egg-chat[data-ql-egg-ordinal="'+nextOrdinal+'"]'))nextOrdinal++;
+  range.insertNode(qlBuildEggChat(room,messages,nextOrdinal));
+  nextOrdinal++;
+ }
 }
 function qlEntryElements(host,entry){
  const button=host.querySelector('.ql-inline-image-trigger[data-ql-marker="'+CSS.escape(entry.markerKey)+'"]')||host.querySelector('.ql-inline-image-trigger[data-ql-trigger="'+CSS.escape(entry.taskKey)+'"]');
@@ -2558,7 +2611,7 @@ async function processLatestAssistantMessage(opts={}){
   // 几套标记互不影响，谁先谁后都行，但都会改变消息里的文本节点结构，放在最前面一次性处理完，
   // 避免影响下面的位置计算。
   qlRenderTitleBadges(host);
-  qlRenderEggChat(host);
+  qlRenderEggChat(host,message.mes);
   if(qlEggDebugThisMessage)qlEggDebugLog('消息'+messageIndex+'调用完 qlRenderEggChat，渲染后 DOM 是否已有 .ql-egg-chat：'+(!!host.querySelector('.ql-egg-chat')));
   if(!found.length)continue;
   const logicalBefore=qlCollectLogicalText(host).text;
