@@ -17,6 +17,39 @@
 #chat .ql-chat-image-title-line{display:none}
 #chat .ql-chat-image-title-label{display:inline-block;padding:3px 12px;font-size:12px;font-weight:600;letter-spacing:.02em;line-height:1.5;border-radius:999px;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));background:color-mix(in srgb,var(--ql-accent,var(--SmartThemeQuoteColor)) 18%,var(--ql-card,var(--SmartThemeBlurTintColor)));color:var(--ql-text,var(--SmartThemeBodyColor));overflow-wrap:anywhere}
 
+/* 彩蛋聊天室：v1 先用黑白漫画风格固定呈现（跟黑白漫画分镜卡是同一套视觉语言），不跟相册风格联动。
+   折叠态只显示小按钮；点开后展开面板，标题栏 sticky 吸顶，点聊天区域逐条弹出对话。 */
+#chat .ql-egg-chat{position:relative;display:block;margin:14px 2px;max-width:100%;color:#171717;font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
+#chat .ql-egg-chat-trigger{display:inline-flex;align-items:center;gap:6px;margin:0;padding:6px 14px;background:#fff;border:2px solid #171717;border-radius:999px;box-shadow:3px 3px 0 #171717;color:#171717;font-weight:900;font-size:13px;cursor:pointer;transition:all .1s ease}
+#chat .ql-egg-chat-trigger:active{box-shadow:0 0 0 #171717;transform:translate(3px,3px)}
+#chat .ql-egg-chat.ql-egg-collapsed .ql-egg-chat-panel{display:none}
+#chat .ql-egg-chat:not(.ql-egg-collapsed) .ql-egg-chat-trigger{display:none}
+#chat .ql-egg-chat-panel{box-sizing:border-box;max-height:min(68vh,460px);overflow-y:auto;overflow-x:hidden;border:3px solid #171717;border-radius:6px;background:#f7f6f2;background-image:radial-gradient(#e2e2e2 1px,transparent 1px);background-size:4px 4px;box-shadow:5px 5px 0 #171717}
+#chat .ql-egg-chat-header{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;margin:0;padding:10px 42px 10px 10px;background:#fff;border-bottom:3px solid #171717}
+#chat .ql-egg-room-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 10px;font-size:13px;font-weight:900;letter-spacing:.05em;background:#171717;color:#fff;border-radius:2px;box-shadow:2px 2px 0 #fff,3px 3px 0 #171717;font-family:'Impact','Arial Black','PingFang SC',sans-serif}
+#chat .ql-egg-room-count{flex:none;padding:2px 7px;font-size:11px;font-weight:900;border:2px solid #171717;border-radius:2px;transform:rotate(-2deg);background:#fff;color:#171717}
+#chat .ql-egg-info-toggle,#chat .ql-egg-chat-close{position:absolute;top:8px;width:26px;height:26px;margin:0;padding:0;display:flex;align-items:center;justify-content:center;border:2px solid #171717;border-radius:50%;background:#fff;color:#171717;box-shadow:2px 2px 0 #171717;cursor:pointer}
+#chat .ql-egg-info-toggle{right:40px}
+#chat .ql-egg-chat-close{right:8px;font-size:15px;font-weight:900;line-height:1}
+#chat .ql-egg-info-toggle:active,#chat .ql-egg-chat-close:active{box-shadow:0 0 0 #171717;transform:translate(2px,2px)}
+#chat .ql-egg-info-drawer{padding:12px;background:#fff;border-bottom:3px solid #171717;font-size:12px;line-height:1.6}
+#chat .ql-egg-info-drawer[hidden]{display:none}
+#chat .ql-egg-info-line{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed #ccc}
+#chat .ql-egg-info-line b{flex:none;font-weight:900}
+#chat .ql-egg-info-line span{min-width:0;text-align:right;overflow-wrap:anywhere;font-weight:700}
+#chat .ql-egg-divider{height:5px;background:#171717;margin:10px 0}
+#chat .ql-egg-narrator-card,#chat .ql-egg-msg{display:flex;align-items:flex-start;gap:8px}
+#chat .ql-egg-msg-right{flex-direction:row-reverse}
+#chat .ql-egg-avatar{flex:none;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:2px solid #171717;border-radius:50%;color:#fff;font-weight:900;font-size:13px;box-shadow:2px 2px 0 #171717}
+#chat .ql-egg-narrator-main,#chat .ql-egg-msg-main{min-width:0;max-width:calc(100% - 42px);display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+#chat .ql-egg-msg-right .ql-egg-msg-main{align-items:flex-end}
+#chat .ql-egg-narrator-name,#chat .ql-egg-msg-name{font-size:11px;font-weight:900;padding:2px 8px;border-radius:2px;background:#171717;color:#fff;box-shadow:2px 2px 0 #fff,3px 3px 0 #171717;max-width:100%;overflow-wrap:anywhere}
+#chat .ql-egg-narrator-bubble,#chat .ql-egg-msg-bubble{padding:8px 11px;border:2px solid #171717;border-radius:3px 12px 12px 12px;background:#fff;color:#171717;font-size:13px;line-height:1.6;overflow-wrap:anywhere;max-width:100%}
+#chat .ql-egg-msg-right .ql-egg-msg-bubble{background:#171717;color:#fff;border-radius:12px 3px 12px 12px}
+#chat .ql-egg-chat-body{margin:0;padding:12px;display:flex;flex-direction:column;gap:12px;cursor:pointer}
+#chat .ql-egg-chat-body .ql-egg-msg,#chat .ql-egg-chat-body .ql-egg-msg *{cursor:auto}
+#chat .ql-egg-chat-hint{align-self:center;margin:0;padding:4px 12px;font-size:11px;font-weight:700;color:#888;border:1px dashed #bbb;border-radius:999px}
+
 /* Horizontal candidate swipes while preserving normal vertical page scrolling. */
 #chat .ql-chat-image img,#chat .ql-statusbar-card img{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:default}
 

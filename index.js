@@ -268,6 +268,115 @@ function qlRenderTitleBadges(host){
   if(slot.title)range.insertNode(qlMakeTitleBadge(slot.title));
  }
 }
+// 彩蛋聊天室：世界书用 eggroom###…### / eggmsg###…### / eggend### 这种纯文字口令输出（同样是
+// 吸取 <img-title> 的教训，不用尖括号标签，免得被酒馆当 HTML 吃掉）。一条消息里只会有一份
+// eggroom + 若干条 eggmsg + 一个 eggend，字段之间用 | 分隔：
+//   eggroom###群聊名字|人数|群主|解说员|解说员吐槽###
+//   eggmsg###left|说话人|对话内容###（side 只认 left/right，其余一律按 left 处理）
+//   eggend###
+// 根据名字生成一个固定的头像兜底颜色（同名字每次颜色都一样），还没做头像上传，先用这个占位。
+function qlEggAvatarColor(name){
+ const str=String(name||'');let hash=0;
+ for(let i=0;i<str.length;i++)hash=(hash*31+str.charCodeAt(i))>>>0;
+ return 'hsl('+(hash%360)+',46%,55%)';
+}
+function qlMakeEggAvatar(name){
+ const el=document.createElement('span');
+ el.className='ql-egg-avatar';
+ el.style.background=qlEggAvatarColor(name);
+ el.textContent=String(name||'').trim().charAt(0)||'?';
+ return el;
+}
+function qlMakeEggInfoLine(label,value){
+ const row=document.createElement('div');row.className='ql-egg-info-line';
+ const b=document.createElement('b');b.textContent=label;
+ const span=document.createElement('span');span.textContent=value||'—';
+ row.append(b,span);
+ return row;
+}
+// 整个聊天室只建一次 DOM：默认折叠只显示"进入聊天室"小按钮，点开后展开成面板，跟现有图片卡片
+// 的折叠按钮是同一套思路（classList.toggle 一个 collapsed 类，CSS 负责切换显示哪一块）。
+function qlBuildEggChat(room,messages){
+ const wrap=document.createElement('div');wrap.className='ql-egg-chat ql-egg-collapsed';
+ const trigger=document.createElement('button');trigger.type='button';trigger.className='ql-egg-chat-trigger';trigger.textContent='💬 进入聊天室';
+ const panel=document.createElement('div');panel.className='ql-egg-chat-panel';
+ const header=document.createElement('div');header.className='ql-egg-chat-header';
+ const nameTag=document.createElement('span');nameTag.className='ql-egg-room-name';nameTag.textContent=room.roomName||'群聊';
+ const countTag=document.createElement('span');countTag.className='ql-egg-room-count';countTag.textContent=room.count?room.count+'人':'';
+ const infoBtn=document.createElement('button');infoBtn.type='button';infoBtn.className='ql-egg-info-toggle';infoBtn.setAttribute('aria-label','聊天室情报');
+ infoBtn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" width="13" height="13"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="11" x2="12" y2="16.3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="7.4" r="1.15" fill="currentColor"/></svg>';
+ const closeBtn=document.createElement('button');closeBtn.type='button';closeBtn.className='ql-egg-chat-close';closeBtn.setAttribute('aria-label','收起聊天室');closeBtn.textContent='×';
+ header.append(nameTag,countTag,infoBtn,closeBtn);
+ const drawer=document.createElement('div');drawer.className='ql-egg-info-drawer';drawer.hidden=true;
+ drawer.append(qlMakeEggInfoLine('群聊名称',room.roomName),qlMakeEggInfoLine('成员人数',room.count?room.count+' 人':''),qlMakeEggInfoLine('群主',room.owner));
+ if(room.narrator){
+  const divider=document.createElement('div');divider.className='ql-egg-divider';drawer.append(divider);
+  const card=document.createElement('div');card.className='ql-egg-narrator-card';
+  const main=document.createElement('div');main.className='ql-egg-narrator-main';
+  const nm=document.createElement('div');nm.className='ql-egg-narrator-name';nm.textContent=room.narrator;
+  const bubble=document.createElement('div');bubble.className='ql-egg-narrator-bubble';bubble.textContent=room.narratorDesc||'';
+  main.append(nm,bubble);card.append(qlMakeEggAvatar(room.narrator),main);drawer.append(card);
+ }
+ const body=document.createElement('div');body.className='ql-egg-chat-body';
+ const hint=document.createElement('div');hint.className='ql-egg-chat-hint';hint.textContent=messages.length?'点击查看对话 ▸':'（这次没有留下对话内容）';
+ body.append(hint);
+ panel.append(header,drawer,body);
+ wrap.append(trigger,panel);
+ let revealed=0;
+ const revealNext=()=>{
+  if(revealed>=messages.length)return;
+  const msg=messages[revealed++];
+  const row=document.createElement('div');row.className='ql-egg-msg ql-egg-msg-'+(msg.side==='right'?'right':'left');
+  const main=document.createElement('div');main.className='ql-egg-msg-main';
+  const nm=document.createElement('div');nm.className='ql-egg-msg-name';nm.textContent=msg.speaker||'';
+  const bubble=document.createElement('div');bubble.className='ql-egg-msg-bubble';bubble.textContent=msg.text||'';
+  main.append(nm,bubble);row.append(qlMakeEggAvatar(msg.speaker),main);
+  body.insertBefore(row,hint);
+  if(revealed>=messages.length)hint.textContent='— 到底了 —';
+  body.scrollTop=body.scrollHeight;
+ };
+ body.addEventListener('click',event=>{if(event.target.closest('.ql-egg-msg'))return;revealNext();});
+ trigger.addEventListener('click',()=>wrap.classList.remove('ql-egg-collapsed'));
+ closeBtn.addEventListener('click',()=>wrap.classList.add('ql-egg-collapsed'));
+ infoBtn.addEventListener('click',()=>{drawer.hidden=!drawer.hidden;});
+ applyChatTheme(wrap);
+ return wrap;
+}
+// 把消息里 eggroom###…### 到 eggend### 之间的一整段原地换成上面建好的聊天室卡片；跟 image###…###
+// 一样用 Range 原位替换，换完原文里就不会留下任何标记痕迹。一条消息最多处理一份（多出的忽略）。
+function qlRenderEggChat(host){
+ if(!host||isHostBeingEdited(host))return;
+ const {text,infos}=qlCollectLogicalText(host);
+ const re=/eggroom###([\s\S]*?)###|eggmsg###([\s\S]*?)###|eggend###/g;
+ let m,room=null,messages=[],start=-1,end=-1;
+ while((m=re.exec(text))!==null){
+  if(m[1]!==undefined){
+   if(room)break;
+   const parts=m[1].split('|');
+   room={roomName:(parts[0]||'').trim(),count:(parts[1]||'').trim(),owner:(parts[2]||'').trim(),narrator:(parts[3]||'').trim(),narratorDesc:(parts[4]||'').trim()};
+   start=m.index;end=m.index+m[0].length;
+  }else if(m[2]!==undefined){
+   if(!room)continue;
+   const parts=m[2].split('|');
+   messages.push({side:(parts[0]||'').trim()==='right'?'right':'left',speaker:(parts[1]||'').trim(),text:(parts[2]||'').trim()});
+   end=m.index+m[0].length;
+  }else{
+   if(room)end=m.index+m[0].length;
+   break;
+  }
+ }
+ if(!room)return;
+ const covered=infos.filter(info=>start<info.end&&end>info.start);
+ if(!covered.length)return;
+ const range=document.createRange();
+ const first=covered[0],last=covered[covered.length-1];
+ try{
+  if(first.isText)range.setStart(first.node,start-first.start);else range.setStartBefore(first.node);
+  if(last.isText)range.setEnd(last.node,end-last.start);else range.setEndAfter(last.node);
+ }catch(error){console.warn('[拾帧 Lite] 聊天室标记范围异常，已跳过',error);return;}
+ range.deleteContents();
+ range.insertNode(qlBuildEggChat(room,messages));
+}
 function qlEntryElements(host,entry){
  const button=host.querySelector('.ql-inline-image-trigger[data-ql-marker="'+CSS.escape(entry.markerKey)+'"]')||host.querySelector('.ql-inline-image-trigger[data-ql-trigger="'+CSS.escape(entry.taskKey)+'"]');
  const card=host.querySelector('.ql-chat-image[data-ql-task="'+CSS.escape(entry.taskKey)+'"]');
@@ -2394,9 +2503,11 @@ async function processLatestAssistantMessage(opts={}){
   if(!host)continue;
   // 正在编辑的消息跳过（见 isHostBeingEdited），等编辑结束（保存/取消会触发 DOM 变动）再由下一轮扫描补回按钮。
   if(isHostBeingEdited(host))continue;
-  // 先把 <img-title>…</img-title> 换成标签，再处理 image###…###——两套标记互不影响，谁先谁后都行，
-  // 但标题标签换完会改变消息里的文本节点结构，放在最前面一次性处理完，避免影响下面的位置计算。
+  // 先把 title###…### 换成标题标签、eggroom###…###~eggend### 换成聊天室卡片，再处理 image###…###——
+  // 几套标记互不影响，谁先谁后都行，但都会改变消息里的文本节点结构，放在最前面一次性处理完，
+  // 避免影响下面的位置计算。
   qlRenderTitleBadges(host);
+  qlRenderEggChat(host);
   const logicalBefore=qlCollectLogicalText(host).text;
   const domMarkerCount=(logicalBefore.match(new RegExp(QL_MARKER_SRC,'g'))||[]).length;
   const slotsBefore=qlFindMarkerSlots(host).length;
