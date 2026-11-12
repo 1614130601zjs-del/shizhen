@@ -52,7 +52,9 @@
 #chat .ql-egg-narrator-name,#chat .ql-egg-msg-name{font-size:11px;font-weight:900;padding:2px 8px;border-radius:2px;background:#171717;color:#fff;box-shadow:2px 2px 0 #fff,3px 3px 0 #171717;max-width:100%;overflow-wrap:anywhere}
 #chat .ql-egg-narrator-bubble,#chat .ql-egg-msg-bubble{padding:8px 11px;border:2px solid #171717;border-radius:3px 12px 12px 12px;background:#fff;color:#171717;font-size:13px;line-height:1.6;overflow-wrap:anywhere;max-width:100%}
 #chat .ql-egg-msg-right .ql-egg-msg-bubble{background:#171717;color:#fff;border-radius:12px 3px 12px 12px}
-#chat .ql-egg-chat-body{margin:0;padding:12px;display:flex;flex-direction:column;gap:12px;cursor:pointer}
+/* flex:1 很关键：面板是固定高度，消息没塞满的时候，下面一大截空白其实是面板自己的背景，
+   不属于 body 这个元素，点上去不会触发监听；让 body 撑满面板剩余高度，空白处才真的点得到。 */
+#chat .ql-egg-chat-body{flex:1 1 auto;min-height:0;margin:0;padding:12px;display:flex;flex-direction:column;gap:12px;cursor:pointer}
 #chat .ql-egg-chat-body .ql-egg-msg,#chat .ql-egg-chat-body .ql-egg-msg *{cursor:auto}
 #chat .ql-egg-chat-hint{align-self:center;margin:0;padding:4px 12px;font-size:11px;font-weight:700;color:#888;border:1px dashed #bbb;border-radius:999px}
 
