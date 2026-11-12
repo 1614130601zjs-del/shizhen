@@ -381,9 +381,16 @@ function qlBuildEggChat(room,messages,ordinal){
   main.append(nm,bubble);row.append(qlMakeEggAvatar(msg.speaker),main);
   body.insertBefore(row,hint);
   if(revealed>=messages.length)hint.textContent='— 到底了 —';
-  body.scrollTop=body.scrollHeight;
+  // 面板内容填满固定高度之后，“空白处”会被消息气泡挤得只剩很窄的缝，手机上很难精准点中，
+  // 每次都要先往下滑找到提示文字才能点——改成整个消息区点哪里都能往下翻一条（气泡上也算），
+  // 不用再找缝；每次翻完用 requestAnimationFrame 等布局稳定后再平滑滚到底部，
+  // 让新消息“推”上来，省得翻完还要再手动往下滑一次才找得到下一次能点的地方。
+  requestAnimationFrame(()=>{
+   if(typeof body.scrollTo==='function')body.scrollTo({top:body.scrollHeight,behavior:'smooth'});
+   else body.scrollTop=body.scrollHeight;
+  });
  };
- body.addEventListener('click',event=>{if(event.target.closest('.ql-egg-msg'))return;revealNext();});
+ body.addEventListener('click',()=>revealNext());
  trigger.addEventListener('click',()=>wrap.classList.remove('ql-egg-collapsed'));
  closeBtn.addEventListener('click',()=>wrap.classList.add('ql-egg-collapsed'));
  infoBtn.addEventListener('click',()=>{drawer.hidden=!drawer.hidden;});
