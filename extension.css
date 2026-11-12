@@ -19,12 +19,18 @@
 
 /* 彩蛋聊天室：v1 先用黑白漫画风格固定呈现（跟黑白漫画分镜卡是同一套视觉语言），不跟相册风格联动。
    折叠态只显示小按钮；点开后展开面板，标题栏 sticky 吸顶，点聊天区域逐条弹出对话。 */
-#chat .ql-egg-chat{position:relative;display:block;margin:14px 2px;max-width:100%;color:#171717;font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
+#chat .ql-egg-chat{position:relative;display:block;margin:2px 2px 14px;max-width:100%;color:#171717;font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
+/* 折叠态：按钮居中，上面挂一条短短的虚线"引线"，看着像是从上面的相册照片垂下来的，
+   不是凭空飘在那里的一个孤立按钮。 */
+#chat .ql-egg-chat.ql-egg-collapsed{display:flex;flex-direction:column;align-items:center}
+#chat .ql-egg-chat.ql-egg-collapsed::before{content:"";display:block;width:2px;height:10px;margin-bottom:3px;background-image:repeating-linear-gradient(to bottom,#171717 0 3px,transparent 3px 6px)}
 #chat .ql-egg-chat-trigger{display:inline-flex;align-items:center;gap:6px;margin:0;padding:6px 14px;background:#fff;border:2px solid #171717;border-radius:999px;box-shadow:3px 3px 0 #171717;color:#171717;font-weight:900;font-size:13px;cursor:pointer;transition:all .1s ease}
 #chat .ql-egg-chat-trigger:active{box-shadow:0 0 0 #171717;transform:translate(3px,3px)}
 #chat .ql-egg-chat.ql-egg-collapsed .ql-egg-chat-panel{display:none}
 #chat .ql-egg-chat:not(.ql-egg-collapsed) .ql-egg-chat-trigger{display:none}
-#chat .ql-egg-chat-panel{box-sizing:border-box;max-height:min(68vh,460px);overflow-y:auto;overflow-x:hidden;border:3px solid #171717;border-radius:6px;background:#f7f6f2;background-image:radial-gradient(#e2e2e2 1px,transparent 1px);background-size:4px 4px;box-shadow:5px 5px 0 #171717}
+/* 用固定 height（不是 max-height）：聊天室一展开大小就定死了，逐条弹消息的时候只是内部
+   滚动区域在变化，外框不会跟着每弹一条就长高一截。 */
+#chat .ql-egg-chat-panel{box-sizing:border-box;height:min(68vh,460px);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;border:3px solid #171717;border-radius:6px;background:#f7f6f2;background-image:radial-gradient(#e2e2e2 1px,transparent 1px);background-size:4px 4px;box-shadow:5px 5px 0 #171717}
 #chat .ql-egg-chat-header{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;margin:0;padding:10px 42px 10px 10px;background:#fff;border-bottom:3px solid #171717}
 #chat .ql-egg-room-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 10px;font-size:13px;font-weight:900;letter-spacing:.05em;background:#171717;color:#fff;border-radius:2px;box-shadow:2px 2px 0 #fff,3px 3px 0 #171717;font-family:'Impact','Arial Black','PingFang SC',sans-serif}
 #chat .ql-egg-room-count{flex:none;padding:2px 7px;font-size:11px;font-weight:900;border:2px solid #171717;border-radius:2px;transform:rotate(-2deg);background:#fff;color:#171717}
