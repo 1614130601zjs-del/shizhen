@@ -10,9 +10,12 @@
 #chat .ql-chat-image-count{font-size:12px;opacity:.75;min-width:42px;text-align:center}
 #chat .ql-chat-image-status{font-size:12px;opacity:.8;overflow-wrap:anywhere}
 
-/* <img-title>…</img-title> 世界书小标题：自带主题配色的小标签，跟随当前相册风格的主题色走，
-   不需要用户单独再写一条酒馆正则。后续可以按不同相册风格再单独写更贴合的样式覆盖这里。 */
-#chat .ql-chat-image-title{display:inline-flex;max-width:100%;align-items:center;gap:4px;margin:8px 2px 2px;padding:3px 12px;font-size:12px;font-weight:600;letter-spacing:.02em;line-height:1.5;border-radius:999px;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));background:color-mix(in srgb,var(--ql-accent,var(--SmartThemeQuoteColor)) 18%,var(--ql-card,var(--SmartThemeBlurTintColor)));color:var(--ql-text,var(--SmartThemeBodyColor));overflow-wrap:anywhere}
+/* title###标题文字### 世界书小标题：结构固定是“左装饰线 + 标签正文 + 右装饰线”三段 span，
+   默认（没有专门样式的相册风格）只显示中间的标签正文，跟随当前主题色走，不需要用户单独写酒馆正则。
+   换相册风格时 applyChatAlbumStyleToAll 会给它重新套 ql-album-xxx class，样式跟着一起切换。 */
+#chat .ql-chat-image-title{display:inline-flex;max-width:100%;align-items:center;margin:8px 2px 2px;overflow-wrap:anywhere}
+#chat .ql-chat-image-title-line{display:none}
+#chat .ql-chat-image-title-label{display:inline-block;padding:3px 12px;font-size:12px;font-weight:600;letter-spacing:.02em;line-height:1.5;border-radius:999px;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));background:color-mix(in srgb,var(--ql-accent,var(--SmartThemeQuoteColor)) 18%,var(--ql-card,var(--SmartThemeBlurTintColor)));color:var(--ql-text,var(--SmartThemeBodyColor));overflow-wrap:anywhere}
 
 /* Horizontal candidate swipes while preserving normal vertical page scrolling. */
 #chat .ql-chat-image img,#chat .ql-statusbar-card img{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:default}
@@ -5571,6 +5574,24 @@ html[data-ql-style="receipt"]{--qp-sig:var(--qs-user-accent,#B5483C);--qp-on-sig
 #chat .ql-chat-image.ql-album-receipt .ql-chat-image-controls{position:relative;z-index:2}
 #chat .ql-chat-image.ql-album-receipt .ql-chat-image-controls button{color:#2B2B2B!important;background:#F7F5EE!important;border:2px solid #2B2B2B!important;border-radius:0!important;box-shadow:none!important;font-family:"Courier New","Noto Sans Mono CJK SC","SF Mono",ui-monospace,Menlo,Consolas,monospace!important}
 #chat .mes_text .ql-inline-image-trigger.ql-album-receipt{color:#2B2B2B!important;background:#F7F5EE!important;border:2px solid #2B2B2B!important;border-radius:0!important;box-shadow:none!important;font-family:"Courier New","Noto Sans Mono CJK SC","SF Mono",ui-monospace,Menlo,Consolas,monospace!important}
+
+/* 黑白漫画分镜卡：用户自己写的自定义相册样式，征得同意后内置成正式风格，不用再手动导入维护。 */
+#chat .ql-chat-image.ql-album-comic{box-sizing:border-box!important;overflow:visible!important;filter:none!important;position:relative!important;transform:none;margin:24px auto!important;width:94%!important;padding:36px 14px 36px!important;border:3px solid #000!important;border-radius:15px 5px 18px 8px/8px 18px 5px 15px!important;background-color:#fff!important;background-image:radial-gradient(#e0e0e0 1px,transparent 1px)!important;background-size:4px 4px!important;color:#000!important;box-shadow:6px 6px 0 #000!important;font-family:'Impact','Arial Black',system-ui,"PingFang SC",sans-serif}
+#chat .ql-chat-image.ql-album-comic::before,#chat .ql-chat-image.ql-album-comic::after{content:none!important;display:none!important;border:0!important;background:none!important;box-shadow:none!important;transform:none!important;margin:0!important;padding:0!important;inset:auto!important;width:auto!important;height:auto!important;animation:none!important}
+#chat .ql-chat-image.ql-album-comic::before{content:"SCENE ▼"!important;display:block!important;position:absolute!important;left:-6px!important;top:-12px!important;background:#000!important;color:#fff!important;padding:3px 12px!important;font-size:13px!important;font-weight:900!important;border-radius:2px!important;box-shadow:3px 3px 0 #fff,4px 4px 0 #000!important;transform:rotate(-5deg)!important;letter-spacing:.1em!important}
+#chat .ql-chat-image.ql-album-comic::after{content:"✂ ---------- CONTINUE"!important;display:block!important;position:absolute!important;left:12px!important;right:12px!important;bottom:10px!important;text-align:right!important;font-size:11px!important;font-weight:900!important;color:#888!important;letter-spacing:.15em!important;border-bottom:2px dashed #ccc!important;padding-bottom:2px!important}
+#chat .ql-chat-image.ql-album-comic>img{display:block;width:100%;height:auto;border:2px solid #000!important;border-radius:0!important;box-shadow:3px 3px 0 rgba(0,0,0,.1)!important;filter:contrast(1.05)}
+#chat .ql-chat-image.ql-album-comic .ql-chat-image-controls{position:relative;z-index:2}
+#chat .ql-chat-image.ql-album-comic .ql-chat-image-controls button{color:#000!important;background:#fff!important;border:2px solid #000!important;border-radius:255px 15px 225px 15px/15px 225px 15px 255px!important;box-shadow:2px 2px 0 #000!important;font-weight:900!important;min-width:28px;min-height:28px;transition:all .1s ease}
+#chat .ql-chat-image.ql-album-comic .ql-chat-image-controls button:active{box-shadow:0 0 0 #000!important;transform:translate(2px,2px)!important}
+#chat .mes_text .ql-inline-image-trigger.ql-album-comic{color:#000!important;background:#fff!important;border:2px solid #000!important;border-radius:255px 15px 225px 15px/15px 225px 15px 255px!important;box-shadow:3px 3px 0 #000!important;font-weight:900!important;padding:4px 10px!important;transform:rotate(-2deg)!important;transition:all .1s ease}
+#chat .mes_text .ql-inline-image-trigger.ql-album-comic:active{box-shadow:0 0 0 #000!important;transform:translate(3px,3px) rotate(-2deg)!important}
+/* 配套的黑白漫画小标题：点线装饰 + 黑框贴纸标签，照用户自己那条酒馆正则的设计原样内置。 */
+#chat .ql-chat-image-title.ql-album-comic{width:100%!important;justify-content:center!important;margin:10px 2px -6px!important;z-index:10}
+#chat .ql-chat-image-title.ql-album-comic .ql-chat-image-title-line{display:block!important;flex:1 1 10px;height:5px;background-image:radial-gradient(circle,#000 2px,transparent 2.5px)!important;background-size:9px 5px!important;background-repeat:repeat-x!important;opacity:.8}
+#chat .ql-chat-image-title.ql-album-comic .ql-chat-image-title-line-l{margin-right:12px}
+#chat .ql-chat-image-title.ql-album-comic .ql-chat-image-title-line-r{margin-left:12px}
+#chat .ql-chat-image-title.ql-album-comic .ql-chat-image-title-label{flex-shrink:0;padding:4px 16px!important;background:#fff!important;border:3px solid #000!important;border-radius:0!important;box-shadow:4px 4px 0 #000!important;color:#000!important;font-family:'Impact','Arial Black','PingFang SC',sans-serif!important;font-size:clamp(9px,3.5vw,16px)!important;font-weight:900!important;letter-spacing:1px!important;white-space:nowrap!important}
 
 /* ---- 收藏状态统一加强：所有内置风格里，已收藏的星标都必须和未收藏明显不同（金色实心 + 按下去的凹陷感） ---- */
 #shizhen-panel#shizhen-panel[data-ql-style][data-ql-style][data-ql-style][data-ql-style][data-ql-style] #ql-result-favorite.is-favorite.is-favorite.is-favorite{color:#E0A92B!important;background:color-mix(in srgb,#E0A92B 30%,var(--ql-card,#fff))!important;border-color:#B8860B!important;box-shadow:inset 1px 1px 2px rgba(0,0,0,.35),inset -1px -1px 0 rgba(255,255,255,.55)!important}
