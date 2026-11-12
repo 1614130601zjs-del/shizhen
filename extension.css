@@ -10,6 +10,10 @@
 #chat .ql-chat-image-count{font-size:12px;opacity:.75;min-width:42px;text-align:center}
 #chat .ql-chat-image-status{font-size:12px;opacity:.8;overflow-wrap:anywhere}
 
+/* <img-title>…</img-title> 世界书小标题：自带主题配色的小标签，跟随当前相册风格的主题色走，
+   不需要用户单独再写一条酒馆正则。后续可以按不同相册风格再单独写更贴合的样式覆盖这里。 */
+#chat .ql-chat-image-title{display:inline-flex;max-width:100%;align-items:center;gap:4px;margin:8px 2px 2px;padding:3px 12px;font-size:12px;font-weight:600;letter-spacing:.02em;line-height:1.5;border-radius:999px;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));background:color-mix(in srgb,var(--ql-accent,var(--SmartThemeQuoteColor)) 18%,var(--ql-card,var(--SmartThemeBlurTintColor)));color:var(--ql-text,var(--SmartThemeBodyColor));overflow-wrap:anywhere}
+
 /* Horizontal candidate swipes while preserving normal vertical page scrolling. */
 #chat .ql-chat-image img,#chat .ql-statusbar-card img{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:default}
 

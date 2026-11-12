@@ -178,6 +178,10 @@ function qlSetGenerationActive(v){qlGenerationActive=v;clearTimeout(qlGeneration
 // 再用 Range 跨节点把标记原位替换成按钮；按钮位置永远就是标记所在的位置。
 // （思路参考智绘姬的 findAndReplaceInElement，代码为自行实现。）
 const QL_MARKER_SRC='image###([\\s\\S]*?)###';
+// 世界书现在会额外输出 <img-title>标题文字</img-title>（配合 {{setglobalvar::小标题::...}} 使用）。
+// 以前要靠用户自己写一条酒馆正则把它渲染成好看的样子；这里直接复用上面 image###…### 同一套
+// “跨节点原位替换”逻辑，把这段标签原地换成一个自带主题配色的小标签，不用再维护额外的正则。
+const QL_TITLE_MARKER_SRC='<img-title>([\\s\\S]*?)<\\/img-title>';
 const QL_SKIP_SELECTOR='script,style,textarea,pre,code,button,.ql-chat-image,.ql-inline-image-trigger';
 const QL_BLOCK_SELECTOR='p,div,li,blockquote,h1,h2,h3,h4,h5,h6,pre,tr,td,th';
 const qlNormalizePrompt=value=>String(value||'').replace(/\s+/g,' ').trim();
@@ -223,6 +227,38 @@ function qlFindMarkerSlots(host){
   return pos&Node.DOCUMENT_POSITION_FOLLOWING?-1:1;
  });
  return slots;
+}
+// 把消息里的 <img-title>…</img-title> 原地换成一个带主题配色的小标签；跟 image###…### 一样用
+// Range 原位替换，换完原文里就没有这段标记了，不会被重复扫描/重复插入。
+function qlRenderTitleBadges(host){
+ if(!host||isHostBeingEdited(host))return;
+ const {text,infos}=qlCollectLogicalText(host);
+ const re=new RegExp(QL_TITLE_MARKER_SRC,'g');
+ const slots=[];let m;
+ while((m=re.exec(text))!==null){
+  const s=m.index,e=m.index+m[0].length;
+  const covered=infos.filter(info=>s<info.end&&e>info.start);
+  if(!covered.length)continue;
+  slots.push({start:s,end:e,covered,title:String(m[1]||'').replace(/\s+/g,' ').trim()});
+ }
+ if(!slots.length)return;
+ for(let i=slots.length-1;i>=0;i--){
+  const slot=slots[i];
+  const range=document.createRange();
+  const first=slot.covered[0],last=slot.covered[slot.covered.length-1];
+  try{
+   if(first.isText)range.setStart(first.node,slot.start-first.start);else range.setStartBefore(first.node);
+   if(last.isText)range.setEnd(last.node,slot.end-last.start);else range.setEndAfter(last.node);
+  }catch(error){console.warn('[拾帧 Lite] 标题标记范围异常，已跳过',error);continue;}
+  range.deleteContents();
+  if(slot.title){
+   const badge=document.createElement('span');
+   badge.className='ql-chat-image-title ql-album-'+qlResolveAlbumStyle(cfg().chatAlbumStyle||'follow');
+   badge.textContent=slot.title;
+   applyChatTheme(badge);
+   range.insertNode(badge);
+  }
+ }
 }
 function qlEntryElements(host,entry){
  const button=host.querySelector('.ql-inline-image-trigger[data-ql-marker="'+CSS.escape(entry.markerKey)+'"]')||host.querySelector('.ql-inline-image-trigger[data-ql-trigger="'+CSS.escape(entry.taskKey)+'"]');
@@ -2346,6 +2382,9 @@ async function processLatestAssistantMessage(opts={}){
   if(!host)continue;
   // 正在编辑的消息跳过（见 isHostBeingEdited），等编辑结束（保存/取消会触发 DOM 变动）再由下一轮扫描补回按钮。
   if(isHostBeingEdited(host))continue;
+  // 先把 <img-title>…</img-title> 换成标签，再处理 image###…###——两套标记互不影响，谁先谁后都行，
+  // 但标题标签换完会改变消息里的文本节点结构，放在最前面一次性处理完，避免影响下面的位置计算。
+  qlRenderTitleBadges(host);
   const logicalBefore=qlCollectLogicalText(host).text;
   const domMarkerCount=(logicalBefore.match(new RegExp(QL_MARKER_SRC,'g'))||[]).length;
   const slotsBefore=qlFindMarkerSlots(host).length;
