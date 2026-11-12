@@ -5408,7 +5408,7 @@ jQuery(()=>{
   // 在聊天较长、设备较慢时可能还没等到消息渲染完就已经用完，导致刷新后没有任何一次扫描真正生效，
   // 只能等到用户点一下编辑铅笔（强制触发 DOM 变动）才会被 MutationObserver 捕捉到。这里把兜底窗口拉长，
   // 并加一次较晚的扫描，减少对“手动点一次铅笔”的依赖。
-  inlineScanTimers=[80,250,600,1200,2500,4500].map(delay=>setTimeout(()=>processLatestAssistantMessage().catch(e=>console.warn('[拾帧 Lite] 正文标记扫描失败',e)),delay));
+  inlineScanTimers=[80,250,600,1200,2500,4500,7000,9000].map(delay=>setTimeout(()=>processLatestAssistantMessage().catch(e=>console.warn('[拾帧 Lite] 正文标记扫描失败',e)),delay));
  };
  scheduleInlineScan();
  const chatObserver=new MutationObserver(records=>{
@@ -5444,6 +5444,11 @@ jQuery(()=>{
   setTimeout(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
    processLatestAssistantMessage().catch(e=>console.warn('[拾帧 Lite] 生成结束后正文扫描失败',e));
    processStatusbarFrames().catch(e=>console.warn('[拾帧 Lite] 生成结束后状态栏扫描失败',e));
+   // 彩蛋聊天室那段 eggroom…eggend 文字一般是整条消息最后输出的，又经常带一长串 chat_msg，
+   // 酒馆把这么长的尾巴渲染进 .mes_text 可能比这里的单次扫描慢——只扫一次很容易刚好扫空。
+   // 补一轮 scheduleInlineScan() 的多次兜底重扫，不要只靠“恰好有别的 DOM 变动”去间接带一下，
+   // 减少“必须手动点一下编辑铅笔才会出现”的情况。
+   scheduleInlineScan();
   })),350);
  });
  for(const name of ['GENERATION_STOPPED','CHAT_CHANGED']){const en=event_types[name];if(en)eventSource.on(en,()=>qlSetGenerationActive(false));}
