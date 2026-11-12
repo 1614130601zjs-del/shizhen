@@ -2498,7 +2498,12 @@ async function processLatestAssistantMessage(opts={}){
   // 点铅笔看到的也是旧文本，点了还会把图记到这个尚未生成的新页上。待生成状态下整条消息跳过。
   if(Array.isArray(message.swipes)&&message.swipes.length>0&&Number(message.swipe_id)>=message.swipes.length)continue;
   const found=markers(message.mes);
-  if(!found.length)continue;
+  // 以前这里直接 if(!found.length)continue：title###…### 和 eggroom###…### 跟 image###…### 是互相独立的标记，
+  // 一条消息完全可能只带彩蛋聊天室/标题、没有配图标记——那种消息会在这一步就被跳过，下面的
+  // qlRenderTitleBadges/qlRenderEggChat 永远轮不到执行，不管后面的兜底重扫重试多少次都没用。
+  // 改成：只要带了任意一种标记就往下走到能渲染 title/egg 的位置，真正只影响配图逻辑的提前退出挪到渲染之后。
+  const hasTitleOrEgg=/title###|eggroom###/.test(message.mes);
+  if(!found.length&&!hasTitleOrEgg)continue;
   const host=document.querySelector('.mes[mesid="'+messageIndex+'"] .mes_text');
   if(!host)continue;
   // 正在编辑的消息跳过（见 isHostBeingEdited），等编辑结束（保存/取消会触发 DOM 变动）再由下一轮扫描补回按钮。
@@ -2508,6 +2513,7 @@ async function processLatestAssistantMessage(opts={}){
   // 避免影响下面的位置计算。
   qlRenderTitleBadges(host);
   qlRenderEggChat(host);
+  if(!found.length)continue;
   const logicalBefore=qlCollectLogicalText(host).text;
   const domMarkerCount=(logicalBefore.match(new RegExp(QL_MARKER_SRC,'g'))||[]).length;
   const slotsBefore=qlFindMarkerSlots(host).length;
@@ -5401,6 +5407,22 @@ jQuery(()=>{
  observeStatusbarFrames();
  // 扩展启用时先扫描现有聊天；再观察酒馆正文重绘，避免事件时序导致 marker 一直以原文显示。
  let inlineScanTimers=[];
+ // 判断“最新一条消息”是不是还有标记原文原封不动地留在当前 DOM 里：有就说明还没渲染成功，兜底重扫
+ // 应该继续等；message.mes 里压根没有任何标记，或者 DOM 里已经找不到标记原文，就说明没必要再扫了，
+ // 用这个来让下面的滚动重试自己知道什么时候该停，而不是靠瞎猜一个固定时长。
+ const qlLatestMessageStillPending=()=>{
+  try{
+   const context=getContext();const chat=context?.chat;
+   if(!Array.isArray(chat)||!chat.length)return false;
+   const messageIndex=chat.length-1;const message=chat[messageIndex];
+   if(!message||message.is_user||message.is_system||typeof message.mes!=='string')return false;
+   if(!/image###|title###|eggroom###/.test(message.mes))return false;
+   const host=document.querySelector('.mes[mesid="'+messageIndex+'"] .mes_text');
+   if(!host)return true;
+   if(isHostBeingEdited(host))return true;
+   return /image###|title###|eggroom###/.test(qlCollectLogicalText(host).text);
+  }catch(error){return false;}
+ };
  const scheduleInlineScan=()=>{
   if(qlGenerationActive)return;
   inlineScanTimers.forEach(timer=>clearTimeout(timer));
@@ -5409,6 +5431,18 @@ jQuery(()=>{
   // 只能等到用户点一下编辑铅笔（强制触发 DOM 变动）才会被 MutationObserver 捕捉到。这里把兜底窗口拉长，
   // 并加一次较晚的扫描，减少对“手动点一次铅笔”的依赖。
   inlineScanTimers=[80,250,600,1200,2500,4500,7000,9000].map(delay=>setTimeout(()=>processLatestAssistantMessage().catch(e=>console.warn('[拾帧 Lite] 正文标记扫描失败',e)),delay));
+  // 9 秒的固定兜底窗口对彩蛋聊天室这种“一长串 chat_msg + eggroom 整段”的超长消息可能还是不够：
+  // 酒馆把这么长的正文重新格式化进 .mes_text 本身花的时间就可能超过 9 秒，9 秒内怎么扫都扫空，
+  // 只有等用户之后随便点一下编辑铅笔（这时候早就过了不止 9 秒）才补扫到。9 秒后不直接放弃，
+  // 改成每 3 秒检查一下“最新消息是不是还没渲染好”，还没好就继续扫，扫好了自己停，最长等到 60 秒。
+  const rollOnce=()=>{
+   if(qlGenerationActive)return;
+   if(!qlLatestMessageStillPending())return;
+   processLatestAssistantMessage().catch(e=>console.warn('[拾帧 Lite] 正文标记扫描失败',e));
+   if(Date.now()<rollDeadline)inlineScanTimers.push(setTimeout(rollOnce,3000));
+  };
+  const rollDeadline=Date.now()+60000;
+  inlineScanTimers.push(setTimeout(rollOnce,12000));
  };
  scheduleInlineScan();
  const chatObserver=new MutationObserver(records=>{
