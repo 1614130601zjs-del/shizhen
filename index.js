@@ -339,13 +339,12 @@ function qlBuildEggChat(room,messages,ordinal){
   main.append(nm,bubble);row.append(qlMakeEggAvatar(msg.speaker),main);
   body.insertBefore(row,hint);
   if(revealed>=messages.length)hint.textContent='— 到底了 —';
-  // 面板内容填满固定高度之后，“空白处”会被消息气泡挤得只剩很窄的缝，手机上很难精准点中，
-  // 每次都要先往下滑找到提示文字才能点——改成整个消息区点哪里都能往下翻一条（气泡上也算），
-  // 不用再找缝。这里原来用平滑滚动(behavior:'smooth')，但连续点快了的话，后一次点击的平滑滚动
-  // 会把前一次还没播完的滚动动画打断重新开始，视觉上滚动一直追不上实际已经翻出来的消息数，
-  // 看起来就像“没点出来”，其实已经偷偷翻出去好几条——改成直接跳到底（不做动画），每点一次都
-  // 立刻、确定地滚到最新消息，不会因为连续点击而互相打断。
-  requestAnimationFrame(()=>{body.scrollTop=body.scrollHeight;});
+  // 之前一直设的是 body.scrollTop——但 body(.ql-egg-chat-body) 自己没有 overflow，不会单独
+  // 产生滚动条，内容溢出的部分是靠外层 panel(.ql-egg-chat-panel，固定高度+overflow-y:auto)
+  // 在滚。设 body.scrollTop 等于没设，这才是手动拖动屏幕才会往下、点击完全不会自动滚的真正原因
+  // （之前"连续点击打断动画"只是误判，根本没滚动，当然不存在动画被打断）。改成滚真正的滚动容器
+  // panel，每点一次都立刻跳到底部露出最新消息。
+  requestAnimationFrame(()=>{panel.scrollTop=panel.scrollHeight;});
  };
  body.addEventListener('click',()=>revealNext());
  trigger.addEventListener('click',()=>wrap.classList.remove('ql-egg-collapsed'));
