@@ -169,6 +169,7 @@ function mesElementOf(target){
 }
 let qlGenerationActive=false;
 let qlGenerationTimer=null;
+let qlTheaterFilterKey=''; // 小剧场页面当前选中的角色筛选（空字符串＝全部）。
 function qlGenLoader(){const d=document.createElement('div');d.className='ql-gen-loader';d.innerHTML='<div class="ql-gen-loader-title">正在生成图片…</div><div class="ql-gen-loader-bar"><i></i></div><button type="button" class="menu_button ql-gen-stop">停止</button>';d.querySelector('.ql-gen-stop').onclick=()=>{qlCancelAllImages();};return d;}
 function qlSetGenerationActive(v){qlGenerationActive=v;clearTimeout(qlGenerationTimer);if(v)qlGenerationTimer=setTimeout(()=>{qlGenerationActive=false;},180000);}
 // ===== 正文标记渲染 =====
@@ -232,13 +233,13 @@ function qlFindMarkerSlots(host){
 }
 // 结构固定为“左装饰线 + 标签正文 + 右装饰线”三段，不同相册风格靠 CSS 决定装饰线显示不显示、
 // 标签正文长什么样——这样换相册风格时只要重新套 class 就行，不用重建 DOM 结构。
-function qlMakeTitleBadge(title){
+function qlMakeTitleBadge(title,styleOverride){
  const wrap=document.createElement('span');
  const lineL=document.createElement('span');lineL.className='ql-chat-image-title-line ql-chat-image-title-line-l';
  const label=document.createElement('span');label.className='ql-chat-image-title-label';label.textContent=title;
  const lineR=document.createElement('span');lineR.className='ql-chat-image-title-line ql-chat-image-title-line-r';
  wrap.append(lineL,label,lineR);
- applyChatAlbumTitleStyle(wrap,cfg().chatAlbumStyle||'follow');
+ applyChatAlbumTitleStyle(wrap,styleOverride||cfg().chatAlbumStyle||'follow');
  applyChatTheme(wrap);
  return wrap;
 }
@@ -381,13 +382,49 @@ function qlParseEggBlocks(mesText){
 // 收藏图片到相册时，如果这条消息里还带着 title###…### 标题和/或 eggroom###…### 聊天室，
 // 把当时的标题文字和聊天室数据一起拍个快照存下来——小剧场页面靠这份快照回看，不依赖正文，
 // 哪怕之后这条消息被重 Roll 掉、标记文字都被换成别的内容，快照也不会跟着变。
-function qlEggSnapshotForMessage(messageIndex){
+// 一条消息可能不止一张图（不止一个 image###…### 标记，对应不止一段"标题+聊天室"）；
+// 早期版本不分青红皂白地拿整条消息里的第一个标题和全部聊天室，结果同一条消息里有两个
+// 彩蛋时，收藏其中一张图会把标题弄混、把另一段聊天室也一起搬过来。
+// 现在按 taskKey 算出这张图是消息里第几个 image### 标记（ord），分别圈出"属于这张图的标题范围"
+// 和"属于这张图的聊天室范围"：
+// ·标题范围：先在"上一张图片结束"到"这张图片开始"之间找（且一旦碰到上一张图自己的 eggend### 收尾
+//  就不再继续往前，避免把上一张图自己的聊天室误当成这张图的标题）；标题也可能写在图片标记之后、
+//  聊天室之前（image### 先于 title###），找不到再退而找这个位置。
+// ·聊天室范围：这张图片标记结束之后，到下一张图片标记开始之前——这段天然就是这张图自己的聊天室，
+//  不会跟上一张/下一张图片的聊天室混在一起。
+function qlEggSnapshotForImageRecord(messageIndex,taskKey){
  try{
   const mesText=getContext()?.chat?.[Number(messageIndex)]?.mes;
   if(typeof mesText!=='string'||!mesText)return null;
-  const titleMatch=mesText.match(new RegExp(QL_TITLE_MARKER_SRC));
+  const allMarkers=markers(mesText);
+  const ord=Number(String(taskKey||'').split(':edited:')[0].split(':').pop());
+  if(!allMarkers.length||!Number.isInteger(ord)||!allMarkers[ord]){
+   // 没能定位到这张图是第几个 image### 标记（兜底／旧数据）：退回旧行为，用整条消息。
+   const titleMatch=mesText.match(new RegExp(QL_TITLE_MARKER_SRC));
+   const title=titleMatch?String(titleMatch[1]||'').replace(/\s+/g,' ').trim():'';
+   const eggBlocks=qlParseEggBlocks(mesText);
+   if(!title&&!eggBlocks.length)return null;
+   return {title:title||null,eggBlocks:eggBlocks.length?eggBlocks:null};
+  }
+  const cur=allMarkers[ord],prev=allMarkers[ord-1],next=allMarkers[ord+1];
+  const lowerBound=prev?prev.index+prev.raw.length:0;
+  const titleLookback=mesText.slice(lowerBound,cur.index);
+  let titleZoneStart=lowerBound,lastEggendEnd=-1,em;
+  const eggendRe=/eggend###/g;
+  while((em=eggendRe.exec(titleLookback))!==null)lastEggendEnd=em.index+em[0].length;
+  if(lastEggendEnd>=0)titleZoneStart=lowerBound+lastEggendEnd;
+  const titleZoneBefore=mesText.slice(titleZoneStart,cur.index);
+  const eggZoneStart=cur.index+cur.raw.length;
+  const eggZoneEnd=next?next.index:mesText.length;
+  const eggZone=eggZoneEnd>eggZoneStart?mesText.slice(eggZoneStart,eggZoneEnd):'';
+  let titleMatch=titleZoneBefore.match(new RegExp(QL_TITLE_MARKER_SRC));
+  if(!titleMatch){
+   const firstEggroom=eggZone.search(/eggroom###/);
+   const titleZoneAfter=firstEggroom>=0?eggZone.slice(0,firstEggroom):eggZone;
+   titleMatch=titleZoneAfter.match(new RegExp(QL_TITLE_MARKER_SRC));
+  }
   const title=titleMatch?String(titleMatch[1]||'').replace(/\s+/g,' ').trim():'';
-  const eggBlocks=qlParseEggBlocks(mesText);
+  const eggBlocks=qlParseEggBlocks(eggZone);
   if(!title&&!eggBlocks.length)return null;
   return {title:title||null,eggBlocks:eggBlocks.length?eggBlocks:null};
  }catch(error){return null;}
@@ -2201,8 +2238,8 @@ function addMessageImage(host,url,prompt,taskKey,recordMeta={},anchor=null) {
    const name=String(records[0].characterName||storedCharacter||currentChar.name||recordMeta.characterName||recordMeta.character||ctx.name2||'当前角色').trim();
    // 收藏的同时，如果这条消息带着标题/彩蛋聊天室，顺手拍个快照存进去，供「小剧场」页面回看。
    const messageIndexForSnapshot=records[0].messageIndex??recordMeta.messageIndex;
-   const eggSnapshot=messageIndexForSnapshot!=null?qlEggSnapshotForMessage(messageIndexForSnapshot):null;
-   for(const item of records){item.albumCharacterName=name;item.albumCharacterKey=currentChar.id||records[0].characterKey||'';item.collection='character-album';delete item.promptEntryId;delete item.sourcePromptEntryId;delete item.sourcePromptEntryAppliedAt;if(eggSnapshot){item.eggTitle=eggSnapshot.title;item.eggBlocks=eggSnapshot.eggBlocks;}}
+   const eggSnapshot=messageIndexForSnapshot!=null?qlEggSnapshotForImageRecord(messageIndexForSnapshot,taskKey):null;
+   for(const item of records){item.albumCharacterName=name;item.albumCharacterKey=currentChar.id||records[0].characterKey||'';item.collection='character-album';delete item.promptEntryId;delete item.sourcePromptEntryId;delete item.sourcePromptEntryAppliedAt;if(eggSnapshot){item.eggTitle=eggSnapshot.title;item.eggBlocks=eggSnapshot.eggBlocks;item.eggAlbumStyle=cfg().chatAlbumStyle||'follow';}}
    save();render();history();status(eggSnapshot?'已收藏到「'+name+'」角色相册，标题/聊天室也已存入「小剧场」。':'已收藏到「'+name+'」角色相册。');
   });
   let touchX=0,touchY=0;
@@ -4119,25 +4156,55 @@ function renderTheater(){
  const host=document.querySelector('#ql-theater-list');
  if(!host)return;
  host.innerHTML='';
- const items=(cfg().records||[]).filter(item=>item&&(item.eggTitle||(Array.isArray(item.eggBlocks)&&item.eggBlocks.length)));
- if(!items.length){
+ const s=cfg();
+ const allItems=(s.records||[]).filter(item=>item&&(item.eggTitle||(Array.isArray(item.eggBlocks)&&item.eggBlocks.length)));
+ if(!allItems.length){
   const empty=document.createElement('p');empty.className='ql-muted';
   empty.textContent='还没有收藏过带标题/彩蛋聊天室的图片。正文消息收藏图片时，如果那条消息带着标题或聊天室标记，会自动存一份快照到这里。';
   host.append(empty);
   return;
  }
+ // 按收藏时的角色相册分组，方便存多了之后按角色找——跟角色相册页面同一套 key 规则：
+ // 优先用 albumCharacterKey，没有再退回 albumCharacterName。
+ const keyOf=item=>String(item.albumCharacterKey||item.albumCharacterName||'current');
+ const nameOf=item=>String(s.albumNames?.[keyOf(item)]||item.albumCharacterName||'当前角色').trim()||'未命名相册';
+ const groupOrder=[],groupCount=new Map(),groupName=new Map();
+ for(const item of allItems){
+  const key=keyOf(item);
+  if(!groupCount.has(key)){groupOrder.push(key);groupCount.set(key,0);groupName.set(key,nameOf(item));}
+  groupCount.set(key,groupCount.get(key)+1);
+ }
+ if(qlTheaterFilterKey&&!groupCount.has(qlTheaterFilterKey))qlTheaterFilterKey='';
+ if(groupOrder.length>1){
+  const tabs=document.createElement('div');tabs.className='ql-theater-filter-tabs';
+  const allTab=document.createElement('button');allTab.type='button';allTab.className='menu_button ql-theater-filter-tab'+(qlTheaterFilterKey?'':' ql-active');allTab.textContent='全部 ('+allItems.length+')';
+  allTab.addEventListener('click',()=>{qlTheaterFilterKey='';renderTheater();});
+  tabs.append(allTab);
+  for(const key of groupOrder){
+   const tab=document.createElement('button');tab.type='button';tab.className='menu_button ql-theater-filter-tab'+(qlTheaterFilterKey===key?' ql-active':'');tab.textContent=groupName.get(key)+' ('+groupCount.get(key)+')';
+   tab.addEventListener('click',()=>{qlTheaterFilterKey=key;renderTheater();});
+   tabs.append(tab);
+  }
+  host.append(tabs);
+ }
+ const items=qlTheaterFilterKey?allItems.filter(item=>keyOf(item)===qlTheaterFilterKey):allItems;
  items.slice().reverse().forEach(item=>{
   const card=document.createElement('div');card.className='ql-theater-card';
+  const style=qlResolveAlbumStyle(item.eggAlbumStyle||s.chatAlbumStyle||'follow');
   if(item.dataUrl){
-   const img=document.createElement('img');img.src=item.dataUrl;img.loading='lazy';img.className='ql-theater-card-img';
+   const figure=document.createElement('figure');figure.className='ql-chat-image ql-album-'+style;
+   const img=document.createElement('img');img.src=item.dataUrl;img.loading='lazy';
    img.addEventListener('click',()=>openViewfinderImage(item.dataUrl));
-   card.append(img);
+   figure.append(img);
+   applyChatTheme(figure);
+   card.append(figure);
   }
-  if(item.eggTitle)card.append(qlMakeTitleBadge(item.eggTitle));
+  if(item.eggTitle)card.append(qlMakeTitleBadge(item.eggTitle,item.eggAlbumStyle||s.chatAlbumStyle||'follow'));
   (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
+  if(groupOrder.length>1){const who=document.createElement('p');who.className='ql-muted ql-theater-card-who';who.textContent='角色相册：'+nameOf(item);card.append(who);}
   const removeBtn=document.createElement('button');removeBtn.type='button';removeBtn.className='menu_button ql-theater-remove';removeBtn.textContent='移出小剧场';
   removeBtn.addEventListener('click',()=>{
-   delete item.eggTitle;delete item.eggBlocks;save();renderTheater();
+   delete item.eggTitle;delete item.eggBlocks;delete item.eggAlbumStyle;save();renderTheater();
   });
   card.append(removeBtn);
   applyChatTheme(card);
