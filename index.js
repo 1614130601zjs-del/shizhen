@@ -4242,7 +4242,14 @@ function renderTheater(){
    delete item.eggTitle;delete item.eggBlocks;delete item.eggAlbumStyle;save();renderTheater();
   });
   card.append(removeBtn);
-  applyChatTheme(card);
+  // 这张卡片本身就在 #shizhen-panel 里面（挂了 .ql-card），跟设置页/取景区那些卡片一样，
+  // 靠 CSS 级联自然从 #shizhen-panel[data-ql-style="ccd"] 这类根节点规则继承 --ql-card 等变量
+  // 就够了——不需要也不应该在这调 applyChatTheme(card)。那是给"长在 #chat 里、脱离了
+  // #shizhen-panel 这棵 DOM 树"的组件（聊天气泡里的配图/标题/状态栏画面等）准备的，用来把
+  // 面板的主题色变量内联注入进去；如果拿来给面板自己里面的卡片也调一遍，就会在这张卡片上
+  // 内联出一份"通用主题色"的 --ql-card，把从 ccd 等界面风格根节点继承下来的（哪怕带了
+  // !important）颜色值整个盖掉——这正是"底色还是填充的初始色"的原因：卡片背景读到的其实是
+  // 内联覆盖的那份通用主题色，而不是当前界面风格（比如 ccd）自己的卡片背景色。
   host.append(card);
  });
 }
