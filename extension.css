@@ -5797,11 +5797,16 @@ body.ql-modal-open .ql-fb-ball{display:none}
 /* 小剧场页面：每张卡片=收藏图片时存下的一份标题/聊天室快照，直接复用正文那套
    .ql-chat-image-title / .ql-egg-chat 组件来画（上面已经把对应选择器也扩到 #shizhen-panel 下）。 */
 #shizhen-panel #ql-theater-list{display:flex;flex-direction:column;gap:16px;margin-top:10px}
-#shizhen-panel .ql-theater-card{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px;border-radius:10px;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));background:var(--ql-card,var(--SmartThemeBlurTintColor))}
+/* 卡片本身始终占满列表宽度（不再用 align-items:center 让卡片跟着内容缩成一团）：
+   这样彩蛋聊天室从折叠的小药丸按钮展开成整块面板时，卡片外框宽度不会跟着跳一下，
+   图片/标题标签靠自己的 margin:auto 居中即可。 */
+#shizhen-panel .ql-theater-card{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:10px;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));background:var(--ql-card,var(--SmartThemeBlurTintColor))}
 #shizhen-panel .ql-theater-card figure.ql-chat-image{max-width:100%;margin:6px auto}
 #shizhen-panel .ql-theater-card figure.ql-chat-image img{cursor:zoom-in;max-height:420px;object-fit:contain}
-#shizhen-panel .ql-theater-card-who{margin:0;align-self:flex-start}
+#shizhen-panel .ql-theater-card .ql-chat-image-title{margin-left:auto;margin-right:auto}
+#shizhen-panel .ql-theater-card .ql-egg-chat{width:100%}
+#shizhen-panel .ql-theater-card-who{margin:0}
 #shizhen-panel .ql-theater-remove{align-self:flex-end;font-size:12px;padding:4px 12px}
-#shizhen-panel .ql-theater-filter-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
-#shizhen-panel .ql-theater-filter-tab{margin:0;font-size:12px;padding:5px 12px;border-radius:999px;opacity:.72}
-#shizhen-panel .ql-theater-filter-tab.ql-active{opacity:1;background:var(--ql-accent,var(--SmartThemeQuoteColor,#8495a6))!important;color:#fff!important}
+#shizhen-panel .ql-theater-filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 10px}
+#shizhen-panel .ql-theater-filter-row label{display:inline;margin:0;font-size:12px;white-space:nowrap}
+#shizhen-panel .ql-theater-filter-row select{width:auto;flex:1;min-width:120px}

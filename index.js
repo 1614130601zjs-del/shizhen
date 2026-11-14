@@ -423,6 +423,14 @@ function qlEggSnapshotForImageRecord(messageIndex,taskKey){
    const titleZoneAfter=firstEggroom>=0?eggZone.slice(0,firstEggroom):eggZone;
    titleMatch=titleZoneAfter.match(new RegExp(QL_TITLE_MARKER_SRC));
   }
+  if(!titleMatch&&!next){
+   // 标题也可能写在聊天室 eggend### 收尾之后（当成这段剧情的结语字幕）；这种写法只有在
+   // "这是消息里最后一张图"时才安全去找——如果后面还有下一张图，这段文字可能其实是属于
+   // 下一张图自己、写在它前面的标题，不能连带吃进来。
+   const lastEggendRe=/eggend###/g;let lastEnd=-1,em2;
+   while((em2=lastEggendRe.exec(eggZone))!==null)lastEnd=em2.index+em2[0].length;
+   if(lastEnd>=0)titleMatch=eggZone.slice(lastEnd).match(new RegExp(QL_TITLE_MARKER_SRC));
+  }
   const title=titleMatch?String(titleMatch[1]||'').replace(/\s+/g,' ').trim():'';
   const eggBlocks=qlParseEggBlocks(eggZone);
   if(!title&&!eggBlocks.length)return null;
@@ -4164,30 +4172,38 @@ function renderTheater(){
   host.append(empty);
   return;
  }
- // 按收藏时的角色相册分组，方便存多了之后按角色找——跟角色相册页面同一套 key 规则：
- // 优先用 albumCharacterKey，没有再退回 albumCharacterName。
+ // 同一个角色的收藏可能被记成不同的键（序号/空/名字），新开聊天后角色序号或 ID 变了就会拆成
+ //两份；角色相册页每次刷新都会做一次"统一成角色卡序号"的归并（见 history() 里的 canon()），这里
+ // 照搬同一套逻辑，这样哪怕用户还没打开过角色相册页，小剧场这边的分组也不会被拆散。
+ {const chars=getCharacterCards();let changed=false;
+  const canon=r=>{const name=String(r.albumCharacterName||'').trim(),raw=String(r.albumCharacterKey??'').trim();if(!name||raw==='__user__')return raw;const hits=[];chars.forEach((ch,i)=>{if(String(ch?.name||'').trim()===name)hits.push(i);});if(hits.length!==1)return raw;return String(hits[0]);};
+  for(const r of s.records||[]){if(!r||!r.albumCharacterName||!r.dataUrl)continue;
+   const old=String(r.albumCharacterKey??'').trim(),k=canon(r);
+   if(k&&k!==old&&old!==''){const oldName=s.albumNames?.[old];if(oldName&&!s.albumNames[k])s.albumNames[k]=oldName;}
+   if(k&&k!==old){r.albumCharacterKey=k;changed=true;}}
+  if(changed)save();}
+ // 分组以"实际显示出来的角色相册名字"为准（而不是内部 key）：就算 key 因为上面提到的历史原因
+ // 还是没完全统一，只要显示名字一样，用户看起来就是同一个角色，不应该在筛选里拆成两份。
  const keyOf=item=>String(item.albumCharacterKey||item.albumCharacterName||'current');
  const nameOf=item=>String(s.albumNames?.[keyOf(item)]||item.albumCharacterName||'当前角色').trim()||'未命名相册';
- const groupOrder=[],groupCount=new Map(),groupName=new Map();
+ const groupOrder=[],groupCount=new Map();
  for(const item of allItems){
-  const key=keyOf(item);
-  if(!groupCount.has(key)){groupOrder.push(key);groupCount.set(key,0);groupName.set(key,nameOf(item));}
-  groupCount.set(key,groupCount.get(key)+1);
+  const name=nameOf(item);
+  if(!groupCount.has(name)){groupOrder.push(name);groupCount.set(name,0);}
+  groupCount.set(name,groupCount.get(name)+1);
  }
  if(qlTheaterFilterKey&&!groupCount.has(qlTheaterFilterKey))qlTheaterFilterKey='';
  if(groupOrder.length>1){
-  const tabs=document.createElement('div');tabs.className='ql-theater-filter-tabs';
-  const allTab=document.createElement('button');allTab.type='button';allTab.className='menu_button ql-theater-filter-tab'+(qlTheaterFilterKey?'':' ql-active');allTab.textContent='全部 ('+allItems.length+')';
-  allTab.addEventListener('click',()=>{qlTheaterFilterKey='';renderTheater();});
-  tabs.append(allTab);
-  for(const key of groupOrder){
-   const tab=document.createElement('button');tab.type='button';tab.className='menu_button ql-theater-filter-tab'+(qlTheaterFilterKey===key?' ql-active':'');tab.textContent=groupName.get(key)+' ('+groupCount.get(key)+')';
-   tab.addEventListener('click',()=>{qlTheaterFilterKey=key;renderTheater();});
-   tabs.append(tab);
-  }
-  host.append(tabs);
+  const row=document.createElement('div');row.className='ql-theater-filter-row';
+  const label=document.createElement('label');label.textContent='按角色相册筛选';label.htmlFor='ql-theater-filter-select';
+  const select=document.createElement('select');select.id='ql-theater-filter-select';
+  select.innerHTML='<option value="">全部 ('+allItems.length+')</option>'+groupOrder.map(name=>'<option value="'+esc(name)+'">'+esc(name)+' ('+groupCount.get(name)+')</option>').join('');
+  select.value=qlTheaterFilterKey||'';
+  select.addEventListener('change',()=>{qlTheaterFilterKey=select.value;renderTheater();});
+  row.append(label,select);
+  host.append(row);
  }
- const items=qlTheaterFilterKey?allItems.filter(item=>keyOf(item)===qlTheaterFilterKey):allItems;
+ const items=qlTheaterFilterKey?allItems.filter(item=>nameOf(item)===qlTheaterFilterKey):allItems;
  items.slice().reverse().forEach(item=>{
   const card=document.createElement('div');card.className='ql-theater-card';
   const style=qlResolveAlbumStyle(item.eggAlbumStyle||s.chatAlbumStyle||'follow');
