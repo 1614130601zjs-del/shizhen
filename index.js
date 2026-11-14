@@ -2243,9 +2243,14 @@ function addMessageImage(host,url,prompt,taskKey,recordMeta={},anchor=null) {
    if(records.some(item=>item.albumCharacterName)){for(const item of records){delete item.albumCharacterName;delete item.albumCharacterKey;delete item.promptEntryId;delete item.sourcePromptEntryId;delete item.sourcePromptEntryAppliedAt;item.collection='cache';}save();render();history();status('已取消收藏；图片已回到底片缓存。');return;}
    const currentChar=currentCharacter(),ctx=getContext()||{};
    const storedCharacter=typeof records[0].character==='string'?records[0].character:'';
-   const name=String(records[0].characterName||storedCharacter||currentChar.name||recordMeta.characterName||recordMeta.character||ctx.name2||'当前角色').trim();
    // 收藏的同时，如果这条消息带着标题/彩蛋聊天室，顺手拍个快照存进去，供「小剧场」页面回看。
    const messageIndexForSnapshot=records[0].messageIndex??recordMeta.messageIndex;
+   // ctx.name2/currentCharacter() 在群聊或当前没有唯一"激活角色卡"时可能是空的，这时候前面
+   // 几个备选全落空就会落到字面量"当前角色"兜底，导致不同时间收藏的同一个角色被拆成两份相册。
+   // 再加一层更可靠的兜底：这条消息本身的 .name 字段——不管单人聊天还是群聊，酒馆都会把
+   // "这条消息到底是谁说的"写进消息自己的 name 字段，比 ctx.name2 更贴近"这张图实际属于谁"。
+   const messageSpeakerName=messageIndexForSnapshot!=null?String(ctx?.chat?.[Number(messageIndexForSnapshot)]?.name||'').trim():'';
+   const name=String(records[0].characterName||storedCharacter||currentChar.name||recordMeta.characterName||recordMeta.character||ctx.name2||messageSpeakerName||'当前角色').trim();
    const eggSnapshot=messageIndexForSnapshot!=null?qlEggSnapshotForImageRecord(messageIndexForSnapshot,taskKey):null;
    for(const item of records){item.albumCharacterName=name;item.albumCharacterKey=currentChar.id||records[0].characterKey||'';item.collection='character-album';delete item.promptEntryId;delete item.sourcePromptEntryId;delete item.sourcePromptEntryAppliedAt;if(eggSnapshot){item.eggTitle=eggSnapshot.title;item.eggBlocks=eggSnapshot.eggBlocks;item.eggAlbumStyle=cfg().chatAlbumStyle||'follow';}}
    save();render();history();status(eggSnapshot?'已收藏到「'+name+'」角色相册，标题/聊天室也已存入「小剧场」。':'已收藏到「'+name+'」角色相册。');
@@ -4165,6 +4170,19 @@ function renderTheater(){
  if(!host)return;
  host.innerHTML='';
  const s=cfg();
+ // 自我修复：标题是收藏那一刻拍的快照，不会跟着正文变——如果是在旧版识别逻辑还有漏洞的时候
+ // 收藏的，哪怕现在升级了代码，已经存下来的快照也不会自动补上标题。这里只对"消息本体还在当前
+ // 聊天里"的记录做一次尝试性重新识别，找到了就补，找不到或不是当前聊天就不碰（换了聊天去读
+ // getContext().chat 会读到风马牛不相及的消息，绝不能在那种情况下瞎补)。
+ {let repaired=false;const ctxNow=getContext()||{};
+  for(const r of s.records||[]){
+   if(!r||!r.taskKey||r.messageIndex==null||r.eggTitle)continue;
+   if(!(Array.isArray(r.eggBlocks)&&r.eggBlocks.length))continue;
+   if(r.chatId&&ctxNow.chatId&&r.chatId!==ctxNow.chatId)continue;
+   const fresh=qlEggSnapshotForImageRecord(r.messageIndex,r.taskKey);
+   if(fresh?.title){r.eggTitle=fresh.title;repaired=true;}
+  }
+  if(repaired)save();}
  const allItems=(s.records||[]).filter(item=>item&&(item.eggTitle||(Array.isArray(item.eggBlocks)&&item.eggBlocks.length)));
  if(!allItems.length){
   const empty=document.createElement('p');empty.className='ql-muted';
