@@ -46,7 +46,11 @@
 #chat .ql-egg-divider,#shizhen-panel .ql-egg-divider{height:5px;background:#171717;margin:10px 0}
 #chat .ql-egg-narrator-card,#chat .ql-egg-msg,#shizhen-panel .ql-egg-narrator-card,#shizhen-panel .ql-egg-msg{display:flex;align-items:flex-start;gap:8px}
 #chat .ql-egg-msg-right,#shizhen-panel .ql-egg-msg-right{flex-direction:row-reverse}
-#chat .ql-egg-avatar,#shizhen-panel .ql-egg-avatar{flex:none;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:2px solid #171717;border-radius:50%;color:#fff;font-weight:900;font-size:13px;box-shadow:2px 2px 0 #171717}
+/* 头像框从圆形小图标改成稍大的圆角正方形(用户要求)；overflow:hidden+position:relative是给
+   传了图之后塞进去的 <img> 用的，裁切范围/缩放靠 img 自己的 object-position+transform 控制，
+   容器本身只负责"开个固定大小的窗口"。 */
+#chat .ql-egg-avatar,#shizhen-panel .ql-egg-avatar{position:relative;overflow:hidden;flex:none;width:42px;height:42px;display:flex;align-items:center;justify-content:center;border:2px solid #171717;border-radius:10px;color:#fff;font-weight:900;font-size:16px;box-shadow:2px 2px 0 #171717}
+#chat .ql-egg-avatar img,#shizhen-panel .ql-egg-avatar img{width:100%;height:100%;object-fit:cover;pointer-events:none}
 #chat .ql-egg-narrator-main,#chat .ql-egg-msg-main,#shizhen-panel .ql-egg-narrator-main,#shizhen-panel .ql-egg-msg-main{min-width:0;max-width:calc(100% - 42px);display:flex;flex-direction:column;align-items:flex-start;gap:3px}
 #chat .ql-egg-msg-right .ql-egg-msg-main,#shizhen-panel .ql-egg-msg-right .ql-egg-msg-main{align-items:flex-end}
 #chat .ql-egg-narrator-name,#chat .ql-egg-msg-name,#shizhen-panel .ql-egg-narrator-name,#shizhen-panel .ql-egg-msg-name{font-size:11px;font-weight:900;padding:2px 8px;border-radius:2px;background:#171717;color:#fff;box-shadow:2px 2px 0 #fff,3px 3px 0 #171717;max-width:100%;overflow-wrap:anywhere}
@@ -5824,3 +5828,18 @@ body.ql-modal-open .ql-fb-ball{display:none}
 #shizhen-panel .ql-egg-avatar-lib-row .ql-egg-avatar{cursor:pointer}
 #shizhen-panel .ql-egg-avatar-lib-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #shizhen-panel .ql-egg-avatar-lib-reset{font-size:12px;padding:4px 12px;flex:none}
+#shizhen-panel .ql-egg-avatar-lib-adjust{font-size:12px;padding:4px 12px;flex:none}
+
+/* 头像裁切/缩放调整弹窗：独立挂在 body 下(不在 #shizhen-panel 里)，盖住全屏。
+   取景框固定正方形，里面的图靠 object-position 控制显示范围、transform:scale 控制缩放，
+   拖动取景框直接改 object-position 百分比，一个滑条再控制缩放。 */
+.ql-egg-avatar-editor-overlay{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}
+.ql-egg-avatar-editor-box{background:#1e1f22;color:#eee;border-radius:12px;padding:16px;max-width:320px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.ql-egg-avatar-editor-box p{margin:0 0 10px;font-size:13px;color:#aaa}
+.ql-egg-avatar-editor-viewport{position:relative;overflow:hidden;width:100%;aspect-ratio:1/1;border-radius:10px;border:2px solid #444;touch-action:none;cursor:grab;background:#111}
+.ql-egg-avatar-editor-viewport:active{cursor:grabbing}
+.ql-egg-avatar-editor-viewport img{width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none}
+.ql-egg-avatar-editor-box .ql-row{display:flex;align-items:center;gap:8px;margin-top:10px}
+.ql-egg-avatar-editor-box .ql-row label{flex:none;font-size:12px;color:#ccc}
+.ql-egg-avatar-editor-box .ql-row input[type="range"]{flex:1}
+.ql-egg-avatar-editor-actions{justify-content:flex-end;margin-top:14px}

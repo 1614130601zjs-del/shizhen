@@ -282,24 +282,37 @@ function qlEggAvatarColor(name){
  return 'hsl('+(hash%360)+',46%,55%)';
 }
 // 头像库：按"说话人名字文本"精确匹配复用（跟用户确认过，不绑定角色卡——同一个角色如果在
-// 不同彩蛋里用了不同称呼，要分别传）。存在 cfg().eggAvatars[名字]=dataURL，跟收藏数据分开存，
+// 不同彩蛋里用了不同称呼，要分别传）。存在 cfg().eggAvatars[名字]=记录，跟收藏数据分开存，
 // 不会因为收藏记录被清理/移出小剧场就跟着丢。没传过的名字继续用"首字+哈希配色"占位，
 // 跟之前的行为完全一样。
-function qlEggAvatarUrlFor(name){
+// 记录格式是 {url,zoom,posX,posY}：url 是图片 dataURL，zoom 是缩放百分比(100=不放大)，
+// posX/posY 是 0~100 的裁切焦点百分比（配合 img 的 object-position 决定"显示框里露出哪一块"）。
+// 早期版本直接存纯 dataURL 字符串（没有缩放/裁切这些），这里兼容一下，读到字符串就当
+// zoom:100/posX:50/posY:50 处理，不会因为升级代码就看不到旧头像。
+function qlEggAvatarRecordFor(name){
  const key=String(name||'').trim();
- if(!key)return '';
- return String(cfg().eggAvatars?.[key]||'');
+ if(!key)return null;
+ const raw=cfg().eggAvatars?.[key];
+ if(!raw)return null;
+ if(typeof raw==='string')return{url:raw,zoom:100,posX:50,posY:50};
+ if(raw&&typeof raw==='object'&&raw.url)return{url:String(raw.url),zoom:Number(raw.zoom)||100,posX:typeof raw.posX==='number'?raw.posX:50,posY:typeof raw.posY==='number'?raw.posY:50};
+ return null;
 }
+function qlEggAvatarUrlFor(name){return qlEggAvatarRecordFor(name)?.url||'';}
 function qlPaintEggAvatar(el,name){
  const key=String(name||'').trim();
- const url=qlEggAvatarUrlFor(key);
- if(url){
-  el.style.backgroundImage='url("'+url.replace(/"/g,'%22')+'")';
-  el.style.backgroundSize='cover';
-  el.style.backgroundPosition='center';
+ const rec=qlEggAvatarRecordFor(key);
+ el.innerHTML='';
+ if(rec?.url){
+  el.style.background='none';
   el.textContent='';
+  const img=document.createElement('img');
+  img.src=rec.url;img.draggable=false;
+  img.style.objectPosition=rec.posX+'% '+rec.posY+'%';
+  img.style.transform='scale('+(Math.max(100,rec.zoom)/100)+')';
+  img.style.transformOrigin='center';
+  el.append(img);
  }else{
-  el.style.backgroundImage='none';
   el.style.background=qlEggAvatarColor(key);
   el.textContent=key.charAt(0)||'?';
  }
@@ -310,6 +323,63 @@ function qlRepaintEggAvatars(name){
  const key=String(name||'').trim();if(!key)return;
  document.querySelectorAll('.ql-egg-avatar[data-ql-egg-avatar-name="'+CSS.escape(key)+'"]').forEach(el=>qlPaintEggAvatar(el,key));
 }
+function qlSaveEggAvatar(name,record){
+ const key=String(name||'').trim();if(!key)return;
+ const s=cfg();if(!s.eggAvatars)s.eggAvatars={};s.eggAvatars[key]=record;save();
+ qlRepaintEggAvatars(key);
+ const lib=document.querySelector('#ql-egg-avatar-lib');
+ if(lib&&!lib.hidden)renderEggAvatarLibrary();
+}
+// 头像裁切/缩放调整弹窗：拖动取景框改 posX/posY，滑条改 zoom；传新图和"调整"已有头像共用
+// 这一个弹窗——区别只是传新图时先读好 dataURL 再带着默认 zoom:100/posX:50/posY:50 打开。
+// 没用现成的裁切库，就是最简单的"拖一下、缩一下"：object-position 当平移、transform:scale
+// 当缩放，数学上不追求像素级精确，够手机上调个大概的露出范围就行。
+function qlOpenEggAvatarEditor(name,dataUrl,initial){
+ return new Promise(resolve=>{
+  const state={zoom:initial?.zoom||100,posX:initial?.posX??50,posY:initial?.posY??50};
+  const overlay=document.createElement('div');overlay.className='ql-egg-avatar-editor-overlay';
+  const box=document.createElement('div');box.className='ql-egg-avatar-editor-box';
+  const title=document.createElement('p');title.textContent='调整「'+name+'」的头像显示范围 —— 拖动图片挪位置，下面滑条缩放';
+  const viewport=document.createElement('div');viewport.className='ql-egg-avatar-editor-viewport';
+  const img=document.createElement('img');img.src=dataUrl;img.draggable=false;
+  viewport.append(img);
+  const zoomRow=document.createElement('div');zoomRow.className='ql-row';
+  const zoomLabel=document.createElement('label');zoomLabel.textContent='缩放';
+  const zoomInput=document.createElement('input');zoomInput.type='range';zoomInput.min='100';zoomInput.max='280';zoomInput.value=String(state.zoom);
+  zoomRow.append(zoomLabel,zoomInput);
+  const actions=document.createElement('div');actions.className='ql-row ql-egg-avatar-editor-actions';
+  const cancelBtn=document.createElement('button');cancelBtn.type='button';cancelBtn.className='menu_button';cancelBtn.textContent='取消';
+  const okBtn=document.createElement('button');okBtn.type='button';okBtn.className='menu_button';okBtn.textContent='确定';
+  actions.append(cancelBtn,okBtn);
+  box.append(title,viewport,zoomRow,actions);
+  overlay.append(box);
+  document.body.append(overlay);
+  const applyStyle=()=>{img.style.objectPosition=state.posX+'% '+state.posY+'%';img.style.transform='scale('+(state.zoom/100)+')';img.style.transformOrigin='center';};
+  applyStyle();
+  zoomInput.addEventListener('input',()=>{state.zoom=Number(zoomInput.value)||100;applyStyle();});
+  let dragging=false,startX=0,startY=0,startPosX=state.posX,startPosY=state.posY;
+  viewport.addEventListener('pointerdown',event=>{dragging=true;startX=event.clientX;startY=event.clientY;startPosX=state.posX;startPosY=state.posY;try{viewport.setPointerCapture(event.pointerId);}catch(error){}});
+  viewport.addEventListener('pointermove',event=>{
+   if(!dragging)return;
+   const rect=viewport.getBoundingClientRect();
+   if(!rect.width||!rect.height)return;
+   const dx=(event.clientX-startX)/rect.width*100;
+   const dy=(event.clientY-startY)/rect.height*100;
+   // 手指/鼠标往右拖=想看图片左边那块，所以 posX 要减，不是加。
+   state.posX=Math.max(0,Math.min(100,startPosX-dx));
+   state.posY=Math.max(0,Math.min(100,startPosY-dy));
+   applyStyle();
+  });
+  const endDrag=()=>{dragging=false;};
+  viewport.addEventListener('pointerup',endDrag);
+  viewport.addEventListener('pointercancel',endDrag);
+  viewport.addEventListener('pointerleave',endDrag);
+  const close=result=>{overlay.remove();resolve(result);};
+  cancelBtn.addEventListener('click',()=>close(null));
+  okBtn.addEventListener('click',()=>close({url:dataUrl,zoom:state.zoom,posX:state.posX,posY:state.posY}));
+  overlay.addEventListener('click',event=>{if(event.target===overlay)close(null);});
+ });
+}
 async function qlUploadEggAvatar(name){
  const key=String(name||'').trim();
  if(!key)return;
@@ -319,14 +389,21 @@ async function qlUploadEggAvatar(name){
   if(!file)return;
   try{
    const dataUrl=await qlReadFileDataUrl(file);
-   const s=cfg();if(!s.eggAvatars)s.eggAvatars={};s.eggAvatars[key]=dataUrl;save();
-   qlRepaintEggAvatars(key);
-   const lib=document.querySelector('#ql-egg-avatar-lib');
-   if(lib&&!lib.hidden)renderEggAvatarLibrary();
+   const result=await qlOpenEggAvatarEditor(key,dataUrl,{zoom:100,posX:50,posY:50});
+   if(!result)return;
+   qlSaveEggAvatar(key,result);
    status('已更新「'+key+'」的头像。');
   }catch(error){status('读取图片失败：'+(error?.message||error));}
  });
  input.click();
+}
+async function qlAdjustEggAvatar(name){
+ const key=String(name||'').trim();
+ const rec=qlEggAvatarRecordFor(key);
+ if(!rec?.url)return;
+ const result=await qlOpenEggAvatarEditor(key,rec.url,rec);
+ if(!result)return;
+ qlSaveEggAvatar(key,result);
 }
 function qlResetEggAvatar(name){
  const key=String(name||'').trim();if(!key)return;
@@ -378,9 +455,11 @@ function renderEggAvatarLibrary(){
   const label=document.createElement('span');label.className='ql-egg-avatar-lib-name';label.textContent=name;
   row.append(qlMakeEggAvatar(name),label);
   if(qlEggAvatarUrlFor(name)){
+   const adjustBtn=document.createElement('button');adjustBtn.type='button';adjustBtn.className='menu_button ql-egg-avatar-lib-adjust';adjustBtn.textContent='调整';
+   adjustBtn.addEventListener('click',()=>qlAdjustEggAvatar(name));
    const resetBtn=document.createElement('button');resetBtn.type='button';resetBtn.className='menu_button ql-egg-avatar-lib-reset';resetBtn.textContent='恢复默认';
    resetBtn.addEventListener('click',()=>{qlResetEggAvatar(name);renderEggAvatarLibrary();});
-   row.append(resetBtn);
+   row.append(adjustBtn,resetBtn);
   }
   host.append(row);
  });
