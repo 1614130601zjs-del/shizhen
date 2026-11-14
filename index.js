@@ -4223,7 +4223,7 @@ function renderTheater(){
  }
  const items=qlTheaterFilterKey?allItems.filter(item=>nameOf(item)===qlTheaterFilterKey):allItems;
  items.slice().reverse().forEach(item=>{
-  const card=document.createElement('div');card.className='ql-theater-card';
+  const card=document.createElement('div');card.className='ql-theater-card ql-card';
   const style=qlResolveAlbumStyle(item.eggAlbumStyle||s.chatAlbumStyle||'follow');
   // 摆放顺序跟正文/原来那张小漫画截图一致：标题在最上面，然后是图片，最后才是聊天室。
   if(item.eggTitle)card.append(qlMakeTitleBadge(item.eggTitle,item.eggAlbumStyle||s.chatAlbumStyle||'follow'));

@@ -5799,8 +5799,10 @@ body.ql-modal-open .ql-fb-ball{display:none}
 #shizhen-panel #ql-theater-list{display:flex;flex-direction:column;gap:16px;margin-top:10px}
 /* 卡片本身始终占满列表宽度（不再用 align-items:center 让卡片跟着内容缩成一团）：
    这样彩蛋聊天室从折叠的小药丸按钮展开成整块面板时，卡片外框宽度不会跟着跳一下，
-   图片/标题标签靠自己的 margin:auto 居中即可。 */
-#shizhen-panel .ql-theater-card{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:10px;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));background:var(--ql-card,var(--SmartThemeBlurTintColor))}
+   图片/标题标签靠自己的 margin:auto 居中即可。
+   背景/边框/圆角不在这里写死——卡片本身同时挂了 .ql-card class，直接复用它那套会跟着
+   当前界面风格（美化）切换背景/装饰的规则，这里只负责布局，不跟 .ql-card 抢 background/border。 */
+#shizhen-panel .ql-theater-card{display:flex;flex-direction:column;gap:8px}
 #shizhen-panel .ql-theater-card figure.ql-chat-image{max-width:100%;margin:6px auto}
 #shizhen-panel .ql-theater-card figure.ql-chat-image img{cursor:zoom-in;max-height:420px;object-fit:contain}
 #shizhen-panel .ql-theater-card .ql-chat-image-title{margin-left:auto;margin-right:auto}
