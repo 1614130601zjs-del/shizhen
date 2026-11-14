@@ -334,15 +334,26 @@ function qlSaveEggAvatar(name,record){
 // 这一个弹窗——区别只是传新图时先读好 dataURL 再带着默认 zoom:100/posX:50/posY:50 打开。
 // 没用现成的裁切库，就是最简单的"拖一下、缩一下"：object-position 当平移、transform:scale
 // 当缩放，数学上不追求像素级精确，够手机上调个大概的露出范围就行。
+// 用原生 <dialog>+showModal() 而不是 fixed+超大 z-index 的 div——这个坑之前在取景区灯箱/
+// 下载面板那两处已经踩过一次了(搜 Top Layer 能看到那两处的注释)：普通 fixed 层叠上下文
+// 终究可能被酒馆自己的弹窗或插件主面板(#ql-overlay)压在下面，只有进浏览器 Top Layer 才稳。
 function qlOpenEggAvatarEditor(name,dataUrl,initial){
  return new Promise(resolve=>{
   const state={zoom:initial?.zoom||100,posX:initial?.posX??50,posY:initial?.posY??50};
-  const overlay=document.createElement('div');overlay.className='ql-egg-avatar-editor-overlay';
-  const box=document.createElement('div');box.className='ql-egg-avatar-editor-box';
-  const title=document.createElement('p');title.textContent='调整「'+name+'」的头像显示范围 —— 拖动图片挪位置，下面滑条缩放';
+  const dlg=document.createElement('dialog');dlg.className='ql-egg-avatar-editor';
+  const title=document.createElement('p');title.textContent='调整「'+name+'」的头像显示范围——拖动图片或用下面的方向按钮挪位置，滑条缩放';
   const viewport=document.createElement('div');viewport.className='ql-egg-avatar-editor-viewport';
   const img=document.createElement('img');img.src=dataUrl;img.draggable=false;
   viewport.append(img);
+  const applyStyle=()=>{img.style.objectPosition=state.posX+'% '+state.posY+'%';img.style.transform='scale('+(state.zoom/100)+')';img.style.transformOrigin='center';};
+  const nudge=(dx,dy)=>{state.posX=Math.max(0,Math.min(100,state.posX+dx));state.posY=Math.max(0,Math.min(100,state.posY+dy));applyStyle();};
+  // 方向按钮摆成九宫格的样子，中间空着只留上下左右四个——不用拖也能挪，手感跟拖动是统一的
+  // 一套坐标(posX/posY)，点按钮等于拖了一小步。
+  const pad=document.createElement('div');pad.className='ql-egg-avatar-editor-pad';
+  const mkArrow=(cls,label,dx,dy)=>{const b=document.createElement('button');b.type='button';b.className='menu_button ql-egg-avatar-editor-arrow '+cls;b.textContent=label;b.addEventListener('click',()=>nudge(dx,dy));return b;};
+  // 方向跟拖动那套"往哪边拖=往哪边露出"是反过来的——点"↑"是把取景框往上移，画面里露出的
+  // 部分应该往下挪，所以按钮方向跟 posY 变化方向是相反的(点↑ posY 减)。
+  pad.append(mkArrow('ql-egg-avatar-editor-arrow-up','↑',0,-8),mkArrow('ql-egg-avatar-editor-arrow-left','←',-8,0),mkArrow('ql-egg-avatar-editor-arrow-right','→',8,0),mkArrow('ql-egg-avatar-editor-arrow-down','↓',0,8));
   const zoomRow=document.createElement('div');zoomRow.className='ql-row';
   const zoomLabel=document.createElement('label');zoomLabel.textContent='缩放';
   const zoomInput=document.createElement('input');zoomInput.type='range';zoomInput.min='100';zoomInput.max='280';zoomInput.value=String(state.zoom);
@@ -351,10 +362,8 @@ function qlOpenEggAvatarEditor(name,dataUrl,initial){
   const cancelBtn=document.createElement('button');cancelBtn.type='button';cancelBtn.className='menu_button';cancelBtn.textContent='取消';
   const okBtn=document.createElement('button');okBtn.type='button';okBtn.className='menu_button';okBtn.textContent='确定';
   actions.append(cancelBtn,okBtn);
-  box.append(title,viewport,zoomRow,actions);
-  overlay.append(box);
-  document.body.append(overlay);
-  const applyStyle=()=>{img.style.objectPosition=state.posX+'% '+state.posY+'%';img.style.transform='scale('+(state.zoom/100)+')';img.style.transformOrigin='center';};
+  dlg.append(title,viewport,pad,zoomRow,actions);
+  document.body.append(dlg);
   applyStyle();
   zoomInput.addEventListener('input',()=>{state.zoom=Number(zoomInput.value)||100;applyStyle();});
   let dragging=false,startX=0,startY=0,startPosX=state.posX,startPosY=state.posY;
@@ -374,10 +383,12 @@ function qlOpenEggAvatarEditor(name,dataUrl,initial){
   viewport.addEventListener('pointerup',endDrag);
   viewport.addEventListener('pointercancel',endDrag);
   viewport.addEventListener('pointerleave',endDrag);
-  const close=result=>{overlay.remove();resolve(result);};
+  const close=result=>{try{if(dlg.open)dlg.close();}catch(error){}dlg.remove();resolve(result);};
   cancelBtn.addEventListener('click',()=>close(null));
   okBtn.addEventListener('click',()=>close({url:dataUrl,zoom:state.zoom,posX:state.posX,posY:state.posY}));
-  overlay.addEventListener('click',event=>{if(event.target===overlay)close(null);});
+  dlg.addEventListener('click',event=>{if(event.target===dlg)close(null);});
+  dlg.addEventListener('cancel',event=>{event.preventDefault();close(null);});
+  if(typeof dlg.showModal==='function')dlg.showModal();else dlg.setAttribute('open','');
  });
 }
 async function qlUploadEggAvatar(name){
@@ -423,30 +434,71 @@ function qlMakeEggAvatar(name){
  qlPaintEggAvatar(el,key);
  return el;
 }
-// 扫描所有收藏记录里的彩蛋聊天室，把出现过的说话人/解说员名字去重列出来，供头像库管理列表用；
-// 已经传过头像、但对应收藏记录已经被移出小剧场的名字也一并保留（不会因为列表不显示了就找不到）。
+// 名字来源有三路：①当前这个聊天里正文消息本身输出过的彩蛋聊天室——不管收没收藏进相册，
+// 只要正文出现过就算，直接拿 qlParseEggBlocks 扫一遍 ctx.chat 里每条消息的原文；②所有收藏
+// 记录里存的彩蛋快照(跨聊天也认，收藏之后换了别的聊天也还能管理)；③用户在头像库里手动
+// 加的名字(cfg().eggAvatarManualNames，给还没出现过、想提前传头像的角色用)。
+// 头像库里点过"删除"的名字记进 cfg().eggAvatarHiddenNames——这三路哪怕又扫到，也不会再
+// 出现在列表里；"删除"在这里的意思是"别再让我在这个列表里看到它"，不是真的清空所有痕迹，
+// 之后想要回来，在下面"添加名字"里把同样的名字再输一遍就行(会自动从隐藏名单里摘掉)。
 function qlCollectEggSpeakerNames(){
  const names=new Set();
  const s=cfg();
+ const ctx=getContext()||{};
+ for(const msg of ctx.chat||[]){
+  if(typeof msg?.mes!=='string'||!msg.mes)continue;
+  for(const block of qlParseEggBlocks(msg.mes)){
+   if(block?.room?.narrator)names.add(String(block.room.narrator).trim());
+   for(const m of block.messages||[])if(m?.speaker)names.add(String(m.speaker).trim());
+  }
+ }
  for(const r of s.records||[]){
   if(!Array.isArray(r?.eggBlocks))continue;
   for(const block of r.eggBlocks){
    if(block?.room?.narrator)names.add(String(block.room.narrator).trim());
-   for(const msg of block.messages||[])if(msg?.speaker)names.add(String(msg.speaker).trim());
+   for(const m of block.messages||[])if(m?.speaker)names.add(String(m.speaker).trim());
   }
  }
  for(const k of Object.keys(s.eggAvatars||{}))if(k)names.add(k);
+ for(const n of s.eggAvatarManualNames||[])if(n)names.add(String(n).trim());
  names.delete('');
- return [...names].sort((a,b)=>a.localeCompare(b,'zh'));
+ const hidden=new Set((s.eggAvatarHiddenNames||[]).map(n=>String(n).trim()));
+ return [...names].filter(n=>!hidden.has(n)).sort((a,b)=>a.localeCompare(b,'zh'));
+}
+function qlAddEggAvatarName(name){
+ const key=String(name||'').trim();if(!key)return;
+ const s=cfg();
+ if(!Array.isArray(s.eggAvatarManualNames))s.eggAvatarManualNames=[];
+ if(!s.eggAvatarManualNames.includes(key))s.eggAvatarManualNames.push(key);
+ if(Array.isArray(s.eggAvatarHiddenNames))s.eggAvatarHiddenNames=s.eggAvatarHiddenNames.filter(n=>String(n).trim()!==key);
+ save();
+}
+function qlDeleteEggAvatarName(name){
+ const key=String(name||'').trim();if(!key)return;
+ const s=cfg();
+ if(s.eggAvatars)delete s.eggAvatars[key];
+ if(Array.isArray(s.eggAvatarManualNames))s.eggAvatarManualNames=s.eggAvatarManualNames.filter(n=>String(n).trim()!==key);
+ if(!Array.isArray(s.eggAvatarHiddenNames))s.eggAvatarHiddenNames=[];
+ if(!s.eggAvatarHiddenNames.includes(key))s.eggAvatarHiddenNames.push(key);
+ save();
+ qlRepaintEggAvatars(key);
 }
 function renderEggAvatarLibrary(){
  const host=document.querySelector('#ql-egg-avatar-lib');
  if(!host)return;
  host.innerHTML='';
+ const addRow=document.createElement('div');addRow.className='ql-egg-avatar-lib-add-row';
+ const addInput=document.createElement('input');addInput.type='text';addInput.placeholder='手动添加一个名字（比如还没出现过的角色）';
+ const addBtn=document.createElement('button');addBtn.type='button';addBtn.className='menu_button';addBtn.textContent='添加';
+ const doAdd=()=>{const v=addInput.value.trim();if(!v)return;qlAddEggAvatarName(v);addInput.value='';renderEggAvatarLibrary();};
+ addBtn.addEventListener('click',doAdd);
+ addInput.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();doAdd();}});
+ addRow.append(addInput,addBtn);
+ host.append(addRow);
  const names=qlCollectEggSpeakerNames();
  if(!names.length){
   const empty=document.createElement('p');empty.className='ql-muted';
-  empty.textContent='还没有彩蛋聊天室里出现过的说话人名字。收藏几段带聊天室的彩蛋之后，这里会自动列出名字。';
+  empty.textContent='还没有彩蛋聊天室里出现过的说话人名字。正文出现过、或者收藏过带聊天室的彩蛋之后，这里会自动列出名字；也可以在上面手动添加。';
   host.append(empty);
   return;
  }
@@ -461,6 +513,9 @@ function renderEggAvatarLibrary(){
    resetBtn.addEventListener('click',()=>{qlResetEggAvatar(name);renderEggAvatarLibrary();});
    row.append(adjustBtn,resetBtn);
   }
+  const deleteBtn=document.createElement('button');deleteBtn.type='button';deleteBtn.className='menu_button ql-egg-avatar-lib-delete';deleteBtn.textContent='删除';
+  deleteBtn.addEventListener('click',()=>{qlDeleteEggAvatarName(name);renderEggAvatarLibrary();status('已从头像库列表移除「'+name+'」；以后还想管理它，在上面"添加名字"里再输一遍名字就行。');});
+  row.append(deleteBtn);
   host.append(row);
  });
 }
