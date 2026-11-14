@@ -13,7 +13,7 @@
 /* title###标题文字### 世界书小标题：结构固定是“左装饰线 + 标签正文 + 右装饰线”三段 span，
    默认（没有专门样式的相册风格）只显示中间的标签正文，跟随当前主题色走，不需要用户单独写酒馆正则。
    换相册风格时 applyChatAlbumStyleToAll 会给它重新套 ql-album-xxx class，样式跟着一起切换。 */
-#chat .ql-chat-image-title,#shizhen-panel .ql-chat-image-title{display:inline-flex;max-width:100%;align-items:center;margin:8px 2px 2px;overflow-wrap:anywhere}
+#chat .ql-chat-image-title,#shizhen-panel .ql-chat-image-title{display:inline-flex;max-width:100%;align-items:center;margin:18px 2px 6px;overflow-wrap:anywhere}
 #chat .ql-chat-image-title-line,#shizhen-panel .ql-chat-image-title-line{display:none}
 #chat .ql-chat-image-title-label,#shizhen-panel .ql-chat-image-title-label{display:inline-block;padding:3px 12px;font-size:12px;font-weight:600;letter-spacing:.02em;line-height:1.5;border-radius:999px;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));background:color-mix(in srgb,var(--ql-accent,var(--SmartThemeQuoteColor)) 18%,var(--ql-card,var(--SmartThemeBlurTintColor)));color:var(--ql-text,var(--SmartThemeBodyColor));overflow-wrap:anywhere}
 
