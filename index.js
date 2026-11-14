@@ -4225,6 +4225,8 @@ function renderTheater(){
  items.slice().reverse().forEach(item=>{
   const card=document.createElement('div');card.className='ql-theater-card';
   const style=qlResolveAlbumStyle(item.eggAlbumStyle||s.chatAlbumStyle||'follow');
+  // 摆放顺序跟正文/原来那张小漫画截图一致：标题在最上面，然后是图片，最后才是聊天室。
+  if(item.eggTitle)card.append(qlMakeTitleBadge(item.eggTitle,item.eggAlbumStyle||s.chatAlbumStyle||'follow'));
   if(item.dataUrl){
    const figure=document.createElement('figure');figure.className='ql-chat-image ql-album-'+style;
    const img=document.createElement('img');img.src=item.dataUrl;img.loading='lazy';
@@ -4233,7 +4235,6 @@ function renderTheater(){
    applyChatTheme(figure);
    card.append(figure);
   }
-  if(item.eggTitle)card.append(qlMakeTitleBadge(item.eggTitle,item.eggAlbumStyle||s.chatAlbumStyle||'follow'));
   (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
   if(groupOrder.length>1){const who=document.createElement('p');who.className='ql-muted ql-theater-card-who';who.textContent='角色相册：'+nameOf(item);card.append(who);}
   const removeBtn=document.createElement('button');removeBtn.type='button';removeBtn.className='menu_button ql-theater-remove';removeBtn.textContent='移出小剧场';
