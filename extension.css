@@ -5816,3 +5816,11 @@ body.ql-modal-open .ql-fb-ball{display:none}
 #shizhen-panel .ql-theater-filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 10px}
 #shizhen-panel .ql-theater-filter-row label{display:inline;margin:0;font-size:12px;white-space:nowrap}
 #shizhen-panel .ql-theater-filter-row select{width:auto;flex:1;min-width:120px}
+
+/* 头像库：列出彩蛋聊天室里出现过的说话人名字，每行一个头像(点了直接上传/更换)+名字+
+   有自定义头像时才出现的"恢复默认"。头像本身复用 .ql-egg-avatar，这里只管这一行的布局。 */
+#shizhen-panel .ql-egg-avatar-lib{display:flex;flex-direction:column;gap:8px;margin:8px 0 14px;max-height:50vh;overflow-y:auto}
+#shizhen-panel .ql-egg-avatar-lib-row{display:flex;align-items:center;gap:10px}
+#shizhen-panel .ql-egg-avatar-lib-row .ql-egg-avatar{cursor:pointer}
+#shizhen-panel .ql-egg-avatar-lib-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#shizhen-panel .ql-egg-avatar-lib-reset{font-size:12px;padding:4px 12px;flex:none}

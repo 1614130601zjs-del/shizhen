@@ -281,12 +281,109 @@ function qlEggAvatarColor(name){
  for(let i=0;i<str.length;i++)hash=(hash*31+str.charCodeAt(i))>>>0;
  return 'hsl('+(hash%360)+',46%,55%)';
 }
+// 头像库：按"说话人名字文本"精确匹配复用（跟用户确认过，不绑定角色卡——同一个角色如果在
+// 不同彩蛋里用了不同称呼，要分别传）。存在 cfg().eggAvatars[名字]=dataURL，跟收藏数据分开存，
+// 不会因为收藏记录被清理/移出小剧场就跟着丢。没传过的名字继续用"首字+哈希配色"占位，
+// 跟之前的行为完全一样。
+function qlEggAvatarUrlFor(name){
+ const key=String(name||'').trim();
+ if(!key)return '';
+ return String(cfg().eggAvatars?.[key]||'');
+}
+function qlPaintEggAvatar(el,name){
+ const key=String(name||'').trim();
+ const url=qlEggAvatarUrlFor(key);
+ if(url){
+  el.style.backgroundImage='url("'+url.replace(/"/g,'%22')+'")';
+  el.style.backgroundSize='cover';
+  el.style.backgroundPosition='center';
+  el.textContent='';
+ }else{
+  el.style.backgroundImage='none';
+  el.style.background=qlEggAvatarColor(key);
+  el.textContent=key.charAt(0)||'?';
+ }
+}
+// 同一个名字可能同时出现在好几个地方（当前展开的聊天室、情报抽屉、小剧场里好几张卡片……），
+// 传完一张头像要让所有这些地方立刻跟着换，不用用户自己一个个重新展开才看到。
+function qlRepaintEggAvatars(name){
+ const key=String(name||'').trim();if(!key)return;
+ document.querySelectorAll('.ql-egg-avatar[data-ql-egg-avatar-name="'+CSS.escape(key)+'"]').forEach(el=>qlPaintEggAvatar(el,key));
+}
+async function qlUploadEggAvatar(name){
+ const key=String(name||'').trim();
+ if(!key)return;
+ const input=document.createElement('input');input.type='file';input.accept='image/*';
+ input.addEventListener('change',async()=>{
+  const file=input.files?.[0];
+  if(!file)return;
+  try{
+   const dataUrl=await qlReadFileDataUrl(file);
+   const s=cfg();if(!s.eggAvatars)s.eggAvatars={};s.eggAvatars[key]=dataUrl;save();
+   qlRepaintEggAvatars(key);
+   const lib=document.querySelector('#ql-egg-avatar-lib');
+   if(lib&&!lib.hidden)renderEggAvatarLibrary();
+   status('已更新「'+key+'」的头像。');
+  }catch(error){status('读取图片失败：'+(error?.message||error));}
+ });
+ input.click();
+}
+function qlResetEggAvatar(name){
+ const key=String(name||'').trim();if(!key)return;
+ const s=cfg();if(s.eggAvatars)delete s.eggAvatars[key];save();
+ qlRepaintEggAvatars(key);
+}
 function qlMakeEggAvatar(name){
+ const key=String(name||'').trim();
  const el=document.createElement('span');
  el.className='ql-egg-avatar';
- el.style.background=qlEggAvatarColor(name);
- el.textContent=String(name||'').trim().charAt(0)||'?';
+ if(key){
+  el.dataset.qlEggAvatarName=key;
+  el.title='点击上传/更换头像';
+  el.style.cursor='pointer';
+  el.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();qlUploadEggAvatar(key);});
+ }
+ qlPaintEggAvatar(el,key);
  return el;
+}
+// 扫描所有收藏记录里的彩蛋聊天室，把出现过的说话人/解说员名字去重列出来，供头像库管理列表用；
+// 已经传过头像、但对应收藏记录已经被移出小剧场的名字也一并保留（不会因为列表不显示了就找不到）。
+function qlCollectEggSpeakerNames(){
+ const names=new Set();
+ const s=cfg();
+ for(const r of s.records||[]){
+  if(!Array.isArray(r?.eggBlocks))continue;
+  for(const block of r.eggBlocks){
+   if(block?.room?.narrator)names.add(String(block.room.narrator).trim());
+   for(const msg of block.messages||[])if(msg?.speaker)names.add(String(msg.speaker).trim());
+  }
+ }
+ for(const k of Object.keys(s.eggAvatars||{}))if(k)names.add(k);
+ names.delete('');
+ return [...names].sort((a,b)=>a.localeCompare(b,'zh'));
+}
+function renderEggAvatarLibrary(){
+ const host=document.querySelector('#ql-egg-avatar-lib');
+ if(!host)return;
+ host.innerHTML='';
+ const names=qlCollectEggSpeakerNames();
+ if(!names.length){
+  const empty=document.createElement('p');empty.className='ql-muted';
+  empty.textContent='还没有彩蛋聊天室里出现过的说话人名字。收藏几段带聊天室的彩蛋之后，这里会自动列出名字。';
+  host.append(empty);
+  return;
+ }
+ names.forEach(name=>{
+  const row=document.createElement('div');row.className='ql-egg-avatar-lib-row';
+  const label=document.createElement('span');label.className='ql-egg-avatar-lib-name';label.textContent=name;
+  row.append(qlMakeEggAvatar(name),label);
+  if(qlEggAvatarUrlFor(name)){
+   const resetBtn=document.createElement('button');resetBtn.type='button';resetBtn.className='menu_button ql-egg-avatar-lib-reset';resetBtn.textContent='恢复默认';
+   resetBtn.addEventListener('click',()=>{qlResetEggAvatar(name);renderEggAvatarLibrary();});
+   row.append(resetBtn);
+  }
+  host.append(row);
+ });
 }
 function qlMakeEggInfoLine(label,value){
  const row=document.createElement('div');row.className='ql-egg-info-line';
@@ -3511,7 +3608,7 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 </div>
 <div class="ql-page" data-page-panel="history" role="tabpanel" hidden><div class="ql-card"><h3>影像缓存</h3><p class="ql-muted">这里保存生成过的影像记录；点击缩略图可查看提示词、参考图与生成参数。</p><label for="ql-history-columns">每行影像数量</label><select id="ql-history-columns"><option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option><option value="5">5 张</option></select><label for="ql-history-kind">显示</label><select id="ql-history-kind"><option value="">全部</option><option value="normal">正文 / 状态栏</option><option value="egg">彩蛋</option></select><button type="button" class="ql-cache-footer-ball" id="ql-cache-footer-ball" aria-label="展开底片工具" aria-expanded="false" title="底片工具（可拖动）">⋮<span class="ql-cache-footer-ball-badge" data-ql-footer-ball-badge hidden>0</span></button><div id="ql-cache-footer" class="ql-cache-bulk-tools" hidden><div class="ql-cache-bar-row"><button type="button" class="menu_button" id="ql-cache-select-mode" aria-pressed="false">多选</button><label class="ql-cache-select-all" hidden><input type="checkbox" data-ql-select-all disabled> 全选</label><span class="ql-cache-selected-count" data-ql-selected-count hidden>已选 0 张</span><button type="button" class="menu_button" data-ql-bulk-download disabled hidden>逐张下载</button><button type="button" class="menu_button" data-ql-bulk-delete disabled hidden>删除所选</button></div><div class="ql-cache-bar-row ql-cache-clear-row"><select id="ql-clear-range" aria-label="清理范围"><option value="0">清理全部</option><option value="1">清理 1 天前</option><option value="3">清理 3 天前</option><option value="7">清理 7 天前</option><option value="30">清理 30 天前</option></select><button type="button" class="menu_button" id="ql-clear">清理缓存</button><button type="button" class="menu_button" id="ql-clear-all" title="连正文里每个格子当前的图也一起清掉">彻底清空</button><button type="button" class="menu_button" id="ql-dedupe" title="完全一样的图只留一张">合并重复</button></div><div class="ql-cache-bar-row"><label for="ql-record-limit">自动保留</label><select id="ql-record-limit"><option value="300">最近 300 条</option><option value="500">最近 500 条</option><option value="800">最近 800 条</option><option value="1500">最近 1500 条</option><option value="0">不限制</option></select><span class="ql-muted">超出时自动清掉最旧的缓存</span></div><p class="ql-muted ql-cache-bar-tip" id="ql-clear-tip"></p></div><div id="ql-history"></div></div></div>
 <div class="ql-page" data-page-panel="albums" role="tabpanel" hidden><div class="ql-card ql-album-library-card"><div id="ql-character-albums"></div></div></div>
-<div class="ql-page" data-page-panel="theater" role="tabpanel" hidden><div class="ql-card"><h3>小剧场</h3><p class="ql-muted">收藏图片时（点正文图片的收藏按钮），如果这条消息带着彩蛋聊天室，会把当时的标题和对话内容一起存下来，重 Roll 掉之后还能在这里原样回看，不受正文重 Roll 影响。</p><div id="ql-theater-list"></div></div></div>
+<div class="ql-page" data-page-panel="theater" role="tabpanel" hidden><div class="ql-card"><h3>小剧场</h3><p class="ql-muted">收藏图片时（点正文图片的收藏按钮），如果这条消息带着彩蛋聊天室，会把当时的标题和对话内容一起存下来，重 Roll 掉之后还能在这里原样回看，不受正文重 Roll 影响。</p><div class="ql-row"><button type="button" class="menu_button" id="ql-egg-avatar-lib-btn">头像库</button></div><p class="ql-muted">点聊天室里任意一个头像，随时可以补传；在这里统一上传/替换的头像，聊天室里同名的头像会一起更新。</p><div id="ql-egg-avatar-lib" class="ql-egg-avatar-lib" hidden></div><div id="ql-theater-list"></div></div></div>
 <div class="ql-page" data-page-panel="prompt-gallery" role="tabpanel" hidden><div class="ql-card ql-prompt-gallery-page-card"><h3 id="ql-prompt-gallery-title" class="ql-muted" hidden>提示词图集</h3><p class="ql-muted" id="ql-prompt-gallery-description" hidden></p><div id="ql-prompt-gallery-content"></div></div></div>
 <div class="ql-page" data-page-panel="settings" role="tabpanel" hidden><div class="ql-card"><h3>插件运行状态</h3><p class="ql-muted">关闭后会暂停拾帧的状态栏扫描、正文标记自动触发和自动生图；已有影像、相册与设置会保留。</p><div class="ql-row"><button id="ql-plugin-toggle" class="menu_button ql-primary" type="button" aria-pressed="true">插件：已启用</button></div></div><div class="ql-card"><h3>数据导出与导入</h3><p class="ql-muted">在这里导出或导入拾帧数据备份。导入备份会替换当前拾帧数据，请先备份现有内容。</p><div class="ql-row"><button id="ql-export-all-data" type="button" class="menu_button">导出拾帧数据</button><button id="ql-import-all-data" type="button" class="menu_button">导入拾帧备份</button></div><input id="ql-import-all-file" type="file" accept=".json,application/json" hidden><p id="ql-export-all-status" class="ql-muted" role="status"></p></div><div class="ql-card"><h3>图片下载选项</h3><p class="ql-muted">可选择保存为 PNG 或 JPG。PNG 保留原始文件及其元数据；JPG 会重新编码图像，不保留原 PNG 的提示词与生成参数数据块。</p><label for="ql-download-format">下载文件格式</label><div class="ql-row ql-setting-control-row"><select id="ql-download-format"><option value="png">PNG（.png）</option><option value="jpg">JPG（.jpg）</option></select><button id="ql-png-download-save" type="button" class="menu_button ql-primary">保存下载格式</button></div><p id="ql-png-download-status" class="ql-muted" role="status"></p></div><div class="ql-card"><h3>放大图小互动（果冻）</h3><p class="ql-muted">在详情页点开放大图后，可以戳一戳、拖一拖、摇一摇图片，松手会 Q 弹地回去。纯装饰，默认关闭。放大图下方的「果冻」小面板可以随时快速切换这些选项，还能涂出「选区」，只让选中的地方动。</p><label for="ql-jelly-on">果冻</label><select id="ql-jelly-on"><option value="off">关闭</option><option value="on">开启</option></select><label for="ql-jelly-scope">范围</label><select id="ql-jelly-scope"><option value="local">局部：按到的一小块凹下去</option><option value="smudge">抹开：手指划过的地方被带着走，松手回弹</option><option value="whole">全屏：整张图一起弹</option></select><label>交互方式（可多选）</label><label class="ql-check"><input type="checkbox" id="ql-jelly-drag"> 拖动：按住拖拽拉伸，松手回弹</label><label class="ql-check"><input type="checkbox" id="ql-jelly-shake"> 摇晃手机：图片跟着晃，停了弹回</label><label class="ql-check"><input type="checkbox" id="ql-jelly-burst"> 点一下连晃：点一下图，自己连晃几下</label><div id="ql-burst-box"><label for="ql-burst-mode">连晃模式</label><select id="ql-burst-mode"><option value="wobble">摇晃（随机方向晃几下）</option><option value="press">点击反馈（按压回弹，重复几次）</option></select><label for="ql-burst-n">次数 <span id="ql-burst-n-v" class="ql-muted"></span></label><input id="ql-burst-n" type="range" min="1" max="10" step="1"><label for="ql-burst-power">幅度 <span id="ql-burst-power-v" class="ql-muted"></span></label><input id="ql-burst-power" type="range" min="20" max="200" step="5"><label class="ql-check"><input type="checkbox" id="ql-burst-decay"> 越晃越弱</label></div><p id="ql-jelly-shake-msg" class="ql-muted" role="status"></p><label for="ql-jelly-strength">弹性</label><select id="ql-jelly-strength"><option value="soft">软糯</option><option value="mid">Q弹</option><option value="bouncy">DUANG</option></select></div><div class="ql-card"><h3>悬浮球（小萌物）</h3><p class="ql-muted">屏幕边上放一个可拖动的小萌物，点一下直接打开拾帧；手机摇晃时它会摇头晃脑。默认关闭。</p><div id="ql-fb-settings"></div></div><div class="ql-card"><h3>聊天相册样式</h3><p class="ql-muted">选择正文生图卡片的相册边框风格，保存后会应用到现有图片和新图片。</p><label for="ql-chat-album-style">相册外观</label><div class="ql-row ql-setting-control-row"><select id="ql-chat-album-style"><option value="follow">跟随界面风格（默认）</option><option value="pixel">像素掌机</option><option value="ccd">CCD 数码相机</option><option value="polaroid">拍立得手账</option><option value="scroll">简约书笺</option><option value="cyber">赛博像素</option><option value="win">经典桌面（Windows）</option><option value="news">复古报纸</option><option value="purikura">大头贴（Y2K）</option><option value="receipt">热敏小票</option><option value="comic">黑白漫画分镜卡</option><option value="classic">经典相册（白边留白）</option><option value="film">胶片相册（深色边框）</option><option value="soft">柔和卡片（圆角浅色）</option></select><button id="ql-chat-album-style-save" type="button" class="menu_button">应用相册样式</button></div><p id="ql-chat-album-style-status" class="ql-muted" role="status"></p><details class="ql-custom-style-box"><summary>✦ 新建 / 管理自定义相册样式</summary><label for="ql-ca-pick">选择要编辑的相册样式</label><select id="ql-ca-pick"><option value="">＋ 新建相册样式</option></select><label for="ql-ca-name">样式名称</label><input id="ql-ca-name" type="text" maxlength="24" placeholder="给相册样式起个名字"><label for="ql-ca-css">相册样式 CSS（含说明的骨架）</label><textarea id="ql-ca-css" rows="12" spellcheck="false"></textarea><div class="ql-row"><button id="ql-ca-skeleton" type="button" class="menu_button">插入骨架</button><button id="ql-ca-save" type="button" class="menu_button">保存并应用</button><button id="ql-ca-delete" type="button" class="menu_button">删除</button></div><div class="ql-row"><button id="ql-ca-export" type="button" class="menu_button">导出 JSON</button><button id="ql-ca-export-ai" type="button" class="menu_button">导出给 AI（含说明）</button><button id="ql-ca-import" type="button" class="menu_button">导入 JSON / CSS</button><input id="ql-ca-file" type="file" accept=".json,.css,application/json,text/css" hidden></div><p id="ql-ca-status" class="ql-muted" role="status"></p></details></div><div class="ql-card"><h3>外观与配色</h3><p class="ql-muted">拾帧使用独立配色与字体，不跟随酒馆主题设置；可选择低饱和配色或自选点缀色。</p><label for="ql-ui-style">界面风格</label><div class="ql-row ql-setting-control-row"><select id="ql-ui-style"><option value="default">柔和（默认）</option><option value="pixel">像素掌机</option><option value="ccd">CCD 数码相机</option><option value="polaroid">拍立得手账</option><option value="scroll">简约书笺</option><option value="cyber">赛博像素</option><option value="win">经典桌面（Windows）</option><option value="crab">小螃蟹（沙滩）</option><option value="cat">小黑猫（月夜）</option><option value="news">复古报纸</option><option value="purikura">大头贴（Y2K）</option><option value="receipt">热敏小票</option></select></div><details class="ql-custom-style-box"><summary>✦ 新建 / 管理自定义风格</summary><label for="ql-cs-pick">选择要编辑的风格</label><select id="ql-cs-pick"><option value="">＋ 新建风格</option></select><label for="ql-cs-name">风格名称</label><input id="ql-cs-name" type="text" maxlength="24" placeholder="给风格起个名字"><label for="ql-cs-css">风格 CSS（含变量说明的骨架）</label><textarea id="ql-cs-css" rows="14" spellcheck="false"></textarea><div class="ql-row"><button id="ql-cs-skeleton" type="button" class="menu_button">插入骨架</button><button id="ql-cs-save" type="button" class="menu_button">保存并应用</button><button id="ql-cs-delete" type="button" class="menu_button">删除</button></div><div class="ql-row"><button id="ql-cs-export" type="button" class="menu_button">导出 JSON</button><button id="ql-cs-export-ai" type="button" class="menu_button">导出给 AI（含说明）</button><button id="ql-cs-import" type="button" class="menu_button">导入 JSON / CSS</button><input id="ql-cs-file" type="file" accept=".json,.css,application/json,text/css" hidden></div><p id="ql-cs-status" class="ql-muted" role="status"></p></details><p class="ql-muted">风格改变设置面板、放大弹窗和详情页的外观；每套风格自带点缀色，在下方配色里选别的配色或「自选颜色」就会换成它。</p><label for="ql-ui-tint">背景染色强度 <span id="ql-ui-tint-value" class="ql-muted"></span></label><input id="ql-ui-tint" type="range" min="0" max="24" step="1"><p class="ql-muted">把点缀色轻轻染进背景；0 为不染色，数值越大颜色越明显（只在选了别的配色或自选颜色时有效）。</p><label for="ql-theme-color">点缀色（拖动色环，或用下面三个滑条）</label><div class="ql-row ql-setting-control-row"><select id="ql-theme-preset" hidden><option value="mist">雾灰蓝（默认独立主题）</option><option value="sage">鼠尾草绿</option><option value="lavender">灰紫</option><option value="oat">燕麦奶茶</option><option value="custom">自选颜色</option></select><button id="ql-theme-apply" type="button" class="menu_button">应用配色</button><button id="ql-theme-reset" type="button" class="menu_button">恢复默认</button></div><div id="ql-custom-color-row"><div class="ql-color-picker-row"><input id="ql-theme-color" type="color" value="#9aaec2" aria-label="自选点缀色"><span id="ql-theme-color-value">#9AAEC2</span></div><div class="ql-hsl-row"><label for="ql-hsl-h">色相</label><input id="ql-hsl-h" class="ql-hsl-hue" type="range" min="0" max="360" step="1"><label for="ql-hsl-s">饱和度</label><input id="ql-hsl-s" class="ql-hsl-sat" type="range" min="0" max="100" step="1"><label for="ql-hsl-l">明度</label><input id="ql-hsl-l" class="ql-hsl-lum" type="range" min="15" max="85" step="1"></div><p class="ql-muted">只调整拾帧界面的点缀色，卡片和图片周围保持浅色底，不会把相框变成深色。</p></div><p id="ql-theme-status" class="ql-muted" role="status"></p></div><div class="ql-card"><h3>接口连接设置</h3><nav class="ql-subtabs" role="tablist" aria-label="接口类型"><button type="button" class="ql-subtab active" data-subpage="conn-nai-official" aria-selected="true">NAI 官网</button><button type="button" class="ql-subtab" data-subpage="conn-nai-third" aria-selected="false">NAI 第三方</button></nav><section class="ql-subpage active" data-subpage-panel="conn-nai-official"><p class="ql-muted">官网模式使用 NovelAI 官方 API，Key 仅保存在当前酒馆扩展设置中。</p><label for="ql-nai-key">NovelAI 官网 Key</label><input id="ql-nai-key" type="password" autocomplete="off" placeholder="NovelAI Persistent API Token"><button id="ql-save-nai" class="menu_button ql-primary">保存 NAI 官网连接</button></section><section class="ql-subpage" data-subpage-panel="conn-nai-third" hidden><p class="ql-muted">第三方 NAI 兼容服务需要填写服务商提供的地址与 Key。</p><label for="ql-nai-third-endpoint">第三方 API 地址</label><input id="ql-nai-third-endpoint" placeholder="https://服务商地址"><label for="ql-nai-third-key">第三方 API Key</label><input id="ql-nai-third-key" type="password" autocomplete="off" placeholder="服务商提供的 Key"><button id="ql-save-nai-third" class="menu_button ql-primary">保存 NAI 第三方连接</button></section><div hidden><input id="ql-endpoint"><input id="ql-key"><input id="ql-gpt-endpoint"><input id="ql-gpt-key"></div></div><div hidden><select id="ql-provider"><option value="novelai">NovelAI 官网</option><option value="novelai-thirdparty">NovelAI 第三方</option></select><input id="ql-model"><select id="ql-size"><option value="auto">auto</option><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option><option>2048x2048</option><option>2048x1152</option><option>3840x2160</option><option>2160x3840</option></select><select id="ql-quality"><option>low</option><option>medium</option><option>high</option></select><input id="ql-nai-model"><input id="ql-nai-steps"><input id="ql-nai-scale"><input id="ql-nai-width" type="hidden"><input id="ql-nai-height" type="hidden"><select id="ql-nai-sampler"><option value="k_euler_ancestral">Euler Ancestral</option><option value="k_euler">Euler</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_2m">DPM++ 2M</option><option value="k_dpmpp_sde">DPM++ SDE</option><option value="k_dpmpp_2m_sde">DPM++ 2M SDE</option><option value="ddim_v3">DDIM（仅 V3 模型）</option></select><select id="ql-nai-scheduler"><option value="karras">Karras</option><option value="native">Native</option><option value="exponential">Exponential</option><option value="polyexponential">Polyexponential</option></select><input id="ql-nai-normalize" type="checkbox"><input id="ql-nai-quality"><input id="ql-nai-seed"><div id="ql-openai-settings" hidden></div><div id="ql-nai-settings" hidden></div></div></div>
 </section></div>`;}
@@ -4258,6 +4355,15 @@ function renderTheater(){
   // 内联覆盖的那份通用主题色，而不是当前界面风格（比如 ccd）自己的卡片背景色。
   host.append(card);
  });
+ const libBtn=document.querySelector('#ql-egg-avatar-lib-btn'),libHost=document.querySelector('#ql-egg-avatar-lib');
+ if(libBtn&&libHost){
+  libBtn.onclick=()=>{
+   libHost.hidden=!libHost.hidden;
+   libBtn.textContent=libHost.hidden?'头像库':'收起头像库';
+   if(!libHost.hidden)renderEggAvatarLibrary();
+  };
+  if(!libHost.hidden)renderEggAvatarLibrary();
+ }
 }
 function renderLibrary(){
  const s=cfg();
