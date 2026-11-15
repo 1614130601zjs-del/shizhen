@@ -335,7 +335,7 @@ function qlSaveEggAvatar(name,dataUrl){
 function qlOpenEggAvatarEditor(name,dataUrl){
  return new Promise(resolve=>{
   const dlg=document.createElement('dialog');dlg.className='ql-egg-avatar-editor';
-  const title=document.createElement('p');title.textContent='调整「'+name+'」的头像显示范围——拖动图片或用方向按钮挪位置，下面滑条缩放';
+  const title=document.createElement('p');title.textContent='调整「'+name+'」的头像显示范围——拖动图片挪位置，下面滑条缩放/左右/上下';
   const viewport=document.createElement('div');viewport.className='ql-egg-avatar-editor-viewport';
   const img=document.createElement('img');img.alt='';img.draggable=false;
   viewport.append(img);
@@ -349,14 +349,11 @@ function qlOpenEggAvatarEditor(name,dataUrl){
   const zoomS=mkSliderRow('缩放','1','3','.01','1');
   const xS=mkSliderRow('左右','0','100','1','50');
   const yS=mkSliderRow('上下','0','100','1','50');
-  const pad=document.createElement('div');pad.className='ql-egg-avatar-editor-pad';
-  const mkArrow=(cls,label,dx,dy)=>{const b=document.createElement('button');b.type='button';b.className='menu_button ql-egg-avatar-editor-arrow '+cls;b.textContent=label;b.addEventListener('click',()=>nudge(dx,dy));return b;};
-  pad.append(mkArrow('ql-egg-avatar-editor-arrow-up','↑',0,-8),mkArrow('ql-egg-avatar-editor-arrow-left','←',-8,0),mkArrow('ql-egg-avatar-editor-arrow-right','→',8,0),mkArrow('ql-egg-avatar-editor-arrow-down','↓',0,8));
   const actions=document.createElement('div');actions.className='ql-row ql-egg-avatar-editor-actions';
   const cancelBtn=document.createElement('button');cancelBtn.type='button';cancelBtn.className='menu_button';cancelBtn.textContent='取消';
   const okBtn=document.createElement('button');okBtn.type='button';okBtn.className='menu_button';okBtn.textContent='确定';
   actions.append(cancelBtn,okBtn);
-  dlg.append(title,viewport,pad,zoomS.row,xS.row,yS.row,actions);
+  dlg.append(title,viewport,zoomS.row,xS.row,yS.row,actions);
   document.body.append(dlg);
   let naturalW=0,naturalH=0,ready=false;
   const updatePreview=()=>{
@@ -367,13 +364,6 @@ function qlOpenEggAvatarEditor(name,dataUrl){
    const maxX=Math.max(0,w-viewport.clientWidth),maxY=Math.max(0,h-viewport.clientHeight);
    img.style.left=(-maxX*Number(xS.input.value||50)/100)+'px';
    img.style.top=(-maxY*Number(yS.input.value||50)/100)+'px';
-  };
-  // "→"=往右挪一点取景框，露出图片更靠右的部分，对应左右滑条的值要变大；"↓"同理对应上下
-  // 滑条变大。直接改滑条的值再调 updatePreview，跟拖动最终改的是同一组数，不会对不上。
-  const nudge=(dx,dy)=>{
-   xS.input.value=String(Math.max(0,Math.min(100,Number(xS.input.value||50)+dx)));
-   yS.input.value=String(Math.max(0,Math.min(100,Number(yS.input.value||50)+dy)));
-   updatePreview();
   };
   const src=new Image();
   src.onload=()=>{
