@@ -4066,6 +4066,9 @@ dialog.ql-viewfinder-lightbox button:disabled {
 #shizhen-panel .ql-llm-tag-box #ql-llm-tag-status{align-self:center;}
 #shizhen-panel #ql-llm-tag-custom-box[hidden]{display:none!important;}
 #shizhen-panel #ql-llm-tag-custom-box label{display:block;margin:8px 0 4px;}
+#shizhen-panel #ql-llm-tag-custom-box .ql-row{align-items:center;gap:8px;}
+#shizhen-panel #ql-llm-tag-custom-box .ql-row input{flex:1;min-width:0;}
+#shizhen-panel #ql-llm-tag-fetch-models{flex:0 0 auto;white-space:nowrap;}
 #shizhen-panel .ql-viewfinder-album-target label{
  flex:0 0 auto;margin:0;font-size:12px;color:var(--ql-muted,var(--SmartThemeQuoteColor,inherit));
 }
