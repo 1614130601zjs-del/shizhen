@@ -4062,6 +4062,10 @@ dialog.ql-viewfinder-lightbox button:disabled {
  display:flex;align-items:center;gap:10px;margin:10px 0 12px;min-width:0;
 }
 #shizhen-panel .ql-viewfinder-album-target[hidden]{display:none!important;}
+#shizhen-panel .ql-llm-tag-box textarea{min-height:64px;}
+#shizhen-panel .ql-llm-tag-box #ql-llm-tag-status{align-self:center;}
+#shizhen-panel #ql-llm-tag-custom-box[hidden]{display:none!important;}
+#shizhen-panel #ql-llm-tag-custom-box label{display:block;margin:8px 0 4px;}
 #shizhen-panel .ql-viewfinder-album-target label{
  flex:0 0 auto;margin:0;font-size:12px;color:var(--ql-muted,var(--SmartThemeQuoteColor,inherit));
 }
