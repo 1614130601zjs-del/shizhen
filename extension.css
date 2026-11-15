@@ -4069,6 +4069,7 @@ dialog.ql-viewfinder-lightbox button:disabled {
 #shizhen-panel #ql-llm-tag-custom-box .ql-row{align-items:center;gap:8px;}
 #shizhen-panel #ql-llm-tag-custom-box .ql-row input{flex:1;min-width:0;}
 #shizhen-panel #ql-llm-tag-fetch-models{flex:0 0 auto;white-space:nowrap;}
+#shizhen-panel #ql-llm-tag-wi-exclude-worlds,#shizhen-panel #ql-llm-tag-wi-exclude-patterns{min-height:48px;}
 #shizhen-panel .ql-viewfinder-album-target label{
  flex:0 0 auto;margin:0;font-size:12px;color:var(--ql-muted,var(--SmartThemeQuoteColor,inherit));
 }
