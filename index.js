@@ -5492,15 +5492,34 @@ async function qlFetchWorldInfoForTag(zhText){
   return '';
  }
 }
-// 列出当前绑定世界书的全部条目（不限于本次会触发的），给设置页做"勾选哪些生效"的清单。
+// 只拿「当前角色绑定的世界书」+「全局勾选的世界书」这两类书名，不要整个酒馆装了的所有世界书——
+// 角色绑定书名是角色卡标准字段 characters[characterId].data.extensions.world；
+// 全局勾选书名酒馆本身存在 world-info.js 模块内的 world_info.globalSelect 数组里（同 checkWorldInfo
+// 一样不在 getContext() 上，需要动态 import 取），两边取不到就当没有，不报错。
+// 不包含"本聊天单独挂的额外世界书"(chat_metadata.world_info)，用户只要当前角色+全局这两类。
+async function qlGetScopedWorldNames(){
+ const ctx=getContext();
+ const names=new Set();
+ try{
+  const characterId=ctx?.characterId;
+  const charWorld=ctx?.characters?.[characterId]?.data?.extensions?.world;
+  if(charWorld)names.add(String(charWorld).trim());
+ }catch(e){}
+ try{
+  const mod=await import('/scripts/world-info.js');
+  const globalSelect=mod?.world_info?.globalSelect;
+  if(Array.isArray(globalSelect))globalSelect.forEach(n=>{if(n)names.add(String(n).trim());});
+ }catch(e){console.error('[拾帧 Lite] 读取全局世界书列表失败',e);}
+ return [...names].filter(Boolean);
+}
+// 列出当前角色绑定世界书+全局世界书的全部条目（不限于本次会触发的），给设置页做"勾选哪些生效"的清单。
 // 跟 qlFetchWorldInfoForTag 的触发扫描是两件事：这里只是把条目摆出来给用户看/勾，
 // 真正生效时仍然要"这次描述触发到 + 没被勾掉"才会被用上，勾掉的条目无论触不触发都不会再出现。
-// getWorldInfoNames/loadWorldInfo 是酒馆稳定扩展API，getContext()本身就暴露（不像checkWorldInfo要动态import）。
+// loadWorldInfo 是酒馆稳定扩展API，getContext()本身就暴露（不像checkWorldInfo要动态import）。
 async function qlListWorldInfoEntries(){
  const ctx=getContext();
- const getNames=ctx?.getWorldInfoNames;
- if(typeof getNames!=='function'||typeof ctx?.loadWorldInfo!=='function')return null;
- const names=[...new Set((getNames()||[]).map(n=>String(n||'').trim()).filter(Boolean))];
+ if(typeof ctx?.loadWorldInfo!=='function')return null;
+ const names=await qlGetScopedWorldNames();
  const books=[];
  for(const name of names){
   try{
@@ -5530,7 +5549,7 @@ async function qlRenderWorldInfoPicker(){
  const books=await qlListWorldInfoEntries();
  if(books===null){
   box.innerHTML='';
-  if(statusEl)statusEl.textContent='当前酒馆版本不支持列出世界书条目（缺少 getWorldInfoNames/loadWorldInfo），排除功能暂时用不了，但转换仍会正常工作、只是不能精细排除。';
+  if(statusEl)statusEl.textContent='当前酒馆版本不支持列出世界书条目（缺少 loadWorldInfo），排除功能暂时用不了，但转换仍会正常工作、只是不能精细排除。';
   return;
  }
  if(!books.length){
