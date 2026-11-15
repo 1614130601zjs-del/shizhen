@@ -5846,7 +5846,10 @@ dialog.ql-egg-avatar-editor::backdrop{background:rgba(0,0,0,.68);backdrop-filter
 dialog.ql-egg-avatar-editor p{margin:0 0 10px;font-size:13px;color:#aaa;max-width:280px}
 .ql-egg-avatar-editor-viewport{position:relative;overflow:hidden;width:260px;height:260px;max-width:100%;margin:0 auto;border-radius:10px;border:2px solid #444;touch-action:none;cursor:grab;background:#111}
 .ql-egg-avatar-editor-viewport:active{cursor:grabbing}
-.ql-egg-avatar-editor-viewport img{width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none}
+/* 跟「拾帧相册」封面裁切取景框(.ql-album-crop-viewport img)同一套做法：img 用 position:
+   absolute 的 left/top(像素)在取景框里挪，宽高也是 JS 算好直接写死像素，不靠 object-fit/
+   object-position——这两套叠起来之前算出来的效果跟拖动/按钮对不上，所以统一改成这个。 */
+.ql-egg-avatar-editor-viewport img{position:absolute;max-width:none;max-height:none;pointer-events:none;user-select:none;-webkit-user-drag:none}
 /* 方向按钮摆成十字(上/左/右/下)，中间留空；一个 3 列网格，上下各占一行、左右占中间那一行。 */
 .ql-egg-avatar-editor-pad{display:grid;grid-template-columns:repeat(3,36px);grid-template-rows:repeat(3,34px);justify-content:center;gap:4px;margin:10px auto 0}
 .ql-egg-avatar-editor-arrow{padding:0;margin:0;font-size:16px;line-height:1}

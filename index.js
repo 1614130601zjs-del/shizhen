@@ -282,35 +282,29 @@ function qlEggAvatarColor(name){
  return 'hsl('+(hash%360)+',46%,55%)';
 }
 // 头像库：按"说话人名字文本"精确匹配复用（跟用户确认过，不绑定角色卡——同一个角色如果在
-// 不同彩蛋里用了不同称呼，要分别传）。存在 cfg().eggAvatars[名字]=记录，跟收藏数据分开存，
+// 不同彩蛋里用了不同称呼，要分别传）。存在 cfg().eggAvatars[名字]=dataURL，跟收藏数据分开存，
 // 不会因为收藏记录被清理/移出小剧场就跟着丢。没传过的名字继续用"首字+哈希配色"占位，
-// 跟之前的行为完全一样。
-// 记录格式是 {url,zoom,posX,posY}：url 是图片 dataURL，zoom 是缩放百分比(100=不放大)，
-// posX/posY 是 0~100 的裁切焦点百分比（配合 img 的 object-position 决定"显示框里露出哪一块"）。
-// 早期版本直接存纯 dataURL 字符串（没有缩放/裁切这些），这里兼容一下，读到字符串就当
-// zoom:100/posX:50/posY:50 处理，不会因为升级代码就看不到旧头像。
-function qlEggAvatarRecordFor(name){
+// 跟之前的行为完全一样。存的就是裁好的正方形成品图(调整弹窗里拖/缩/点方向按钮选好取景范围
+// 后，点"确定"时已经用 canvas 烤成一张裁好的图)，显示的地方不用再算什么缩放/偏移，直接
+// object-fit:cover 铺满就行，跟角色词条头像、相册封面走的是同一个"存成品图"思路。
+function qlEggAvatarUrlFor(name){
  const key=String(name||'').trim();
- if(!key)return null;
+ if(!key)return '';
  const raw=cfg().eggAvatars?.[key];
- if(!raw)return null;
- if(typeof raw==='string')return{url:raw,zoom:100,posX:50,posY:50};
- if(raw&&typeof raw==='object'&&raw.url)return{url:String(raw.url),zoom:Number(raw.zoom)||100,posX:typeof raw.posX==='number'?raw.posX:50,posY:typeof raw.posY==='number'?raw.posY:50};
- return null;
+ if(!raw)return '';
+ if(typeof raw==='string')return raw;
+ if(raw&&typeof raw==='object'&&raw.url)return String(raw.url);// 兼容中间版本存过的 {url,...} 格式
+ return '';
 }
-function qlEggAvatarUrlFor(name){return qlEggAvatarRecordFor(name)?.url||'';}
 function qlPaintEggAvatar(el,name){
  const key=String(name||'').trim();
- const rec=qlEggAvatarRecordFor(key);
+ const url=qlEggAvatarUrlFor(key);
  el.innerHTML='';
- if(rec?.url){
+ if(url){
   el.style.background='none';
   el.textContent='';
   const img=document.createElement('img');
-  img.src=rec.url;img.draggable=false;
-  img.style.objectPosition=rec.posX+'% '+rec.posY+'%';
-  img.style.transform='scale('+(Math.max(100,rec.zoom)/100)+')';
-  img.style.transformOrigin='center';
+  img.src=url;img.draggable=false;img.alt='';
   el.append(img);
  }else{
   el.style.background=qlEggAvatarColor(key);
@@ -323,69 +317,101 @@ function qlRepaintEggAvatars(name){
  const key=String(name||'').trim();if(!key)return;
  document.querySelectorAll('.ql-egg-avatar[data-ql-egg-avatar-name="'+CSS.escape(key)+'"]').forEach(el=>qlPaintEggAvatar(el,key));
 }
-function qlSaveEggAvatar(name,record){
+function qlSaveEggAvatar(name,dataUrl){
  const key=String(name||'').trim();if(!key)return;
- const s=cfg();if(!s.eggAvatars)s.eggAvatars={};s.eggAvatars[key]=record;save();
+ const s=cfg();if(!s.eggAvatars)s.eggAvatars={};s.eggAvatars[key]=dataUrl;save();
  qlRepaintEggAvatars(key);
  const lib=document.querySelector('#ql-egg-avatar-lib');
  if(lib&&!lib.hidden)renderEggAvatarLibrary();
 }
-// 头像裁切/缩放调整弹窗：拖动取景框改 posX/posY，滑条改 zoom；传新图和"调整"已有头像共用
-// 这一个弹窗——区别只是传新图时先读好 dataURL 再带着默认 zoom:100/posX:50/posY:50 打开。
-// 没用现成的裁切库，就是最简单的"拖一下、缩一下"：object-position 当平移、transform:scale
-// 当缩放，数学上不追求像素级精确，够手机上调个大概的露出范围就行。
-// 用原生 <dialog>+showModal() 而不是 fixed+超大 z-index 的 div——这个坑之前在取景区灯箱/
-// 下载面板那两处已经踩过一次了(搜 Top Layer 能看到那两处的注释)：普通 fixed 层叠上下文
-// 终究可能被酒馆自己的弹窗或插件主面板(#ql-overlay)压在下面，只有进浏览器 Top Layer 才稳。
-function qlOpenEggAvatarEditor(name,dataUrl,initial){
+// 头像裁切/缩放调整弹窗——用户要求直接照搬「拾帧相册」封面取景那一套已经验证过能用的逻辑
+// (搜 openCropForSource/updateCropPreview 能看到原版)，不是另起一套新算法：
+// 图片用 position:absolute 的 left/top(像素)摆在固定大小的取景框里，缩放先算出"刚好铺满
+// 取景框"的基准比例(Math.max(框宽/原图宽,框高/原图高))，再乘缩放滑条的值；左右/上下两个
+// 0~100 的滑条，换算成 left/top = -(图片比取景框多出来的那部分) * 滑条值/100。拖动直接改
+// left/top 再反推滑条值，方向按钮则是改滑条值再重新算 left/top——两者共用同一套
+// updatePreview，不会出现"拖动和按钮各算各的"而对不上的问题。确定时按同样的比例在 canvas
+// 上画一刀，存的是裁好的成品图，别处显示不用再算一遍。
+function qlOpenEggAvatarEditor(name,dataUrl){
  return new Promise(resolve=>{
-  const state={zoom:initial?.zoom||100,posX:initial?.posX??50,posY:initial?.posY??50};
   const dlg=document.createElement('dialog');dlg.className='ql-egg-avatar-editor';
-  const title=document.createElement('p');title.textContent='调整「'+name+'」的头像显示范围——拖动图片或用下面的方向按钮挪位置，滑条缩放';
+  const title=document.createElement('p');title.textContent='调整「'+name+'」的头像显示范围——拖动图片或用方向按钮挪位置，下面滑条缩放';
   const viewport=document.createElement('div');viewport.className='ql-egg-avatar-editor-viewport';
-  const img=document.createElement('img');img.src=dataUrl;img.draggable=false;
+  const img=document.createElement('img');img.alt='';img.draggable=false;
   viewport.append(img);
-  const applyStyle=()=>{img.style.objectPosition=state.posX+'% '+state.posY+'%';img.style.transform='scale('+(state.zoom/100)+')';img.style.transformOrigin='center';};
-  const nudge=(dx,dy)=>{state.posX=Math.max(0,Math.min(100,state.posX+dx));state.posY=Math.max(0,Math.min(100,state.posY+dy));applyStyle();};
-  // 方向按钮摆成九宫格的样子，中间空着只留上下左右四个——不用拖也能挪，手感跟拖动是统一的
-  // 一套坐标(posX/posY)，点按钮等于拖了一小步。
+  const mkSliderRow=(labelText,min,max,step,value)=>{
+   const row=document.createElement('div');row.className='ql-row';
+   const label=document.createElement('label');label.textContent=labelText;
+   const input=document.createElement('input');input.type='range';input.min=min;input.max=max;input.step=step;input.value=value;
+   row.append(label,input);
+   return{row,input};
+  };
+  const zoomS=mkSliderRow('缩放','1','3','.01','1');
+  const xS=mkSliderRow('左右','0','100','1','50');
+  const yS=mkSliderRow('上下','0','100','1','50');
   const pad=document.createElement('div');pad.className='ql-egg-avatar-editor-pad';
   const mkArrow=(cls,label,dx,dy)=>{const b=document.createElement('button');b.type='button';b.className='menu_button ql-egg-avatar-editor-arrow '+cls;b.textContent=label;b.addEventListener('click',()=>nudge(dx,dy));return b;};
-  // 方向跟拖动那套"往哪边拖=往哪边露出"是反过来的——点"↑"是把取景框往上移，画面里露出的
-  // 部分应该往下挪，所以按钮方向跟 posY 变化方向是相反的(点↑ posY 减)。
   pad.append(mkArrow('ql-egg-avatar-editor-arrow-up','↑',0,-8),mkArrow('ql-egg-avatar-editor-arrow-left','←',-8,0),mkArrow('ql-egg-avatar-editor-arrow-right','→',8,0),mkArrow('ql-egg-avatar-editor-arrow-down','↓',0,8));
-  const zoomRow=document.createElement('div');zoomRow.className='ql-row';
-  const zoomLabel=document.createElement('label');zoomLabel.textContent='缩放';
-  const zoomInput=document.createElement('input');zoomInput.type='range';zoomInput.min='100';zoomInput.max='280';zoomInput.value=String(state.zoom);
-  zoomRow.append(zoomLabel,zoomInput);
   const actions=document.createElement('div');actions.className='ql-row ql-egg-avatar-editor-actions';
   const cancelBtn=document.createElement('button');cancelBtn.type='button';cancelBtn.className='menu_button';cancelBtn.textContent='取消';
   const okBtn=document.createElement('button');okBtn.type='button';okBtn.className='menu_button';okBtn.textContent='确定';
   actions.append(cancelBtn,okBtn);
-  dlg.append(title,viewport,pad,zoomRow,actions);
+  dlg.append(title,viewport,pad,zoomS.row,xS.row,yS.row,actions);
   document.body.append(dlg);
-  applyStyle();
-  zoomInput.addEventListener('input',()=>{state.zoom=Number(zoomInput.value)||100;applyStyle();});
-  let dragging=false,startX=0,startY=0,startPosX=state.posX,startPosY=state.posY;
-  viewport.addEventListener('pointerdown',event=>{dragging=true;startX=event.clientX;startY=event.clientY;startPosX=state.posX;startPosY=state.posY;try{viewport.setPointerCapture(event.pointerId);}catch(error){}});
+  let naturalW=0,naturalH=0,ready=false;
+  const updatePreview=()=>{
+   if(!ready||!viewport.clientWidth||!viewport.clientHeight)return;
+   const scale=Math.max(viewport.clientWidth/naturalW,viewport.clientHeight/naturalH)*Number(zoomS.input.value||1);
+   const w=naturalW*scale,h=naturalH*scale;
+   img.style.width=w+'px';img.style.height=h+'px';
+   const maxX=Math.max(0,w-viewport.clientWidth),maxY=Math.max(0,h-viewport.clientHeight);
+   img.style.left=(-maxX*Number(xS.input.value||50)/100)+'px';
+   img.style.top=(-maxY*Number(yS.input.value||50)/100)+'px';
+  };
+  // "→"=往右挪一点取景框，露出图片更靠右的部分，对应左右滑条的值要变大；"↓"同理对应上下
+  // 滑条变大。直接改滑条的值再调 updatePreview，跟拖动最终改的是同一组数，不会对不上。
+  const nudge=(dx,dy)=>{
+   xS.input.value=String(Math.max(0,Math.min(100,Number(xS.input.value||50)+dx)));
+   yS.input.value=String(Math.max(0,Math.min(100,Number(yS.input.value||50)+dy)));
+   updatePreview();
+  };
+  const src=new Image();
+  src.onload=()=>{
+   naturalW=src.naturalWidth;naturalH=src.naturalHeight;
+   if(!naturalW||!naturalH){status('图片读取失败，请换一张。');close(null);return;}
+   ready=true;img.src=dataUrl;
+   requestAnimationFrame(updatePreview);
+  };
+  src.onerror=()=>{status('图片读取失败，请换一张。');close(null);};
+  src.src=dataUrl;
+  [zoomS.input,xS.input,yS.input].forEach(input=>input.addEventListener('input',updatePreview));
+  let dragPoint=null;
+  viewport.addEventListener('pointerdown',event=>{if(!img.src)return;dragPoint={x:event.clientX,y:event.clientY,left:parseFloat(img.style.left)||0,top:parseFloat(img.style.top)||0};try{viewport.setPointerCapture(event.pointerId);}catch(error){}});
   viewport.addEventListener('pointermove',event=>{
-   if(!dragging)return;
-   const rect=viewport.getBoundingClientRect();
-   if(!rect.width||!rect.height)return;
-   const dx=(event.clientX-startX)/rect.width*100;
-   const dy=(event.clientY-startY)/rect.height*100;
-   // 手指/鼠标往右拖=想看图片左边那块，所以 posX 要减，不是加。
-   state.posX=Math.max(0,Math.min(100,startPosX-dx));
-   state.posY=Math.max(0,Math.min(100,startPosY-dy));
-   applyStyle();
+   if(!dragPoint)return;
+   const maxX=Math.max(0,img.offsetWidth-viewport.clientWidth),maxY=Math.max(0,img.offsetHeight-viewport.clientHeight);
+   const newLeft=Math.max(-maxX,Math.min(0,dragPoint.left+event.clientX-dragPoint.x));
+   const newTop=Math.max(-maxY,Math.min(0,dragPoint.top+event.clientY-dragPoint.y));
+   img.style.left=newLeft+'px';img.style.top=newTop+'px';
+   if(maxX)xS.input.value=String(Math.round(-newLeft/maxX*100));
+   if(maxY)yS.input.value=String(Math.round(-newTop/maxY*100));
   });
-  const endDrag=()=>{dragging=false;};
-  viewport.addEventListener('pointerup',endDrag);
-  viewport.addEventListener('pointercancel',endDrag);
-  viewport.addEventListener('pointerleave',endDrag);
+  ['pointerup','pointercancel','lostpointercapture'].forEach(n=>viewport.addEventListener(n,()=>{dragPoint=null;}));
   const close=result=>{try{if(dlg.open)dlg.close();}catch(error){}dlg.remove();resolve(result);};
   cancelBtn.addEventListener('click',()=>close(null));
-  okBtn.addEventListener('click',()=>close({url:dataUrl,zoom:state.zoom,posX:state.posX,posY:state.posY}));
+  okBtn.addEventListener('click',()=>{
+   if(!ready){close(null);return;}
+   const outSize=240;
+   const scale=Math.max(outSize/naturalW,outSize/naturalH)*Number(zoomS.input.value||1);
+   const sw=outSize/scale,sh=outSize/scale;
+   const maxSX=Math.max(0,naturalW-sw),maxSY=Math.max(0,naturalH-sh);
+   const sx=maxSX*Number(xS.input.value||50)/100,sy=maxSY*Number(yS.input.value||50)/100;
+   const canvas=document.createElement('canvas');canvas.width=outSize;canvas.height=outSize;
+   const context=canvas.getContext('2d');
+   if(!context){status('无法处理这张图片，请换一张。');return;}
+   context.drawImage(src,sx,sy,sw,sh,0,0,outSize,outSize);
+   try{close(canvas.toDataURL('image/jpeg',.9));}catch(error){status('头像保存失败，图片可能过大，请换一张。');}
+  });
   dlg.addEventListener('click',event=>{if(event.target===dlg)close(null);});
   dlg.addEventListener('cancel',event=>{event.preventDefault();close(null);});
   if(typeof dlg.showModal==='function')dlg.showModal();else dlg.setAttribute('open','');
@@ -400,7 +426,7 @@ async function qlUploadEggAvatar(name){
   if(!file)return;
   try{
    const dataUrl=await qlReadFileDataUrl(file);
-   const result=await qlOpenEggAvatarEditor(key,dataUrl,{zoom:100,posX:50,posY:50});
+   const result=await qlOpenEggAvatarEditor(key,dataUrl);
    if(!result)return;
    qlSaveEggAvatar(key,result);
    status('已更新「'+key+'」的头像。');
@@ -410,9 +436,9 @@ async function qlUploadEggAvatar(name){
 }
 async function qlAdjustEggAvatar(name){
  const key=String(name||'').trim();
- const rec=qlEggAvatarRecordFor(key);
- if(!rec?.url)return;
- const result=await qlOpenEggAvatarEditor(key,rec.url,rec);
+ const url=qlEggAvatarUrlFor(key);
+ if(!url)return;
+ const result=await qlOpenEggAvatarEditor(key,url);
  if(!result)return;
  qlSaveEggAvatar(key,result);
 }
