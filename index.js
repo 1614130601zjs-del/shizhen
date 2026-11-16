@@ -4831,6 +4831,7 @@ function renderTheater(){
     tagEditor.append(tagInput,editorHint);
     const currentRecord=()=>images[imageIndex];
     const loadCurrentTag=()=>{const record=currentRecord();const raw=String(record?.basePrompt||record?.prompt||'');tagInput.value=/^\\s*[\\[【]\\s*彩蛋/.test(raw)?raw:'[彩蛋]'+raw;};
+    loadCurrentTag();
     editBtn.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();tagEditor.hidden=!tagEditor.hidden;if(!tagEditor.hidden)loadCurrentTag();});
     rerollBtn.addEventListener('click',async event=>{
      event.preventDefault();event.stopPropagation();const record=currentRecord();if(!record||qlTcBusy)return;
