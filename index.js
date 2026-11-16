@@ -4473,9 +4473,9 @@ async function qlTcMakeImage(st){
  const sizeOv=sizeSel||generation.sizeOverride||'';
  const url=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null,null,sizeOv);
  const candidate={url,prompt,generation,renderedPrompt:prompt,at:Date.now()};
- if(!Array.isArray(st.candidates))st.candidates=[];
- if(!st.candidates.some(item=>sameImageSource(item.url,url)))st.candidates.push(candidate);
- st.index=st.candidates.length-1;
+ if(!Array.isArray(st._qlCandidates))st._qlCandidates=[];
+ if(!st._qlCandidates.some(item=>sameImageSource(item.url,url)))st._qlCandidates.push(candidate);
+ st._qlIndex=st._qlCandidates.length-1;
  st.generation=generation;st.url=url;st.prompt=prompt;st.renderedPrompt=prompt;
  return url;
 }
@@ -4488,8 +4488,8 @@ function qlTcRenderResult(){
  const host=document.querySelector('#ql-tc-result');if(!host)return;
  host.innerHTML='';
  const st=qlTcState;if(!st)return;
- const candidates=Array.isArray(st.candidates)?st.candidates:[];
- const active=candidates[Number(st.index)]||null;
+ const candidates=Array.isArray(st._qlCandidates)?st._qlCandidates:[];
+ const active=candidates[Number(st._qlIndex)]||null;
  if(active){st.url=active.url;st.generation=active.generation;st.prompt=active.prompt;st.renderedPrompt=active.renderedPrompt||active.prompt;}
  const styleKey=cfg().chatAlbumStyle||'follow';
  const card=document.createElement('div');card.className='ql-theater-card ql-card';
@@ -4501,20 +4501,21 @@ function qlTcRenderResult(){
   const prev=document.createElement('button');prev.type='button';prev.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-prev';prev.setAttribute('aria-label','上一张');prev.title='上一张';prev.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
   const next=document.createElement('button');next.type='button';next.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-next';next.setAttribute('aria-label','下一张');next.title='下一张';next.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
   const controls=document.createElement('div');controls.className='ql-chat-image-controls';
-  const count=document.createElement('span');count.className='ql-chat-image-count';count.textContent=(Number(st.index)+1)+' / '+candidates.length;
+  const count=document.createElement('span');count.className='ql-chat-image-count';count.textContent=(Number(st._qlIndex)+1)+' / '+candidates.length;
   const reroll=document.createElement('button');reroll.type='button';reroll.className='menu_button ql-chat-image-reroll';reroll.setAttribute('aria-label','重 Roll 图片');reroll.title='重 Roll 图片';reroll.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M20 20v-4h-4"/></svg>';
   const remove=document.createElement('button');remove.type='button';remove.className='menu_button ql-chat-image-remove';remove.setAttribute('aria-label','删除当前图片');remove.title=candidates.length<=1?'至少保留一张图片':'删除当前候选图';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="m6 7 1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>';
-  prev.disabled=Number(st.index)<=0;next.disabled=Number(st.index)>=candidates.length-1;remove.disabled=candidates.length<=1;
-  const switchTo=index=>{if(index<0||index>=candidates.length)return;st.index=index;const chosen=candidates[index];st.url=chosen.url;st.generation=chosen.generation;st.prompt=chosen.prompt;st.renderedPrompt=chosen.renderedPrompt||chosen.prompt;qlTcRenderResult();};
-  prev.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();switchTo(Number(st.index)-1);});
-  next.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();switchTo(Number(st.index)+1);});
+  prev.disabled=Number(st._qlIndex)<=0;next.disabled=Number(st._qlIndex)>=candidates.length-1;remove.disabled=candidates.length<=1;
+  const switchTo=index=>{if(index<0||index>=candidates.length)return;st._qlIndex=index;const chosen=candidates[index];st.url=chosen.url;st.generation=chosen.generation;st.prompt=chosen.prompt;st.renderedPrompt=chosen.renderedPrompt||chosen.prompt;qlTcRenderResult();};
+  let touchX=0,touchY=0;img.addEventListener('touchstart',event=>{const touch=event.changedTouches[0];touchX=touch.clientX;touchY=touch.clientY;},{passive:true});img.addEventListener('touchend',event=>{const touch=event.changedTouches[0],dx=touch.clientX-touchX,dy=touch.clientY-touchY;if(Math.abs(dx)>42&&Math.abs(dx)>Math.abs(dy)*1.25)switchTo(Number(st._qlIndex)+(dx<0?1:-1));},{passive:true});
+  prev.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();switchTo(Number(st._qlIndex)-1);});
+  next.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();switchTo(Number(st._qlIndex)+1);});
   reroll.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();qlTcReroll();});
   remove.addEventListener('click',event=>{
    event.preventDefault();event.stopPropagation();
    if(candidates.length<=1)return;
-   candidates.splice(Number(st.index),1);
-   st.index=Math.min(Number(st.index),candidates.length-1);
-   const chosen=candidates[st.index];st.url=chosen.url;st.generation=chosen.generation;st.prompt=chosen.prompt;st.renderedPrompt=chosen.renderedPrompt||chosen.prompt;
+   candidates.splice(Number(st._qlIndex),1);
+   st._qlIndex=Math.min(Number(st._qlIndex),candidates.length-1);
+   const chosen=candidates[st._qlIndex];st.url=chosen.url;st.generation=chosen.generation;st.prompt=chosen.prompt;st.renderedPrompt=chosen.renderedPrompt||chosen.prompt;
    qlTcRenderResult();
    const status=document.querySelector('#ql-tc-status');if(status)status.textContent='已删除当前候选图，其他图片已保留。';
   });
@@ -4555,7 +4556,7 @@ async function qlTcGenerate(){
   let prompt=parsed.prompt;
   if(!/^\s*[\[【]\s*彩蛋/.test(prompt))prompt='[彩蛋]'+prompt;
   if(!await qlGuardMissingNames(prompt,ctx)){if(statusEl)statusEl.textContent='已取消。';return;}
-  qlTcState={title:parsed.title,eggBlocks:parsed.eggBlocks,prompt,raw,url:'',generation:null,renderedPrompt:'',candidates:[],index:-1};
+  qlTcState={title:parsed.title,eggBlocks:parsed.eggBlocks,prompt,raw,url:'',generation:null,renderedPrompt:'',_qlCandidates:[],_qlIndex:-1};
   if(statusEl)statusEl.textContent='文字已写好，正在出图…'+(parsed.extraImages?'（模型多写了 '+parsed.extraImages+' 张图的口令，只画第一张）':'');
   await qlTcMakeImage(qlTcState);
   qlTcRenderResult();
@@ -4584,22 +4585,22 @@ async function qlTcReroll(){
  }finally{qlTcBusy=false;}
 }
 function qlTcSave(){
- const st=qlTcState;if(!st||!Array.isArray(st.candidates)||!st.candidates.length)return;
+ const st=qlTcState;if(!st||!Array.isArray(st._qlCandidates)||!st._qlCandidates.length)return;
  const editedPrompt=document.querySelector('#ql-tc-result .ql-tc-tag-input');if(editedPrompt)st.prompt=editedPrompt.value.trim();
  if(!st.prompt||String(st.prompt).trim()!==String(st.renderedPrompt||'').trim()){const statusEl=document.querySelector('#ql-tc-status');if(statusEl)statusEl.textContent='画面 Tag 已修改，请先点「重 Roll 图片」应用后再收入小剧场。';return;}
  const ctx=getContext()||{},cur=currentCharacter();
  const name=String(cur.name||ctx.name2||'当前角色').trim()||'当前角色';
  const taskKey='theater:'+Date.now().toString(36)+':'+Math.random().toString(36).slice(2,6);
  const meta={source:'theater',mesStamp:'',characterName:name,characterKey:cur.id||''};
- for(let i=0;i<st.candidates.length;i++){
-  const candidate=st.candidates[i];if(!candidate?.url||!candidate?.generation)continue;
+ for(let i=0;i<st._qlCandidates.length;i++){
+  const candidate=st._qlCandidates[i];if(!candidate?.url||!candidate?.generation)continue;
   const candidateKey=taskKey+':'+String(i+1);
   const rec=storeChatRecord(candidate.url,candidate.prompt,candidateKey,meta,candidate.generation);
   rec.albumCharacterName=name;rec.albumCharacterKey=cur.id||'';rec.collection='character-album';
   rec.eggTitle=st.title||null;rec.eggBlocks=st.eggBlocks;rec.eggAlbumStyle=cfg().chatAlbumStyle||'follow';
  }
  save();history();
- const savedCount=st.candidates.length;
+ const savedCount=st._qlCandidates.length;
  qlTcState=null;qlTcRenderResult();
  const statusEl=document.querySelector('#ql-tc-status');
  if(statusEl)statusEl.textContent='已收入小剧场：'+savedCount+' 张图片均已保存到「'+name+'」角色相册。';
