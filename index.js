@@ -4712,7 +4712,9 @@ function renderTheater(){
  const allItems=(s.records||[]).filter(item=>item&&item.dataUrl&&Array.isArray(item.eggBlocks)&&item.eggBlocks.length&&!item.theaterHidden);
  const grouped=new Map();
  for(const item of allItems){const key=String(item.theaterGroupId||('legacy:'+String(item.id||item.taskKey||item.dataUrl)));if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push(item);}
- const allGroups=[...grouped.values()];
+ const groupTime=group=>Math.max(0,...group.map(record=>Number(record?.at)||0));
+ const groupKeyOf=group=>String(group[0]?.theaterGroupId||('legacy:'+String(group[0]?.id||group[0]?.taskKey||group[0]?.dataUrl)));
+ const allGroups=[...grouped.values()].sort((a,b)=>groupTime(b)-groupTime(a));
  if(!allItems.length){
   const empty=document.createElement('p');empty.className='ql-muted';
   empty.textContent='还没有收藏过带彩蛋聊天室的图片。正文消息收藏图片时，如果那条消息带着彩蛋聊天室，会自动存一份快照到这里。';
@@ -4747,44 +4749,68 @@ function renderTheater(){
   host.append(row);
  }
  const groupsToRender=qlTheaterFilterKey?allGroups.filter(group=>nameOf(group[0])===qlTheaterFilterKey):allGroups;
- groupsToRender.slice().reverse().forEach(group=>{
-  const item=group[0],images=group.filter(record=>record.dataUrl);
-  const card=document.createElement('div');card.className='ql-theater-card ql-card';
-  const style=qlResolveAlbumStyle(item.eggAlbumStyle||s.chatAlbumStyle||'follow');
-  // 摆放顺序跟正文/原来那张小漫画截图一致：标题在最上面，然后是图片，最后才是聊天室。
-  if(item.eggTitle)card.append(qlMakeTitleBadge(item.eggTitle,item.eggAlbumStyle||s.chatAlbumStyle||'follow'));
-  if(images.length){
-   const figure=document.createElement('figure');figure.className='ql-chat-image ql-album-'+style;
-   const img=document.createElement('img');img.src=images[0].dataUrl;img.loading='lazy';
-   img.addEventListener('click',()=>openViewfinderImage(img.currentSrc||img.src));figure.append(img);
-   if(images.length>1){
-    let imageIndex=0;const counter=document.createElement('span');counter.className='ql-theater-image-count';counter.textContent='1/'+images.length;
-    const prev=qlCreateChatImageArrow('prev'),next=qlCreateChatImageArrow('next');
-    const stepImage=delta=>{imageIndex=(imageIndex+delta+images.length)%images.length;img.src=images[imageIndex].dataUrl;counter.textContent=(imageIndex+1)+'/'+images.length;};
-    prev.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();stepImage(-1);});
-    next.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();stepImage(1);});
-    figure.append(prev,next,counter);
-   }
-   applyChatTheme(figure);card.append(figure);
-  }
-  (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
-  if(groupOrder.length>1){const who=document.createElement('p');who.className='ql-muted ql-theater-card-who';who.textContent='角色相册：'+nameOf(item);card.append(who);}
-  const removeBtn=document.createElement('button');removeBtn.type='button';removeBtn.className='menu_button ql-theater-remove';removeBtn.textContent='移出小剧场';
-  removeBtn.addEventListener('click',()=>{
-   // 只隐藏在小剧场这个列表里，不碰角色相册那边的收藏状态——图片仍然留在角色相册里。
-   for(const record of group)record.theaterHidden=true;save();renderTheater();
+ const activeGroupKey=host.dataset.theaterGroup||'';
+ const activeGroup=activeGroupKey?groupsToRender.find(group=>groupKeyOf(group)===activeGroupKey):null;
+ if(activeGroupKey&&!activeGroup)delete host.dataset.theaterGroup;
+ if(!activeGroup){
+  const shell=document.createElement('section');shell.className='ql-theater-gallery-shell ql-album-library-shell';
+  const heading=document.createElement('div');heading.className='ql-album-library-heading';
+  const title=document.createElement('div');title.className='ql-album-library-title';
+  const h=document.createElement('h3');h.textContent='小剧场相册';
+  const sub=document.createElement('span');sub.className='ql-album-library-subtitle';sub.textContent='按收藏时间排列 · 最新的在前';
+  title.append(h,sub);
+  const count=document.createElement('span');count.className='ql-album-library-count';count.textContent=groupsToRender.length+' 个故事';
+  heading.append(title,count);shell.append(heading);
+  const grid=document.createElement('div');grid.className='ql-album-grid ql-theater-album-grid';
+  groupsToRender.forEach(group=>{
+   const item=group[0],images=group.filter(record=>record.dataUrl).slice().sort((a,b)=>(Number(b.at)||0)-(Number(a.at)||0));
+   const key=groupKeyOf(group),card=document.createElement('article');card.className='ql-album-card ql-theater-album-card';
+   const open=document.createElement('button');open.type='button';open.className='ql-album-card-open ql-theater-album-open';open.setAttribute('aria-label','打开 '+(item.eggTitle||'小剧场'));
+   const cover=document.createElement('span');cover.className='ql-album-card-cover';
+   if(images[0]){const image=document.createElement('img');image.loading='lazy';image.src=images[0].dataUrl;image.alt='';cover.append(image);}
+   else{const placeholder=document.createElement('span');placeholder.className='ql-album-cover-placeholder';placeholder.textContent='THEATER';cover.append(placeholder);}
+   open.append(cover);
+   const caption=document.createElement('span');caption.className='ql-album-card-caption';
+   const name=document.createElement('strong');name.textContent=item.eggTitle||'未命名小剧场';
+   const meta=document.createElement('span');const latest=images[0]?.at?new Date(Number(images[0].at)):null;
+   meta.textContent=images.length+' 张画面'+(latest&&!Number.isNaN(latest.getTime())?' · '+latest.toLocaleDateString():'');
+   caption.append(name,meta);open.append(caption);
+   open.addEventListener('click',()=>{host.dataset.theaterGroup=key;renderTheater();});
+   card.append(open);grid.append(card);
   });
-  card.append(removeBtn);
-  // 这张卡片本身就在 #shizhen-panel 里面（挂了 .ql-card），跟设置页/取景区那些卡片一样，
-  // 靠 CSS 级联自然从 #shizhen-panel[data-ql-style="ccd"] 这类根节点规则继承 --ql-card 等变量
-  // 就够了——不需要也不应该在这调 applyChatTheme(card)。那是给"长在 #chat 里、脱离了
-  // #shizhen-panel 这棵 DOM 树"的组件（聊天气泡里的配图/标题/状态栏画面等）准备的，用来把
-  // 面板的主题色变量内联注入进去；如果拿来给面板自己里面的卡片也调一遍，就会在这张卡片上
-  // 内联出一份"通用主题色"的 --ql-card，把从 ccd 等界面风格根节点继承下来的（哪怕带了
-  // !important）颜色值整个盖掉——这正是"底色还是填充的初始色"的原因：卡片背景读到的其实是
-  // 内联覆盖的那份通用主题色，而不是当前界面风格（比如 ccd）自己的卡片背景色。
-  host.append(card);
- });
+  shell.append(grid);host.append(shell);
+ }else{
+  const back=document.createElement('button');back.type='button';back.className='menu_button ql-theater-detail-back';
+  back.textContent='‹ 返回小剧场相册';back.addEventListener('click',()=>{delete host.dataset.theaterGroup;renderTheater();});
+  host.append(back);
+  [activeGroup].forEach(group=>{
+   const item=group[0],images=group.filter(record=>record.dataUrl).slice().sort((a,b)=>(Number(b.at)||0)-(Number(a.at)||0));
+   const card=document.createElement('div');card.className='ql-theater-card ql-card';
+   const style=qlResolveAlbumStyle(item.eggAlbumStyle||s.chatAlbumStyle||'follow');
+   if(item.eggTitle)card.append(qlMakeTitleBadge(item.eggTitle,item.eggAlbumStyle||s.chatAlbumStyle||'follow'));
+   if(images.length){
+    const figure=document.createElement('figure');figure.className='ql-chat-image ql-album-'+style;
+    const img=document.createElement('img');img.src=images[0].dataUrl;img.loading='lazy';
+    img.addEventListener('click',()=>openViewfinderImage(img.currentSrc||img.src));figure.append(img);
+    if(images.length>1){
+     let imageIndex=0;const counter=document.createElement('span');counter.className='ql-theater-image-count';counter.textContent='1/'+images.length;
+     const prev=qlCreateChatImageArrow('prev'),next=qlCreateChatImageArrow('next');
+     const stepImage=delta=>{imageIndex=(imageIndex+delta+images.length)%images.length;img.src=images[imageIndex].dataUrl;counter.textContent=(imageIndex+1)+'/'+images.length;};
+     prev.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();stepImage(-1);});
+     next.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();stepImage(1);});
+     figure.append(prev,next,counter);
+    }
+    applyChatTheme(figure);card.append(figure);
+   }
+   (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
+   if(groupOrder.length>1){const who=document.createElement('p');who.className='ql-muted ql-theater-card-who';who.textContent='角色相册：'+nameOf(item);card.append(who);}
+   const removeBtn=document.createElement('button');removeBtn.type='button';removeBtn.className='menu_button ql-theater-remove';removeBtn.textContent='移出小剧场';
+   removeBtn.addEventListener('click',()=>{
+    for(const record of group)record.theaterHidden=true;save();delete host.dataset.theaterGroup;renderTheater();
+   });
+   card.append(removeBtn);host.append(card);
+  });
+ }
  const libBtn=document.querySelector('#ql-egg-avatar-lib-btn'),libHost=document.querySelector('#ql-egg-avatar-lib');
  if(libBtn&&libHost){
   libBtn.onclick=()=>{
