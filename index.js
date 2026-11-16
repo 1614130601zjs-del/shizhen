@@ -4527,6 +4527,16 @@ function qlTcRenderResult(){
  const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{qlTcState=null;qlTcRenderResult();const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
  card.append(row);host.append(card);qlTcShowRaw(host,st.raw);
 }
+async function qlTcRequestText(prompt){
+ const s=cfg();
+ if(s.llmTagMode==='custom'){
+  const messages=[{role:'user',content:String(prompt||'')}];
+  return String(await qlRequestLlmTagViaCustomApi(messages)||'').trim();
+ }
+ const ctx=getContext();
+ if(typeof ctx?.generateQuietPrompt!=='function')throw new Error('当前酒馆版本不支持静默生成（generateQuietPrompt），请检查酒馆主 API。');
+ return String(await ctx.generateQuietPrompt({quietPrompt:String(prompt||''),responseLength:2048})||'').trim();
+}
 async function qlTcGenerate(){
  if(qlTcBusy)return;
  const statusEl=document.querySelector('#ql-tc-status'),btn=document.querySelector('#ql-tc-generate'),resultHost=document.querySelector('#ql-tc-result');
@@ -4535,11 +4545,12 @@ async function qlTcGenerate(){
  if(!input){if(statusEl)statusEl.textContent='先写点画面词或剧情词。';return;}
  if(cfg().enabled===false){if(statusEl)statusEl.textContent='拾帧已停用；请先在偏好设置中重新启用插件。';return;}
  const ctx=getContext();
- if(typeof ctx?.generateQuietPrompt!=='function'){if(statusEl)statusEl.textContent='当前酒馆版本不支持静默生成（generateQuietPrompt），创作区暂时用不了。';return;}
+ if(cfg().llmTagMode!=='custom'&&typeof ctx?.generateQuietPrompt!=='function'){if(statusEl)statusEl.textContent='当前酒馆版本不支持静默生成（generateQuietPrompt），请检查酒馆主 API。';return;}
  qlTcBusy=true;if(btn)btn.disabled=true;
  try{
-  if(statusEl)statusEl.textContent='正在让模型写小剧场…（会带上预设、聊天上下文、角色卡和世界书）';
-  const raw=String(await ctx.generateQuietPrompt({quietPrompt:qlTcBuildQuietPrompt(mode,input),responseLength:2048})||'').trim();
+  const llmMode=cfg().llmTagMode==='custom'?'拾帧独立 LLM':'酒馆主 API';
+  if(statusEl)statusEl.textContent='正在让模型写小剧场…（'+llmMode+'；会带上预设、聊天上下文、角色卡和世界书）';
+  const raw=await qlTcRequestText(qlTcBuildQuietPrompt(mode,input));
   if(!raw)throw new Error('模型返回空内容');
   const parsed=qlTcParse(raw);
   if(!parsed.prompt||!parsed.eggBlocks.length){
