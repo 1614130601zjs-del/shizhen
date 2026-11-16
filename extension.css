@@ -1392,7 +1392,7 @@ html:has(> #ql-overlay:not([hidden])){overflow:hidden}
  height:auto!important;
  touch-action:pan-y!important;
 }
-#chat .ql-chat-image>.ql-chat-image-arrow{
+#chat .ql-chat-image>.ql-chat-image-arrow,#shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow{
  position:absolute!important;
  top:50%!important;
  z-index:12!important;
@@ -1416,7 +1416,7 @@ html:has(> #ql-overlay:not([hidden])){overflow:hidden}
 }
 #chat .ql-chat-image>.ql-chat-image-arrow-prev,#shizhen-panel .ql-chat-image>.ql-chat-image-arrow-prev{left:8px!important;right:auto!important;}
 #chat .ql-chat-image>.ql-chat-image-arrow-next,#shizhen-panel .ql-chat-image>.ql-chat-image-arrow-next{right:8px!important;left:auto!important;}
-#chat .ql-chat-image>.ql-chat-image-arrow svg{
+#chat .ql-chat-image>.ql-chat-image-arrow svg,#shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow svg{
  width:22px!important;height:22px!important;fill:none!important;stroke:currentColor!important;
  stroke-width:2.2!important;stroke-linecap:round!important;stroke-linejoin:round!important;
 }
@@ -5976,7 +5976,7 @@ dialog.ql-egg-avatar-editor .ql-row input[type="range"]{flex:1}
  color:#fff!important;background:#171717!important;border-color:#171717!important;
  box-shadow:2px 2px 0 #171717!important;
 }
-#shizhen-panel[data-ql-style="comic"] button:not(.ql-tab):not(.ql-cache-image):not([data-ql-detail]):not(#ql-close){
+#shizhen-panel[data-ql-style="comic"] button:not(.ql-tab):not(.ql-cache-image):not(.ql-chat-image-arrow):not([data-ql-detail]):not(#ql-close){
  color:#171717!important;background:#fff!important;
  border:1.5px solid #171717!important;border-radius:2px!important;
  box-shadow:2px 2px 0 #171717!important;font-weight:750!important;
@@ -6133,25 +6133,4 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
  #shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow-prev{left:5px!important;}
  #shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow-next{right:5px!important;}
  #shizhen-panel #ql-tc-result .ql-chat-image-controls{gap:14px!important;}
-}
-
-/* 漫画风格小剧场：箭头沿用正文的圆形磨砂玻璃按钮，
-   覆盖漫画全局方形按钮规则，仅作用于小剧场结果图。 */
-#shizhen-panel[data-ql-style="comic"] #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow{
- width:38px!important;height:38px!important;min-width:38px!important;min-height:38px!important;
- border:1px solid rgba(255,255,255,.62)!important;border-radius:50%!important;
- color:#fff!important;background:rgba(24,20,28,.28)!important;
- box-shadow:0 1px 6px rgba(0,0,0,.18)!important;
- backdrop-filter:blur(5px)!important;-webkit-backdrop-filter:blur(5px)!important;
-}
-#shizhen-panel[data-ql-style="comic"] #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow svg{
- width:20px!important;height:20px!important;stroke:#fff!important;
-}
-#shizhen-panel[data-ql-style="comic"] #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow:disabled{
- opacity:.28!important;
-}
-@media(max-width:360px){
- #shizhen-panel[data-ql-style="comic"] #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow{
-  width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;
- }
 }
