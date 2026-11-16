@@ -6275,7 +6275,7 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
  font-family:Georgia,"Noto Serif SC",serif!important;
  font-weight:1000!important;
  letter-spacing:.2em!important;
- text-shadow:2px 2px 0 #777,4px 4px 0 #333!important;
+ text-shadow:none!important;-webkit-text-stroke:.35px #fff!important;
 }
 #shizhen-panel[data-ql-style="comic"] .ql-tabs{
  background:#deded9!important;
@@ -6526,4 +6526,85 @@ html[data-ql-style="comic"] #ql-image-cache-modal .ql-cache-accordion-body pre{
  html[data-ql-style="comic"] #ql-image-cache-modal .ql-cache-detail-actions .ql-cache-action-primary{
   grid-column:1/-1!important;
  }
+}
+
+
+/* 影像主题：顶栏标题去重影，副标题改为连载语境。 */
+#shizhen-panel[data-ql-style="comic"] .ql-brand strong{
+ text-shadow:none!important;
+ -webkit-text-stroke:.35px #fff!important;
+}
+#shizhen-panel[data-ql-style="comic"] .ql-brand span{
+ color:#d8d8d8!important;
+ opacity:1!important;
+ font-size:10px!important;
+ letter-spacing:.12em!important;
+}
+
+/* 影像主题同步到聊天室：结构与逐条弹出交互保持不变，只替换纸张、墨线、气泡与按钮的主题色。 */
+#chat .ql-egg-chat,#shizhen-panel .ql-egg-chat{
+ --ql-room-ink:#292929;
+ --ql-room-paper:#fff;
+ --ql-room-panel:#f4f2ec;
+ --ql-room-line:#777;
+ --ql-room-accent:#292929;
+ --ql-room-on-accent:#fff;
+ color:var(--ql-room-ink)!important;
+}
+#chat .ql-egg-chat.ql-album-classic,#shizhen-panel .ql-egg-chat.ql-album-classic{--ql-room-ink:#3b3935;--ql-room-paper:#fff;--ql-room-panel:#f4f1e9;--ql-room-line:#c9c1b5;--ql-room-accent:#777064;--ql-room-on-accent:#fff}
+#chat .ql-egg-chat.ql-album-film,#shizhen-panel .ql-egg-chat.ql-album-film{--ql-room-ink:#f3eee4;--ql-room-paper:#282725;--ql-room-panel:#171716;--ql-room-line:#77736b;--ql-room-accent:#b7a98e;--ql-room-on-accent:#171716}
+#chat .ql-egg-chat.ql-album-soft,#shizhen-panel .ql-egg-chat.ql-album-soft{--ql-room-ink:#4a5a4e;--ql-room-paper:#fff;--ql-room-panel:#f4f2ea;--ql-room-line:#aab4a8;--ql-room-accent:#829486;--ql-room-on-accent:#fff}
+#chat .ql-egg-chat.ql-album-pixel,#shizhen-panel .ql-egg-chat.ql-album-pixel{--ql-room-ink:#202a44;--ql-room-paper:#f0f3ff;--ql-room-panel:#dfe6fa;--ql-room-line:#53658e;--ql-room-accent:#29395f;--ql-room-on-accent:#fff}
+#chat .ql-egg-chat.ql-album-ccd,#shizhen-panel .ql-egg-chat.ql-album-ccd{--ql-room-ink:#26323a;--ql-room-paper:#f7fafb;--ql-room-panel:#e6edf0;--ql-room-line:#91a1aa;--ql-room-accent:#526b7a;--ql-room-on-accent:#fff}
+#chat .ql-egg-chat.ql-album-polaroid,#shizhen-panel .ql-egg-chat.ql-album-polaroid{--ql-room-ink:#514437;--ql-room-paper:#fffdf8;--ql-room-panel:#eee7dc;--ql-room-line:#b9a995;--ql-room-accent:#8a7158;--ql-room-on-accent:#fff}
+#chat .ql-egg-chat.ql-album-scroll,#shizhen-panel .ql-egg-chat.ql-album-scroll{--ql-room-ink:#66543e;--ql-room-paper:#fbf3df;--ql-room-panel:#eee2c9;--ql-room-line:#b9a47f;--ql-room-accent:#806849;--ql-room-on-accent:#fff}
+#chat .ql-egg-chat.ql-album-cyber,#shizhen-panel .ql-egg-chat.ql-album-cyber{--ql-room-ink:#e8faff;--ql-room-paper:#121b2a;--ql-room-panel:#0b1220;--ql-room-line:#277d91;--ql-room-accent:#00bcd4;--ql-room-on-accent:#07131b}
+#chat .ql-egg-chat.ql-album-win,#shizhen-panel .ql-egg-chat.ql-album-win{--ql-room-ink:#19395c;--ql-room-paper:#f4f7fc;--ql-room-panel:#dce7f4;--ql-room-line:#7e9bb9;--ql-room-accent:#315f91;--ql-room-on-accent:#fff}
+#chat .ql-egg-chat.ql-album-news,#shizhen-panel .ql-egg-chat.ql-album-news{--ql-room-ink:#282622;--ql-room-paper:#fffdf6;--ql-room-panel:#eee9dc;--ql-room-line:#8f8878;--ql-room-accent:#3c3932;--ql-room-on-accent:#fff}
+#chat .ql-egg-chat.ql-album-purikura,#shizhen-panel .ql-egg-chat.ql-album-purikura{--ql-room-ink:#713d5c;--ql-room-paper:#fff7fb;--ql-room-panel:#fce8f2;--ql-room-line:#d99aba;--ql-room-accent:#c15b91;--ql-room-on-accent:#fff}
+#chat .ql-egg-chat.ql-album-receipt,#shizhen-panel .ql-egg-chat.ql-album-receipt{--ql-room-ink:#2b2b2b;--ql-room-paper:#f7f5ee;--ql-room-panel:#eeeae0;--ql-room-line:#aaa69b;--ql-room-accent:#2b2b2b;--ql-room-on-accent:#fff}
+#chat .ql-egg-chat.ql-album-comic,#shizhen-panel .ql-egg-chat.ql-album-comic{--ql-room-ink:#111;--ql-room-paper:#fff;--ql-room-panel:#f2f2ef;--ql-room-line:#111;--ql-room-accent:#111;--ql-room-on-accent:#fff}
+#chat .ql-egg-chat-panel,#shizhen-panel .ql-egg-chat-panel{
+ border:3px solid var(--ql-room-ink)!important;
+ border-radius:3px!important;
+ background-color:var(--ql-room-panel)!important;
+ background-image:radial-gradient(color-mix(in srgb,var(--ql-room-line) 24%,transparent) .8px,transparent .8px)!important;
+ background-size:5px 5px!important;
+ box-shadow:5px 5px 0 color-mix(in srgb,var(--ql-room-ink) 78%,transparent)!important;
+}
+#chat .ql-egg-chat-header,#shizhen-panel .ql-egg-chat-header{
+ background:var(--ql-room-paper)!important;
+ border-bottom:3px solid var(--ql-room-ink)!important;
+}
+#chat .ql-egg-room-name,#chat .ql-egg-narrator-name,#chat .ql-egg-msg-name,
+#shizhen-panel .ql-egg-room-name,#shizhen-panel .ql-egg-narrator-name,#shizhen-panel .ql-egg-msg-name{
+ background:var(--ql-room-accent)!important;color:var(--ql-room-on-accent)!important;
+ box-shadow:2px 2px 0 var(--ql-room-paper),3px 3px 0 var(--ql-room-ink)!important;
+}
+#chat .ql-egg-room-count,#shizhen-panel .ql-egg-room-count{
+ color:var(--ql-room-ink)!important;background:var(--ql-room-paper)!important;border-color:var(--ql-room-ink)!important;
+}
+#chat .ql-egg-chat-trigger,#chat .ql-egg-info-toggle,#chat .ql-egg-chat-close,
+#shizhen-panel .ql-egg-chat-trigger,#shizhen-panel .ql-egg-info-toggle,#shizhen-panel .ql-egg-chat-close{
+ color:var(--ql-room-ink)!important;background:var(--ql-room-paper)!important;border:2px solid var(--ql-room-ink)!important;
+ box-shadow:3px 3px 0 var(--ql-room-ink)!important;border-radius:2px!important;
+}
+#chat .ql-egg-chat.ql-egg-collapsed::before,#shizhen-panel .ql-egg-chat.ql-egg-collapsed::before{
+ background-image:repeating-linear-gradient(to bottom,var(--ql-room-ink) 0 3px,transparent 3px 6px)!important;
+}
+#chat .ql-egg-info-drawer,#shizhen-panel .ql-egg-info-drawer{
+ color:var(--ql-room-ink)!important;background:var(--ql-room-paper)!important;border-bottom:3px solid var(--ql-room-ink)!important;
+}
+#chat .ql-egg-info-line,#shizhen-panel .ql-egg-info-line{border-bottom-color:color-mix(in srgb,var(--ql-room-line) 65%,transparent)!important}
+#chat .ql-egg-divider,#shizhen-panel .ql-egg-divider{background:var(--ql-room-ink)!important}
+#chat .ql-egg-avatar,#shizhen-panel .ql-egg-avatar{border-color:var(--ql-room-ink)!important;box-shadow:2px 2px 0 var(--ql-room-ink)!important}
+#chat .ql-egg-narrator-bubble,#chat .ql-egg-msg-bubble,
+#shizhen-panel .ql-egg-narrator-bubble,#shizhen-panel .ql-egg-msg-bubble{
+ color:var(--ql-room-ink)!important;background:var(--ql-room-paper)!important;border:2px solid var(--ql-room-ink)!important;border-radius:3px!important;
+}
+#chat .ql-egg-msg-right .ql-egg-msg-bubble,#shizhen-panel .ql-egg-msg-right .ql-egg-msg-bubble{
+ color:var(--ql-room-on-accent)!important;background:var(--ql-room-accent)!important;border-color:var(--ql-room-ink)!important;
+}
+#chat .ql-egg-chat-hint,#shizhen-panel .ql-egg-chat-hint{
+ color:var(--ql-room-ink)!important;border-color:var(--ql-room-line)!important;background:var(--ql-room-paper)!important;
 }
