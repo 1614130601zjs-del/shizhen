@@ -544,7 +544,7 @@ function qlMakeEggInfoLine(label,value){
 }
 // 整个聊天室只建一次 DOM：默认折叠只显示"进入聊天室"小按钮，点开后展开成面板，跟现有图片卡片
 // 的折叠按钮是同一套思路（classList.toggle 一个 collapsed 类，CSS 负责切换显示哪一块）。
-function qlBuildEggChat(room,messages,ordinal){
+function qlBuildEggChat(room,messages,ordinal,infoOpen=false){
  const wrap=document.createElement('div');wrap.className='ql-egg-chat ql-egg-collapsed';
  // _qlEggLive：标记这个卡片是刚刚现建的、监听还“活着”。酒馆之外的东西（正则/前端美化框架等）
  // 把消息 HTML 重新序列化写回之后，这个 JS 属性不会跟着序列化留下来——扫描时看到 .ql-egg-chat
@@ -561,7 +561,7 @@ function qlBuildEggChat(room,messages,ordinal){
  infoBtn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" width="13" height="13"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="11" x2="12" y2="16.3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="7.4" r="1.15" fill="currentColor"/></svg>';
  const closeBtn=document.createElement('button');closeBtn.type='button';closeBtn.className='ql-egg-chat-close';closeBtn.setAttribute('aria-label','收起聊天室');closeBtn.textContent='×';
  header.append(nameTag,countTag,infoBtn,closeBtn);
- const drawer=document.createElement('div');drawer.className='ql-egg-info-drawer';drawer.hidden=true;
+ const drawer=document.createElement('div');drawer.className='ql-egg-info-drawer';drawer.hidden=!infoOpen;
  drawer.append(qlMakeEggInfoLine('群聊名称',room.roomName),qlMakeEggInfoLine('成员人数',room.count?room.count+' 人':''),qlMakeEggInfoLine('群主',room.owner));
  if(room.narrator){
   const divider=document.createElement('div');divider.className='ql-egg-divider';drawer.append(divider);
@@ -597,7 +597,8 @@ function qlBuildEggChat(room,messages,ordinal){
  body.addEventListener('click',()=>revealNext());
  trigger.addEventListener('click',()=>wrap.classList.remove('ql-egg-collapsed'));
  closeBtn.addEventListener('click',()=>wrap.classList.add('ql-egg-collapsed'));
- infoBtn.addEventListener('click',()=>{drawer.hidden=!drawer.hidden;});
+ infoBtn.setAttribute('aria-expanded',String(!!infoOpen));
+ infoBtn.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();drawer.hidden=!drawer.hidden;wrap.dataset.qlEggInfoOpen=String(!drawer.hidden);infoBtn.setAttribute('aria-expanded',String(!drawer.hidden));});
  applyChatTheme(wrap);
  return wrap;
 }
@@ -701,7 +702,7 @@ function qlRenderEggChat(host,mesText){
   const ordinal=Number(el.dataset.qlEggOrdinal);
   const data=Number.isInteger(ordinal)?blocks[ordinal]:null;
   if(!data)return;
-  el.replaceWith(qlBuildEggChat(data.room,data.messages,ordinal));
+  el.replaceWith(qlBuildEggChat(data.room,data.messages,ordinal,el.dataset.qlEggInfoOpen==='true'));
  });
  // 再处理原文里还没被替换掉的区块：每轮处理一份，处理完 DOM 变了就重新拼一次逻辑文本接着找，
  // 直到原文里再也找不到未渲染的 eggroom###…### 为止，一条消息有几份就都能在这一次调用里处理完。
