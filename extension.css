@@ -6815,12 +6815,12 @@ html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-modal-cl
 }
 dialog.ql-viewfinder-lightbox[data-ql-style="comic"]{
  box-sizing:border-box!important;
- padding:0 0 10px!important;
- border:0!important;
+ padding:8px 8px 10px!important;
+ border:3px solid #171717!important;
  border-radius:2px!important;
- background:transparent!important;
+ background:#e9e9e5!important;
  color:#171717!important;
- box-shadow:none!important;
+ box-shadow:6px 6px 0 #171717!important;
  overflow:visible!important;
 }
 dialog.ql-viewfinder-lightbox[data-ql-style="comic"]::backdrop{
