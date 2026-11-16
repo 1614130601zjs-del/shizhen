@@ -4527,15 +4527,18 @@ function qlTcRenderResult(){
  const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{qlTcState=null;qlTcRenderResult();const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
  card.append(row);host.append(card);qlTcShowRaw(host,st.raw);
 }
-async function qlTcRequestText(prompt){
- const s=cfg();
- if(s.llmTagMode==='custom'){
-  const messages=[{role:'user',content:String(prompt||'')}];
-  return String(await qlRequestLlmTagViaCustomApi(messages)||'').trim();
+async function qlTcGenerateText(mode,input,ctx){
+ const quietPrompt=qlTcBuildQuietPrompt(mode,input),s=cfg();
+ if(s.llmTagMode!=='custom'){
+  if(typeof ctx?.generateQuietPrompt!=='function')throw new Error('当前酒馆版本不支持静默生成（generateQuietPrompt）');
+  return String(await ctx.generateQuietPrompt({quietPrompt,responseLength:2048})||'').trim();
  }
- const ctx=getContext();
- if(typeof ctx?.generateQuietPrompt!=='function')throw new Error('当前酒馆版本不支持静默生成（generateQuietPrompt），请检查酒馆主 API。');
- return String(await ctx.generateQuietPrompt({quietPrompt:String(prompt||''),responseLength:2048})||'').trim();
+ let system=quietPrompt;
+ try{const borrowed=qlPresetBorrowText();if(borrowed)system+='\n\n【当前预设参考】\n'+borrowed;}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
+ if(s.llmTagUseWorldInfo!==false){try{const wi=await qlFetchWorldInfoForTag(input);if(wi)system+='\n\n【当前角色卡世界书参考】\n'+wi;}catch(error){console.warn('[拾帧] 小剧场读取世界书失败（已忽略）',error);}}
+ try{const roster=qlRosterText();if(roster&&!roster.startsWith('（角色词库里暂时'))system+='\n\n【当前角色名单】\n'+roster;}catch{}
+ const history=Array.isArray(ctx?.chat)?ctx.chat.slice(-12).filter(m=>m&&typeof m.mes==='string'&&m.mes.trim()).map(m=>({role:m.is_user?'user':'assistant',content:String(m.mes).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,3000)})).filter(m=>m.content):[];
+ return qlRequestLlmTagViaCustomApi([{role:'system',content:system},...history,{role:'user',content:'请根据上面的聊天上下文和小剧场创作任务，严格按指定口令格式输出。'}]);
 }
 async function qlTcGenerate(){
  if(qlTcBusy)return;
@@ -4550,7 +4553,7 @@ async function qlTcGenerate(){
  try{
   const llmMode=cfg().llmTagMode==='custom'?'拾帧独立 LLM':'酒馆主 API';
   if(statusEl)statusEl.textContent='正在让模型写小剧场…（'+llmMode+'；会带上预设、聊天上下文、角色卡和世界书）';
-  const raw=await qlTcRequestText(qlTcBuildQuietPrompt(mode,input));
+  const raw=await qlTcGenerateText(mode,input,ctx);
   if(!raw)throw new Error('模型返回空内容');
   const parsed=qlTcParse(raw);
   if(!parsed.prompt||!parsed.eggBlocks.length){
