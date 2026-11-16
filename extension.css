@@ -6134,3 +6134,32 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
  #shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow-next{right:5px!important;}
  #shizhen-panel #ql-tc-result .ql-chat-image-controls{gap:14px!important;}
 }
+/* 小剧场聊天室头部：为右侧两个固定操作键预留宽度，防止群名、人数与按钮叠在一起。 */
+#shizhen-panel .ql-theater-card .ql-egg-chat-header{
+ display:flex!important;align-items:center!important;gap:8px!important;
+ box-sizing:border-box!important;padding:10px 76px 10px 10px!important;min-height:48px!important;
+}
+#shizhen-panel .ql-theater-card .ql-egg-room-name{
+ display:block!important;flex:1 1 auto!important;min-width:0!important;max-width:100%!important;
+ overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;
+}
+#shizhen-panel .ql-theater-card .ql-egg-room-count{
+ display:inline-flex!important;flex:0 0 auto!important;align-items:center!important;
+ white-space:nowrap!important;margin:0!important;
+}
+#shizhen-panel .ql-theater-card .ql-egg-info-toggle,
+#shizhen-panel .ql-theater-card .ql-egg-chat-close{
+ position:absolute!important;top:50%!important;transform:translateY(-50%)!important;
+ flex:0 0 26px!important;width:26px!important;min-width:26px!important;
+ height:26px!important;min-height:26px!important;padding:0!important;margin:0!important;
+ display:flex!important;align-items:center!important;justify-content:center!important;
+}
+#shizhen-panel .ql-theater-card .ql-egg-info-toggle{right:40px!important;}
+#shizhen-panel .ql-theater-card .ql-egg-chat-close{right:8px!important;}
+#shizhen-panel[data-ql-style="comic"] .ql-theater-card .ql-egg-info-toggle,
+#shizhen-panel[data-ql-style="comic"] .ql-theater-card .ql-egg-chat-close{border-radius:50%!important;}
+@media(max-width:380px){
+ #shizhen-panel .ql-theater-card .ql-egg-chat-header{gap:5px!important;padding-right:72px!important;}
+ #shizhen-panel .ql-theater-card .ql-egg-room-name{font-size:12px!important;padding-left:7px!important;padding-right:7px!important;}
+ #shizhen-panel .ql-theater-card .ql-egg-room-count{font-size:10px!important;padding:2px 5px!important;}
+}
