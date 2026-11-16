@@ -4830,17 +4830,39 @@ function renderTheater(){
    const editTheaterBtn=document.createElement('button');editTheaterBtn.type='button';editTheaterBtn.className='menu_button ql-chat-image-edit';editTheaterBtn.title='编辑 Tag 和重 Roll';editTheaterBtn.setAttribute('aria-label','编辑');editTheaterBtn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h10l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20z"/><path d="M15 3.5V8h4M8 12h8M8 16h6"/><path d="m14.5 18.5 4.8-4.8 1.5 1.5-4.8 4.8-2 .5z"/></svg>';
    editTheaterBtn.addEventListener('click',event=>{
     event.preventDefault();event.stopPropagation();
-    const selected=images[imageIndex]||images[0];if(!selected)return;
-    const target=card.querySelector('.ql-theater-inline-editor')||document.createElement('div');
-    target.className='ql-theater-inline-editor';
-    if(target.childElementCount){target.hidden=!target.hidden;target.scrollIntoView({behavior:'smooth',block:'nearest'});return;}
-    if(!target.parentNode)card.append(target);
-    target.hidden=false;
-    const rawPrompt=String(selected.basePrompt||selected.prompt||'');
-    const marked=/^\s*[\[【]\s*彩蛋/.test(rawPrompt)?rawPrompt:'[彩蛋]'+rawPrompt;
-    const generation=resolveChatImageGeneration(marked,getContext(),'egg');
-    qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:marked,renderedPrompt:marked,url:selected.dataUrl,generation,raw:'',sizeOverride:selected.size||'',_qlCandidates:[{url:selected.dataUrl,prompt:marked,generation,renderedPrompt:marked}],_qlIndex:0,_editRecords:[selected],_renderHost:target,_hideEggBlocks:true,_editButtonHost:footerActions};
-    qlTcRenderResult();target.scrollIntoView({behavior:'smooth',block:'nearest'});
+    let groupEditor=card.querySelector('.ql-theater-group-editor');
+    if(groupEditor){groupEditor.hidden=!groupEditor.hidden;groupEditor.scrollIntoView({behavior:'smooth',block:'nearest'});return;}
+    groupEditor=document.createElement('section');groupEditor.className='ql-theater-group-editor';
+    const heading=document.createElement('div');heading.className='ql-theater-group-editor-heading';heading.textContent='本组底片 · '+images.length+' 张';groupEditor.append(heading);
+    images.forEach((record,index)=>{
+     const tile=document.createElement('article');tile.className='ql-theater-edit-tile';
+     const preview=document.createElement('img');preview.className='ql-theater-edit-thumb';preview.loading='lazy';preview.src=record.dataUrl;preview.alt='第 '+(index+1)+' 张图片';
+     const info=document.createElement('div');info.className='ql-theater-edit-info';
+     const label=document.createElement('strong');label.textContent='画面 '+(index+1);
+     const prompt=document.createElement('span');prompt.textContent=String(record.basePrompt||record.prompt||'').replace(/^\s*[\[【]\s*彩蛋[\]】]?\s*/,'').slice(0,90)||'暂无 Tag';
+     info.append(label,prompt);
+     const actions=document.createElement('div');actions.className='ql-theater-edit-actions';
+     const edit=document.createElement('button');edit.type='button';edit.className='menu_button ql-chat-image-edit';edit.textContent='编辑';
+     const move=document.createElement('button');move.type='button';move.className='menu_button ql-theater-film';move.textContent='移到底片';
+     const editorHost=document.createElement('div');editorHost.className='ql-theater-inline-editor';editorHost.hidden=true;
+     edit.addEventListener('click',()=>{
+      if(qlTcState?._renderHost&&qlTcState._renderHost!==editorHost)qlTcState._renderHost.innerHTML='';
+      if(editorHost.childElementCount){editorHost.hidden=!editorHost.hidden;editorHost.scrollIntoView({behavior:'smooth',block:'nearest'});return;}
+      editorHost.hidden=false;
+      const rawPrompt=String(record.basePrompt||record.prompt||'');
+      const marked=/^\s*[\[【]\s*彩蛋/.test(rawPrompt)?rawPrompt:'[彩蛋]'+rawPrompt;
+      const generation=resolveChatImageGeneration(marked,getContext(),'egg');
+      qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:marked,renderedPrompt:marked,url:record.dataUrl,generation,raw:'',sizeOverride:record.size||'',_qlCandidates:[{url:record.dataUrl,prompt:marked,generation,renderedPrompt:marked}],_qlIndex:0,_editRecords:[record],_renderHost:editorHost,_hideEggBlocks:true,_editButtonHost:actions};
+      qlTcRenderResult();editorHost.scrollIntoView({behavior:'smooth',block:'nearest'});
+     });
+     move.addEventListener('click',()=>{
+      record.theaterHidden=true;delete record.albumCharacterName;delete record.albumCharacterKey;record.collection='cache';
+      if(qlTcState?._renderHost===editorHost)qlTcState=null;
+      save();history();renderTheater();
+     });
+     actions.append(edit,move);tile.append(preview,info,actions,editorHost);groupEditor.append(tile);
+    });
+    card.append(groupEditor);groupEditor.scrollIntoView({behavior:'smooth',block:'nearest'});
    });
    const removeBtn=document.createElement('button');removeBtn.type='button';removeBtn.className='menu_button ql-theater-remove';removeBtn.textContent='移出小剧场';
    removeBtn.addEventListener('click',()=>{
