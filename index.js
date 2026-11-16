@@ -4731,7 +4731,7 @@ function renderTheater(){
   const row=document.createElement('div');row.className='ql-theater-filter-row';
   const label=document.createElement('label');label.textContent='按角色相册筛选';label.htmlFor='ql-theater-filter-select';
   const select=document.createElement('select');select.id='ql-theater-filter-select';
-  select.innerHTML='<option value="">全部 ('+allItems.length+')</option>'+groupOrder.map(name=>'<option value="'+esc(name)+'">'+esc(name)+' ('+groupCount.get(name)+')</option>').join('');
+  select.innerHTML='<option value="">全部 ('+allGroups.length+')</option>'+groupOrder.map(name=>'<option value="'+esc(name)+'">'+esc(name)+' ('+groupCount.get(name)+')</option>').join('');
   select.value=qlTheaterFilterKey||'';
   select.addEventListener('change',()=>{qlTheaterFilterKey=select.value;renderTheater();});
   row.append(label,select);
