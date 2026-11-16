@@ -2462,7 +2462,7 @@ function addMessageImage(host,url,prompt,taskKey,recordMeta={},anchor=null) {
   remove.disabled=true;remove.title='当前只有一张图片，无法删除最后一张；请使用重 Roll 生成其他图片后再删除。';
   remove.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();const current=card._qlCandidates?.[card._qlIndex];if(!current||card._qlCandidates.length<=1)return;const records=cfg().records||[];let changed=false;for(const item of records){if(item?.taskKey!==taskKey||!sameImageSource(item.dataUrl,current.url))continue;if(card.dataset.qlMessageIndex!==''&&Number(item.messageIndex)!==Number(card.dataset.qlMessageIndex))continue;if(card.dataset.qlChatId&&item.chatId&&item.chatId!==card.dataset.qlChatId)continue;item.hiddenInChat=true;changed=true;}if(changed)save();card._qlCandidates=card._qlCandidates.filter(candidate=>!sameImageSource(candidate.url,current.url));if(!card._qlCandidates.length){return;}card._qlIndex=Math.min(card._qlIndex,card._qlCandidates.length-1);card._qlRender?.();});
 
-  const editor=document.createElement('div');editor.className='ql-chat-image-editor';editor.hidden=true;
+  const editor=document.createElement('div');editor.className='ql-chat-image-editor';editor.hidden=!st._editButtonHost;
   const tempConfig=document.createElement('div');tempConfig.className='ql-chat-image-temp-config';
   const tempPresetLabel=document.createElement('label');tempPresetLabel.textContent='重 Roll 配置';const tempPreset=document.createElement('select');tempPreset.className='ql-chat-image-temp-preset';tempPresetLabel.append(tempPreset);
   const tempSizeLabel=document.createElement('label');tempSizeLabel.textContent='本次尺寸';const tempSize=document.createElement('select');tempSize.className='ql-chat-image-temp-size';tempSizeLabel.append(tempSize);tempConfig.append(tempPresetLabel,tempSizeLabel);
@@ -4828,7 +4828,7 @@ function renderTheater(){
    (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
    if(groupOrder.length>1){const who=document.createElement('p');who.className='ql-muted ql-theater-card-who';who.textContent='角色相册：'+nameOf(item);card.append(who);}
    const footerActions=document.createElement('div');footerActions.className='ql-theater-footer-actions';
-   const editTheaterBtn=document.createElement('button');editTheaterBtn.type='button';editTheaterBtn.className='menu_button ql-chat-image-edit';editTheaterBtn.title='编辑 Tag 和重 Roll';editTheaterBtn.setAttribute('aria-label','编辑');
+   const editTheaterBtn=document.createElement('button');editTheaterBtn.type='button';editTheaterBtn.className='menu_button ql-chat-image-edit';editTheaterBtn.title='编辑 Tag 和重 Roll';editTheaterBtn.setAttribute('aria-label','编辑');editTheaterBtn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h10l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20z"/><path d="M15 3.5V8h4M8 12h8M8 16h6"/><path d="m14.5 18.5 4.8-4.8 1.5 1.5-4.8 4.8-2 .5z"/></svg>';
    editTheaterBtn.addEventListener('click',event=>{
     event.preventDefault();event.stopPropagation();
     const selected=images[imageIndex]||images[0];if(!selected)return;
@@ -4839,7 +4839,6 @@ function renderTheater(){
     const generation=resolveChatImageGeneration(marked,getContext(),'egg');
     qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:marked,renderedPrompt:marked,url:selected.dataUrl,generation,raw:'',sizeOverride:selected.size||'',_qlCandidates:[{url:selected.dataUrl,prompt:marked,generation,renderedPrompt:marked}],_qlIndex:0,_editRecords:[selected],_renderHost:target,_hideEggBlocks:true,_editButtonHost:footerActions};
     qlTcRenderResult();target.scrollIntoView({behavior:'smooth',block:'nearest'});
-    footerActions.querySelector('.ql-chat-image-edit')?.click();
    });
    const removeBtn=document.createElement('button');removeBtn.type='button';removeBtn.className='menu_button ql-theater-remove';removeBtn.textContent='移出小剧场';
    removeBtn.addEventListener('click',()=>{
