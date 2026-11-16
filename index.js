@@ -4503,7 +4503,6 @@ function qlTcRenderResult(){
   const reroll=document.createElement('button');reroll.type='button';reroll.className='menu_button ql-chat-image-reroll';reroll.setAttribute('aria-label','重 Roll');reroll.title='重 Roll';reroll.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M20 20v-4h-4"/></svg>';
   const remove=document.createElement('button');remove.type='button';remove.className='menu_button ql-chat-image-remove';remove.setAttribute('aria-label','删除当前图片');remove.title=candidates.length<=1?'至少保留一张图片':'删除当前候选图';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="m6 7 1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>';
   const controls=document.createElement('div');controls.className='ql-chat-image-controls';controls.append(edit,reroll,remove);
-  const collapse=document.createElement('button');collapse.type='button';collapse.className='ql-chat-image-collapse';collapse.setAttribute('aria-label','折叠图片');collapse.title='折叠图片';collapse.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg><span>拾帧相册 · PHOTO ALBUM</span>';
   const editor=document.createElement('div');editor.className='ql-chat-image-editor';editor.hidden=true;
   const textarea=document.createElement('textarea');textarea.className='ql-tc-tag-input ql-chat-image-tag-input';textarea.rows=3;textarea.value=String(active.prompt||'');textarea.setAttribute('aria-label','画面提示词');
   const editorActions=document.createElement('div');editorActions.className='ql-chat-image-editor-actions';
@@ -4521,8 +4520,7 @@ function qlTcRenderResult(){
   cancelTag.addEventListener('click',()=>{textarea.value=String(st.prompt||'');editor.hidden=true;});
   reroll.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(!editor.hidden)st.prompt=textarea.value.trim();qlTcReroll();});
   remove.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(candidates.length<=1)return;candidates.splice(Number(st._qlIndex),1);st._qlIndex=Math.min(Number(st._qlIndex),candidates.length-1);const chosen=candidates[st._qlIndex];st.url=chosen.url;st.generation=chosen.generation;st.prompt=chosen.prompt;st.renderedPrompt=chosen.renderedPrompt||chosen.prompt;qlTcRenderResult();const status=document.querySelector('#ql-tc-status');if(status)status.textContent='已删除当前候选图，其他图片已保留。';});
-  figure.append(img,prev,next,controls,collapse,editor);
-  collapse.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();const collapsed=figure.classList.toggle('ql-image-collapsed');collapse.setAttribute('aria-label',collapsed?'展开图片':'折叠图片');collapse.title=collapsed?'点击展开图片':'点击折叠图片';collapse.innerHTML=(collapsed?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 10 6 6 6-6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg>')+'<span>拾帧相册 · PHOTO ALBUM</span>';});
+  figure.append(img,prev,next,controls,editor);
   applyChatAlbumStyle(figure,styleKey);applyChatTheme(figure);card.append(figure);
  }
  (st.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
