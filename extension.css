@@ -6225,3 +6225,19 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
  box-shadow:none!important;
  padding:0!important;
 }
+
+
+/* 小剧场整组编辑：按底片条目纵向展开，单张编辑与移入底片互不干扰。 */
+#shizhen-panel .ql-theater-group-editor{display:flex!important;flex-direction:column!important;gap:10px!important;margin:14px 0 4px!important;padding:12px!important;border:1px solid var(--SmartThemeBorderColor)!important;background:transparent!important;border-radius:3px!important;box-shadow:none!important;}
+#shizhen-panel .ql-theater-group-editor-heading{font-size:13px!important;font-weight:700!important;letter-spacing:.04em!important;padding-bottom:8px!important;border-bottom:1px solid var(--SmartThemeBorderColor)!important;}
+#shizhen-panel .ql-theater-edit-tile{display:grid!important;grid-template-columns:76px minmax(0,1fr) auto!important;align-items:center!important;gap:10px!important;padding:9px 0!important;border-bottom:1px solid color-mix(in srgb,var(--SmartThemeBorderColor) 55%,transparent)!important;}
+#shizhen-panel .ql-theater-edit-tile:last-child{border-bottom:0!important;}
+#shizhen-panel .ql-theater-edit-thumb{display:block!important;width:76px!important;height:88px!important;object-fit:cover!important;border:1px solid var(--SmartThemeBorderColor)!important;border-radius:2px!important;}
+#shizhen-panel .ql-theater-edit-info{display:flex!important;min-width:0!important;flex-direction:column!important;gap:5px!important;}
+#shizhen-panel .ql-theater-edit-info strong{font-size:13px!important;}
+#shizhen-panel .ql-theater-edit-info span{font-size:11px!important;line-height:1.4!important;opacity:.72!important;overflow-wrap:anywhere!important;display:-webkit-box!important;-webkit-line-clamp:3!important;-webkit-box-orient:vertical!important;overflow:hidden!important;}
+#shizhen-panel .ql-theater-edit-actions{display:flex!important;flex-direction:column!important;gap:6px!important;align-items:stretch!important;}
+#shizhen-panel .ql-theater-edit-actions button{min-width:66px!important;min-height:30px!important;padding:4px 8px!important;font-size:12px!important;}
+#shizhen-panel .ql-theater-edit-tile>.ql-theater-inline-editor{grid-column:1/-1!important;width:100%!important;min-width:0!important;}
+#shizhen-panel .ql-theater-restore{position:absolute!important;right:5px!important;bottom:5px!important;z-index:2!important;}
+@media(max-width:420px){#shizhen-panel .ql-theater-edit-tile{grid-template-columns:62px minmax(0,1fr) auto!important;gap:7px!important;}#shizhen-panel .ql-theater-edit-thumb{width:62px!important;height:76px!important;}#shizhen-panel .ql-theater-edit-actions button{min-width:58px!important;padding-inline:5px!important;}}
