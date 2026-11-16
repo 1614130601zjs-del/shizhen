@@ -4509,19 +4509,7 @@ function qlTcRenderResult(){
  host.append(card);
  qlTcShowRaw(host,st.raw);
 }
-async function qlTcGenerateText(mode,input,ctx){
- const quietPrompt=qlTcBuildQuietPrompt(mode,input),s=cfg();
- if(s.llmTagMode!=='custom'){
-  if(typeof ctx?.generateQuietPrompt!=='function')throw new Error('当前酒馆版本不支持静默生成（generateQuietPrompt）');
-  return String(await ctx.generateQuietPrompt({quietPrompt,responseLength:2048})||'').trim();
- }
- let system=quietPrompt;
- try{const borrowed=qlPresetBorrowText();if(borrowed)system+='\n\n【当前预设参考】\n'+borrowed;}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
- if(s.llmTagUseWorldInfo!==false){try{const wi=await qlFetchWorldInfoForTag(input);if(wi)system+='\n\n【当前角色卡世界书参考】\n'+wi;}catch(error){console.warn('[拾帧] 小剧场读取世界书失败（已忽略）',error);}}
- try{const roster=qlRosterText();if(roster&&!roster.startsWith('（角色词库里暂时'))system+='\n\n【当前角色名单】\n'+roster;}catch{}
- const history=Array.isArray(ctx?.chat)?ctx.chat.slice(-12).filter(m=>m&&typeof m.mes==='string'&&m.mes.trim()).map(m=>({role:m.is_user?'user':'assistant',content:String(m.mes).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,3000)})).filter(m=>m.content):[];
- return qlRequestLlmTagViaCustomApi([{role:'system',content:system},...history,{role:'user',content:'请根据上面的聊天上下文和小剧场创作任务，严格按指定口令格式输出。'}]);
-}
+
 async function qlTcGenerate(){
  if(qlTcBusy)return;
  const statusEl=document.querySelector('#ql-tc-status'),btn=document.querySelector('#ql-tc-generate'),resultHost=document.querySelector('#ql-tc-result');
@@ -4530,11 +4518,11 @@ async function qlTcGenerate(){
  if(!input){if(statusEl)statusEl.textContent='先写点画面词或剧情词。';return;}
  if(cfg().enabled===false){if(statusEl)statusEl.textContent='拾帧已停用；请先在偏好设置中重新启用插件。';return;}
  const ctx=getContext();
- if(cfg().llmTagMode!=='custom'&&typeof ctx?.generateQuietPrompt!=='function'){if(statusEl)statusEl.textContent='当前酒馆版本不支持静默生成（generateQuietPrompt），创作区暂时用不了。';return;}
+ if(typeof ctx?.generateQuietPrompt!=='function'){if(statusEl)statusEl.textContent='当前酒馆版本不支持静默生成（generateQuietPrompt），创作区暂时用不了。';return;}
  qlTcBusy=true;if(btn)btn.disabled=true;
  try{
   if(statusEl)statusEl.textContent='正在让模型写小剧场…（会带上预设、聊天上下文、角色卡和世界书）';
-  const raw=await qlTcGenerateText(mode,input,ctx);
+  const raw=String(await ctx.generateQuietPrompt({quietPrompt:qlTcBuildQuietPrompt(mode,input),responseLength:2048})||'').trim();
   if(!raw)throw new Error('模型返回空内容');
   const parsed=qlTcParse(raw);
   if(!parsed.prompt||!parsed.eggBlocks.length){
