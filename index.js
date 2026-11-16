@@ -4512,7 +4512,13 @@ function qlTcRenderResult(){
   const next=document.createElement('button');next.type='button';next.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-next';next.setAttribute('aria-label','下一张');next.title='下一张';next.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
   const reroll=document.createElement('button');reroll.type='button';reroll.className='menu_button ql-chat-image-reroll';reroll.setAttribute('aria-label','重 Roll');reroll.title='重 Roll';reroll.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M20 20v-4h-4"/></svg>';
   const remove=document.createElement('button');remove.type='button';remove.className='menu_button ql-chat-image-remove';remove.setAttribute('aria-label','删除当前图片');remove.title=candidates.length<=1?'至少保留一张图片':'删除当前候选图';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="m6 7 1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>';
-  const controls=document.createElement('div');controls.className='ql-chat-image-controls';controls.append(edit,reroll,remove);
+  const controls=document.createElement('div');controls.className='ql-chat-image-controls';
+  if(st._editButtonHost){
+   controls.append(reroll,remove);
+   st._editButtonHost.querySelector('.ql-chat-image-edit')?.remove();
+   const removeAction=st._editButtonHost.querySelector('.ql-theater-remove');
+   if(removeAction)st._editButtonHost.insertBefore(edit,removeAction);else st._editButtonHost.append(edit);
+  }else controls.append(edit,reroll,remove);
   const editor=document.createElement('div');editor.className='ql-chat-image-editor';editor.hidden=true;
   const textarea=document.createElement('textarea');textarea.className='ql-tc-tag-input ql-chat-image-tag-input';textarea.rows=3;textarea.value=String(active.prompt||'');textarea.setAttribute('aria-label','画面提示词');
   const editorActions=document.createElement('div');editorActions.className='ql-chat-image-editor-actions';
@@ -4536,7 +4542,7 @@ function qlTcRenderResult(){
  if(!st._hideEggBlocks)(st.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
  const row=document.createElement('div');row.className='ql-theater-result-actions';
  const saveButton=document.createElement('button');saveButton.type='button';saveButton.className='menu_button ql-primary';saveButton.textContent=st._editRecords?'保存修改':'收入小剧场';saveButton.dataset.tcSave='1';saveButton.disabled=!active||String(st.prompt||'').trim()!==String(st.renderedPrompt||'').trim();saveButton.addEventListener('click',qlTcSave);row.append(saveButton);
- const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{if(st._renderHost)st._renderHost.innerHTML='';else qlTcRenderResult();qlTcState=null;const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
+ const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{if(st._renderHost)st._renderHost.innerHTML='';else qlTcRenderResult();st._editButtonHost?.querySelector('.ql-chat-image-edit')?.remove();qlTcState=null;const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
  card.append(row);host.append(card);qlTcShowRaw(host,st.raw);
 }
 async function qlTcFetchWorldInfo(input,ctx){
@@ -4668,7 +4674,7 @@ function qlTcSave(){
   record.config=snapshotConfig(candidate.prompt,generation.negative);record.updatedAt=Date.now();record.dataUrl=candidate.url;
   save();history();renderTheater();
   if(typeof candidate.url==='string'&&/^data:image\//i.test(candidate.url))persistImageToTavern(candidate.url,record.taskKey||('theater-edit-'+Date.now())).then(path=>{if(record.dataUrl===candidate.url){record.dataUrl=path;save();history();renderTheater();}}).catch(error=>console.warn('[拾帧] 小剧场重绘图转存失败，原图仍保留。',error));
-  if(st._renderHost)st._renderHost.innerHTML='';qlTcState=null;const statusEl=document.querySelector('#ql-tc-status');if(statusEl)statusEl.textContent='已保存修改；原小剧场分组、聊天室和角色相册归属均已保留。';return;
+  if(st._renderHost)st._renderHost.innerHTML='';st._editButtonHost?.querySelector('.ql-chat-image-edit')?.remove();qlTcState=null;const statusEl=document.querySelector('#ql-tc-status');if(statusEl)statusEl.textContent='已保存修改；原小剧场分组、聊天室和角色相册归属均已保留。';return;
  }
  const name=String(cur.name||ctx.name2||'当前角色').trim()||'当前角色';
  const taskKey='theater:'+Date.now().toString(36)+':'+Math.random().toString(36).slice(2,6);
@@ -4831,7 +4837,7 @@ function renderTheater(){
     const rawPrompt=String(selected.basePrompt||selected.prompt||'');
     const marked=/^\\s*[\\[【]\\s*彩蛋/.test(rawPrompt)?rawPrompt:'[彩蛋]'+rawPrompt;
     const generation=resolveChatImageGeneration(marked,getContext(),'egg');
-    qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:marked,renderedPrompt:marked,url:selected.dataUrl,generation,raw:'',sizeOverride:selected.size||'',_qlCandidates:[{url:selected.dataUrl,prompt:marked,generation,renderedPrompt:marked}],_qlIndex:0,_editRecords:[selected],_renderHost:target,_hideEggBlocks:true};
+    qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:marked,renderedPrompt:marked,url:selected.dataUrl,generation,raw:'',sizeOverride:selected.size||'',_qlCandidates:[{url:selected.dataUrl,prompt:marked,generation,renderedPrompt:marked}],_qlIndex:0,_editRecords:[selected],_renderHost:target,_hideEggBlocks:true,_editButtonHost:footerActions};
     qlTcRenderResult();target.scrollIntoView({behavior:'smooth',block:'nearest'});
     target.querySelector('.ql-chat-image-reroll')?.click();
    });
