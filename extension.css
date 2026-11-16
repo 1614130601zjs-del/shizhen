@@ -6205,3 +6205,11 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
 #shizhen-panel .ql-theater-album-card .ql-album-card-cover{aspect-ratio:4/3!important;}
 #shizhen-panel .ql-theater-detail-back{display:inline-flex!important;align-items:center!important;margin:0 0 10px!important;padding:6px 12px!important;}
 @media(max-width:380px){#shizhen-panel .ql-theater-album-grid{gap:7px!important;}}
+
+/* 小剧场编辑框最终覆盖：不受相册主题 textarea 填充色影响。 */
+#shizhen-panel#shizhen-panel[data-ql-style] .ql-theater-inline-editor textarea.ql-chat-image-tag-input{
+ background:transparent!important;
+ background-color:transparent!important;
+ background-image:none!important;
+ box-shadow:none!important;
+}
