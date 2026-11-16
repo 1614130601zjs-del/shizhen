@@ -597,7 +597,7 @@ function qlBuildEggChat(room,messages,ordinal){
  body.addEventListener('click',()=>revealNext());
  trigger.addEventListener('click',()=>wrap.classList.remove('ql-egg-collapsed'));
  closeBtn.addEventListener('click',()=>wrap.classList.add('ql-egg-collapsed'));
- infoBtn.addEventListener('click',()=>{drawer.hidden=!drawer.hidden;});
+ infoBtn.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();const opening=drawer.hidden;drawer.hidden=!opening;infoBtn.setAttribute('aria-expanded',String(opening));});
  applyChatTheme(wrap);
  return wrap;
 }
