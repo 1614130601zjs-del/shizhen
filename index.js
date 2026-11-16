@@ -4446,7 +4446,8 @@ function qlTcParse(raw){
  const text=String(raw||'');
  const tm=text.match(new RegExp(QL_TITLE_MARKER_SRC));
  const title=tm?String(tm[1]||'').replace(/\s+/g,' ').trim():'';
- const images=[...text.matchAll(new RegExp(QL_MARKER_SRC,'g'))].map(m=>qlNormalizePrompt(m[1])).filter(Boolean);
+ // 小剧场单独使用正则字面量，避免 QL_MARKER_SRC 的字符串转义漏掉空格和换行。
+ const images=[...text.matchAll(/image###([\s\S]*?)###/g)].map(m=>qlNormalizePrompt(m[1])).filter(Boolean);
  return {title,prompt:images[0]||'',extraImages:Math.max(0,images.length-1),eggBlocks:qlParseEggBlocks(text)};
 }
 function qlTcRefreshCombos(){
