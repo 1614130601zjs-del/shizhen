@@ -17,7 +17,7 @@
 #chat .ql-chat-image-title-line,#shizhen-panel .ql-chat-image-title-line{display:none}
 #chat .ql-chat-image-title-label,#shizhen-panel .ql-chat-image-title-label{display:inline-block;padding:3px 12px;font-size:12px;font-weight:600;letter-spacing:.02em;line-height:1.5;border-radius:999px;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));background:color-mix(in srgb,var(--ql-accent,var(--SmartThemeQuoteColor)) 18%,var(--ql-card,var(--SmartThemeBlurTintColor)));color:var(--ql-text,var(--SmartThemeBodyColor));overflow-wrap:anywhere}
 
-/* 彩蛋聊天室：v1 先用黑白漫画风格固定呈现（跟黑白漫画分镜卡是同一套视觉语言），不跟相册风格联动。
+/* 彩蛋聊天室：结构与逐条弹出交互保持独立；外观通过 ql-album-* 主题 class 跟随统一影像主题。
    折叠态只显示小按钮；点开后展开面板，标题栏 sticky 吸顶，点聊天区域逐条弹出对话。 */
 #chat .ql-egg-chat,#shizhen-panel .ql-egg-chat{position:relative;display:block;margin:2px 2px 14px;max-width:100%;color:#171717;font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
 /* 折叠态：按钮居中，上面挂一条短短的虚线"引线"，看着像是从上面的相册照片垂下来的，
