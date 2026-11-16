@@ -34,8 +34,10 @@
 #chat .ql-egg-chat-header,#shizhen-panel .ql-egg-chat-header{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;margin:0;padding:10px 42px 10px 10px;background:#fff;border-bottom:3px solid #171717}
 #chat .ql-egg-room-name,#shizhen-panel .ql-egg-room-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 10px;font-size:13px;font-weight:900;letter-spacing:.05em;background:#171717;color:#fff;border-radius:2px;box-shadow:2px 2px 0 #fff,3px 3px 0 #171717;font-family:'Impact','Arial Black','PingFang SC',sans-serif}
 #chat .ql-egg-room-count,#shizhen-panel .ql-egg-room-count{flex:none;padding:2px 7px;font-size:11px;font-weight:900;border:2px solid #171717;border-radius:2px;transform:rotate(-2deg);background:#fff;color:#171717}
-#chat .ql-egg-info-toggle,#chat .ql-egg-chat-close,#shizhen-panel .ql-egg-info-toggle,#shizhen-panel .ql-egg-chat-close{position:absolute;top:8px;width:26px;height:26px;margin:0;padding:0;display:flex;align-items:center;justify-content:center;border:2px solid #171717;border-radius:50%;background:#fff;color:#171717;box-shadow:2px 2px 0 #171717;cursor:pointer}
-#chat .ql-egg-info-toggle,#shizhen-panel .ql-egg-info-toggle{right:40px}
+#chat .ql-egg-info-toggle,#chat .ql-egg-chat-close,#shizhen-panel .ql-egg-info-toggle,#shizhen-panel .ql-egg-chat-close{position:absolute;top:5px;width:36px;height:36px;min-width:36px;min-height:36px;margin:0;padding:0;display:flex;align-items:center;justify-content:center;z-index:8;pointer-events:auto;touch-action:manipulation;border:2px solid #171717;border-radius:50%;background:#fff;color:#171717;box-shadow:2px 2px 0 #171717;cursor:pointer}
+#chat .ql-egg-info-toggle,#shizhen-panel .ql-egg-info-toggle{right:43px}
+#chat .ql-egg-info-toggle svg,#shizhen-panel .ql-egg-info-toggle svg{width:18px!important;height:18px!important;pointer-events:none!important}
+#chat .ql-egg-chat-header,#shizhen-panel .ql-egg-chat-header{padding-right:88px!important}
 #chat .ql-egg-chat-close,#shizhen-panel .ql-egg-chat-close{right:8px;font-size:15px;font-weight:900;line-height:1}
 #chat .ql-egg-info-toggle:active,#chat .ql-egg-chat-close:active,#shizhen-panel .ql-egg-info-toggle:active,#shizhen-panel .ql-egg-chat-close:active{box-shadow:0 0 0 #171717;transform:translate(2px,2px)}
 #chat .ql-egg-info-drawer,#shizhen-panel .ql-egg-info-drawer{padding:12px;background:#fff;border-bottom:3px solid #171717;font-size:12px;line-height:1.6}
@@ -6530,3 +6532,15 @@ html[data-ql-style="comic"] #ql-image-cache-modal .ql-cache-accordion-body pre{
 
 /* 小剧场仅去掉标题与整组内容外侧的最外层框；提高主题选择器优先级，避免漫画主题重新加回边框。内部图片相框、点阵底板与布局均保留。 */
 #shizhen-panel[data-ql-style] .ql-theater-card{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;}
+
+
+/* 小剧场详情：编辑、重 Roll、删图固定在原始图片下方，不再单独生成编辑抽屉。 */
+#shizhen-panel .ql-theater-image-controls{display:flex!important;align-items:center!important;justify-content:flex-end!important;gap:8px!important;width:100%!important;margin:9px 0 0!important;padding:0!important;}
+#shizhen-panel .ql-theater-image-controls button{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:58px!important;min-height:34px!important;padding:5px 10px!important;border:1px solid var(--SmartThemeBorderColor)!important;border-radius:2px!important;background:transparent!important;color:var(--SmartThemeBodyColor)!important;box-shadow:none!important;font-size:12px!important;}
+#shizhen-panel .ql-theater-image-controls .ql-chat-image-reroll{width:auto!important;height:34px!important;}
+#shizhen-panel .ql-theater-image-controls .ql-chat-image-remove{opacity:.8!important;}
+#shizhen-panel .ql-theater-image-editor{display:block!important;margin:9px 0 0!important;padding:9px 0 0!important;border-top:1px solid var(--SmartThemeBorderColor)!important;}
+#shizhen-panel .ql-theater-image-editor[hidden]{display:none!important;}
+#shizhen-panel .ql-theater-image-editor .ql-chat-image-tag-input{width:100%!important;min-height:88px!important;box-sizing:border-box!important;border-radius:2px!important;}
+#shizhen-panel .ql-theater-image-editor-hint{margin-top:5px!important;font-size:11px!important;opacity:.65!important;}
+@media(max-width:420px){#shizhen-panel .ql-theater-image-controls{justify-content:space-between!important;}#shizhen-panel .ql-theater-image-controls button{flex:1 1 0!important;min-width:0!important;}}
