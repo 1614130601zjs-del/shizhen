@@ -4662,7 +4662,6 @@ async function qlTcReroll(){
   await qlTcMakeImage(st);
   if(editTarget&&st._qlCandidates?.length)st._qlCandidates[st._qlIndex]._editRecord=editTarget;
   if(st._inlineTheater){
-   if(editTarget)editTarget.theaterRerollStatus='重 Roll 完成，图片已替换。';
    qlTcSave();
    return;
   }
