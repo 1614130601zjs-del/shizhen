@@ -6162,19 +6162,19 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
 #shizhen-panel .ql-theater-card .ql-egg-info-toggle,
 #shizhen-panel .ql-theater-card .ql-egg-chat-close{
  position:absolute!important;top:50%!important;transform:translateY(-50%)!important;
- flex:0 0 44px!important;width:44px!important;min-width:44px!important;
- height:44px!important;min-height:44px!important;padding:0!important;margin:0!important;
+ flex:0 0 36px!important;width:36px!important;min-width:36px!important;
+ height:36px!important;min-height:36px!important;padding:0!important;margin:0!important;
  display:flex!important;align-items:center!important;justify-content:center!important;
- z-index:30!important;pointer-events:auto!important;touch-action:manipulation!important;
+ z-index:8!important;pointer-events:auto!important;touch-action:manipulation!important;
 }
-#shizhen-panel .ql-theater-card .ql-egg-info-toggle{right:60px!important;}
+#shizhen-panel .ql-theater-card .ql-egg-info-toggle{right:52px!important;}
 #shizhen-panel .ql-theater-card .ql-egg-chat-close{right:8px!important;}
-#shizhen-panel .ql-theater-card .ql-egg-info-toggle svg{width:21px!important;height:21px!important;pointer-events:none!important;}
-#shizhen-panel .ql-theater-card .ql-egg-chat-header{position:sticky!important;isolation:isolate!important;overflow:visible!important;padding-right:116px!important;}
+#shizhen-panel .ql-theater-card .ql-egg-info-toggle svg{width:18px!important;height:18px!important;pointer-events:none!important;}
+#shizhen-panel .ql-theater-card .ql-egg-chat-header{position:sticky!important;isolation:isolate!important;overflow:visible!important;padding-right:96px!important;}
 #shizhen-panel[data-ql-style="comic"] .ql-theater-card .ql-egg-info-toggle,
 #shizhen-panel[data-ql-style="comic"] .ql-theater-card .ql-egg-chat-close{border-radius:50%!important;}
 @media(max-width:380px){
- #shizhen-panel .ql-theater-card .ql-egg-chat-header{gap:5px!important;padding-right:72px!important;}
+ #shizhen-panel .ql-theater-card .ql-egg-chat-header{gap:5px!important;padding-right:96px!important;}
  #shizhen-panel .ql-theater-card .ql-egg-room-name{font-size:12px!important;padding-left:7px!important;padding-right:7px!important;}
  #shizhen-panel .ql-theater-card .ql-egg-room-count{font-size:10px!important;padding:2px 5px!important;}
 }
