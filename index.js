@@ -4842,7 +4842,6 @@ function renderTheater(){
     const {editor:tagEditor,textarea:tagInput,saveTag,cancelTag}=qlCreateTheaterTagEditor({hidden:true,ariaLabel:'当前图片 Tag'});
     const rerollStatus=document.createElement('div');rerollStatus.className='ql-theater-reroll-status';rerollStatus.setAttribute('role','status');rerollStatus.setAttribute('aria-live','polite');
     const currentRecord=()=>images[imageIndex];
-    if(currentRecord()?.theaterRerollStatus){rerollStatus.textContent=currentRecord().theaterRerollStatus;rerollStatus.hidden=false;}
     const loadCurrentTag=()=>{const record=currentRecord();const raw=String(record?.basePrompt||record?.prompt||'');tagInput.value=/^\\s*[\\[【]\\s*彩蛋/.test(raw)?raw:'[彩蛋]'+raw;};
     loadCurrentTag();
     editBtn.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();tagEditor.hidden=!tagEditor.hidden;if(!tagEditor.hidden)loadCurrentTag();});
@@ -4860,12 +4859,11 @@ function renderTheater(){
     deleteBtn.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();const record=currentRecord();if(!record)return;const index=(cfg().records||[]).indexOf(record);if(index>=0)cfg().records.splice(index,1);save();history();renderTheater();});
     figure.append(controls,tagEditor,rerollStatus);
     if(images.length>1){
-     const counter=document.createElement('span');counter.className='ql-theater-image-count';counter.textContent='1/'+images.length;
      const prev=qlCreateChatImageArrow('prev'),next=qlCreateChatImageArrow('next');
-     const stepImage=delta=>{imageIndex=(imageIndex+delta+images.length)%images.length;img.src=images[imageIndex].dataUrl;counter.textContent=(imageIndex+1)+'/'+images.length;if(!tagEditor.hidden)loadCurrentTag();};
+     const stepImage=delta=>{imageIndex=(imageIndex+delta+images.length)%images.length;img.src=images[imageIndex].dataUrl;if(!tagEditor.hidden)loadCurrentTag();};
      prev.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();stepImage(-1);});
      next.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();stepImage(1);});
-     figure.append(prev,next,counter);
+     figure.append(prev,next);
     }
     applyChatTheme(figure);card.append(figure);
    }
