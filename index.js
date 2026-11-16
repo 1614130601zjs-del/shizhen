@@ -4844,7 +4844,7 @@ function renderTheater(){
      return {url:record.dataUrl,prompt:marked,renderedPrompt:marked,generation,at:Number(record.at)||Date.now(),_editRecord:record};
     });
     const active=candidates[0];
-    qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:active?.prompt||'',renderedPrompt:active?.renderedPrompt||'',url:active?.url||'',generation:active?.generation||null,raw:'',sizeOverride:item.size||'',_qlCandidates:candidates,_qlIndex:0,_editRecords:images,_renderHost:editorHost,_hideEggBlocks:true,_editButtonHost:footerActions};
+    qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:active?.prompt||'',renderedPrompt:active?.renderedPrompt||'',url:active?.url||'',generation:active?.generation||null,raw:'',sizeOverride:item.size||'',_qlCandidates:candidates,_qlIndex:0,_editRecords:images,_renderHost:editorHost,_hideEggBlocks:true};
     qlTcRenderResult();editorHost.scrollIntoView({behavior:'smooth',block:'nearest'});
    });
       const removeBtn=document.createElement('button');removeBtn.type='button';removeBtn.className='menu_button ql-theater-remove';removeBtn.textContent='移出小剧场';
