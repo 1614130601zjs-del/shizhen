@@ -178,13 +178,13 @@ function qlSetGenerationActive(v){qlGenerationActive=v;clearTimeout(qlGeneration
 // 现在把整条消息的文本节点按顺序拼成一份“逻辑文本”（<br> 当换行、不同段落之间补换行），在逻辑文本上匹配标记，
 // 再用 Range 跨节点把标记原位替换成按钮；按钮位置永远就是标记所在的位置。
 // （思路参考智绘姬的 findAndReplaceInElement，代码为自行实现。）
-const QL_MARKER_SRC='image###([\\s\\S]*?)###';
+const QL_MARKER_SRC='image###([\s\\S]*?)###';
 // 标题标记用跟 image###…### 完全一样的“纯文字口令”写法，不用尖括号标签——
 // 之前试过 <img-title>…</img-title>，结果酒馆把消息当 HTML 渲染时，浏览器/酒馆自带的内容过滤
 // 会把这种看起来像标签的东西直接当成一个未知 HTML 标签处理掉（标签被吃掉，只剩里面的纯文字），
 // 等我们的代码扫描消息 DOM 的时候，原文里早就找不到任何“<img-title>”这几个字符了，所以渲染不出来。
 // title###…### 长得不像任何合法标签，不会被当成 HTML 解析/过滤掉，能完整原样留在消息文字里。
-const QL_TITLE_MARKER_SRC='title###([\\s\\S]*?)###';
+const QL_TITLE_MARKER_SRC='title###([\s\\S]*?)###';
 const QL_SKIP_SELECTOR='script,style,textarea,pre,code,button,.ql-chat-image,.ql-inline-image-trigger';
 const QL_BLOCK_SELECTOR='p,div,li,blockquote,h1,h2,h3,h4,h5,h6,pre,tr,td,th';
 const qlNormalizePrompt=value=>String(value||'').replace(/\s+/g,' ').trim();
@@ -4001,7 +4001,7 @@ function history(){
   const promptText=String(r.basePrompt||'').trim()||(artistPositive&&promptSource.includes(artistPositive)
    ?promptSource.split(artistPositive).join(' ').replace(/(?:\s*[,，、]\s*){2,}/g,', ').replace(/^[\s,，、]+|[\s,，、]+$/g,'').trim()
    :promptSource);
-  const promptWords=promptText.split(/[,，\\n]+/).map(x=>x.trim()).filter(Boolean).length;
+  const promptWords=promptText.split(/[,，\n]+/).map(x=>x.trim()).filter(Boolean).length;
   const vibeCount=Array.isArray(vibe?.entries)?vibe.entries.length:0;
   content.innerHTML='<div class="ql-cache-detail-hero"><div class="ql-cache-detail-image-wrap"><img class="ql-cache-large" src="'+esc(r.dataUrl||'')+'" alt="生成结果"></div><div class="ql-cache-detail-heading"><span class="ql-cache-eyebrow">IMAGE ARCHIVE · 拾帧缓存</span><h3>生成记录</h3><p>'+esc(createdAt.toLocaleString())+'</p><div class="ql-cache-badges"><span>'+esc(r.provider||'未知后端')+'</span><span>'+esc(r.model||meta.model||'未知模型')+'</span><span>'+esc(r.size||meta.size||'尺寸未知')+'</span></div></div></div><div class="ql-cache-stat-grid"><div class="ql-cache-stat"><span>提示词条目</span><strong>'+promptWords+'</strong></div><div class="ql-cache-stat"><span>Vibe 参考</span><strong>'+vibeCount+'</strong></div><div class="ql-cache-stat"><span>画师串</span><strong>'+esc(preset?.name||'未使用')+'</strong></div></div><section class="ql-cache-prompt-section"><div class="ql-cache-section-title"><div><span class="ql-cache-eyebrow">PROMPT</span><h4>画面提示词</h4></div><button type="button" class="ql-cache-copy-icon ql-cache-copy-pill" data-copy-positive aria-label="复制画面提示词" title="复制画面提示词"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="11" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3"></path></svg></button></div><div class="ql-cache-prompt-box"><pre>'+esc(promptText||'此记录没有保存正向提示词')+'</pre></div></section><div class="ql-cache-detail-actions"><button type="button" class="menu_button ql-cache-action-primary" data-modal-load>载入提示词</button><button type="button" class="menu_button" data-modal-save>保存图片</button><button type="button" class="menu_button" data-modal-workshop>送去工坊重绘</button></div><div class="ql-cache-accordions"><details><summary><span>最终提交给 NAI 的完整提示词</span><small>FINAL PROMPT</small></summary><div class="ql-cache-accordion-body"><pre>'+esc(promptSource||'未记录')+'</pre><button type="button" class="menu_button" data-copy-final>复制完整提示词</button></div></details><details><summary><span>画师串预设</span><small>'+esc(preset?.name||'未使用')+'</small></summary><div class="ql-cache-accordion-body"><label>预设正文</label><pre>'+esc(preset?.positive||'未记录')+'</pre><label>预设负向词</label><pre>'+esc(preset?.negative||'未记录')+'</pre></div></details><details><summary><span>负向提示词</span><small>NEGATIVE PROMPT</small></summary><div class="ql-cache-accordion-body"><pre>'+esc(r.negative||meta.negative||'未记录')+'</pre></div></details><details><summary><span>Vibe 参考</span><small>'+vibeCount+' 条参考</small></summary><div class="ql-cache-accordion-body"><pre>'+esc(vibe?JSON.stringify(vibe,null,2):'未使用 Vibe')+'</pre></div></details><details><summary><span>完整生成参数</span><small>ADVANCED</small></summary><div class="ql-cache-accordion-body"><pre>'+esc(JSON.stringify(meta,null,2))+'</pre></div></details></div>';
   content.querySelector('[data-copy-final]')?.addEventListener('click',async()=>{try{if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(promptSource);else{const area=document.createElement('textarea');area.value=promptSource;area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();document.execCommand('copy');area.remove();}status('已复制最终提交的完整提示词。');}catch{status('复制失败：请长按文本手动复制。');}});
@@ -4546,7 +4546,7 @@ async function qlTcFetchWorldInfo(input,ctx){
    try{text=String(sub(String(entry.content||''))||'').trim();}catch{text=String(entry.content||'').trim();}
    if(text&&!seen.has(text)){seen.add(text);chunks.push(text);}
   }
-  return chunks.join('\\n\\n').trim();
+  return chunks.join('\n\n').trim();
  }catch(error){
   console.warn('[拾帧] 小剧场读取世界书失败（已忽略）',error);
   return '';
@@ -4569,7 +4569,7 @@ function qlTcCharacterCardText(ctx){
    ['角色系统提示',card.system_prompt],
    ['角色后置指令',card.post_history_instructions]
   ];
-  return fields.filter(([,value])=>String(value||'').trim()).map(([label,value])=>'【'+label+'】\\n'+String(value).trim()).join('\\n\\n');
+  return fields.filter(([,value])=>String(value||'').trim()).map(([label,value])=>'【'+label+'】\n'+String(value).trim()).join('\n\n');
  }catch(error){console.warn('[拾帧] 小剧场读取角色卡失败（已忽略）',error);return '';}
 }
 async function qlTcGenerateText(mode,input,ctx){
@@ -4579,12 +4579,12 @@ async function qlTcGenerateText(mode,input,ctx){
   return String(await ctx.generateQuietPrompt({quietPrompt,responseLength:2048})||'').trim();
  }
  const materials=[];
- try{const borrowed=qlPresetBorrowText();if(borrowed)materials.push('【当前预设资料】\\n'+borrowed);}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
- try{const card=qlTcCharacterCardText(ctx);if(card)materials.push('【当前角色卡资料】\\n'+card);}catch{}
- try{const roster=qlRosterText();if(roster&&!roster.startsWith('（角色词库里暂时'))materials.push('【拾帧角色名单资料】\\n'+roster);}catch{}
- if(s.llmTagUseWorldInfo!==false){const wi=await qlTcFetchWorldInfo(input,ctx);if(wi)materials.push('【当前激活的世界书内容（请遵循其中与本次小剧场相关的规则及输出要求）】\\n'+wi);}
- const history=Array.isArray(ctx?.chat)?ctx.chat.slice(-12).filter(m=>m&&typeof m.mes==='string'&&m.mes.trim()).map(m=>({role:m.is_user?'user':'assistant',content:String(m.mes).replace(/<[^>]*>/g,' ').replace(/\\s+/g,' ').trim().slice(0,3000)})).filter(m=>m.content):[];
- const system=[...materials,quietPrompt].filter(Boolean).join('\\n\\n');
+ try{const borrowed=qlPresetBorrowText();if(borrowed)materials.push('【当前预设资料】\n'+borrowed);}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
+ try{const card=qlTcCharacterCardText(ctx);if(card)materials.push('【当前角色卡资料】\n'+card);}catch{}
+ try{const roster=qlRosterText();if(roster&&!roster.startsWith('（角色词库里暂时'))materials.push('【拾帧角色名单资料】\n'+roster);}catch{}
+ if(s.llmTagUseWorldInfo!==false){const wi=await qlTcFetchWorldInfo(input,ctx);if(wi)materials.push('【当前激活的世界书内容（请遵循其中与本次小剧场相关的规则及输出要求）】\n'+wi);}
+ const history=Array.isArray(ctx?.chat)?ctx.chat.slice(-12).filter(m=>m&&typeof m.mes==='string'&&m.mes.trim()).map(m=>({role:m.is_user?'user':'assistant',content:String(m.mes).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,3000)})).filter(m=>m.content):[];
+ const system=[...materials,quietPrompt].filter(Boolean).join('\n\n');
  return qlRequestLlmTagViaCustomApi([{role:'system',content:system},...history,{role:'user',content:'请结合上面的预设、角色卡、聊天上下文和已激活世界书内容完成小剧场；世界书中的设定与输出规则优先，严格按小剧场口令结构返回。'}]);
 }
 async function qlTcGenerate(){
@@ -5060,9 +5060,9 @@ async function scanChatu8Settings(){
  merged.prompts=[];
  renderMigrationPreview(merged);
  const host=$('#ql-migrate-preview');
- if(host)host.textContent+='\\n扫描到 '+found.length+' 个可能相关的数据源；仅处理画师串。';
+ if(host)host.textContent+='\n扫描到 '+found.length+' 个可能相关的数据源；仅处理画师串。';
  if((migrationCandidate?.artists||[]).length)importChatu8Candidate();
- else if(host)host.textContent+='\\n没有发现新的可迁移画师串。若扩展数据不在当前酒馆可访问范围内，请使用备用 JSON 导入。';
+ else if(host)host.textContent+='\n没有发现新的可迁移画师串。若扩展数据不在当前酒馆可访问范围内，请使用备用 JSON 导入。';
 }
 function safeMigrationStringify(value){try{return JSON.stringify(value);}catch{return '';}}
 async function readMigrationFile(file){
