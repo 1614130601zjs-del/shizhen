@@ -6527,3 +6527,6 @@ html[data-ql-style="comic"] #ql-image-cache-modal .ql-cache-accordion-body pre{
   grid-column:1/-1!important;
  }
 }
+
+/* 小剧场外层卡片去壳：保留 DOM 分组与内部图片卡片，只移除额外的边框、底色、阴影和内边距。 */
+#shizhen-panel .ql-theater-card{display:contents!important;}
