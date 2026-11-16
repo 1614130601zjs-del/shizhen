@@ -6213,3 +6213,15 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
  background-image:none!important;
  box-shadow:none!important;
 }
+
+
+/* 小剧场已收藏图片的编辑区：去掉正文图片工具栏的蓝色胶囊底，仅保留内部操作按钮。 */
+#shizhen-panel#shizhen-panel[data-ql-style] .ql-theater-inline-editor .ql-chat-image-controls{
+ background:transparent!important;
+ background-color:transparent!important;
+ background-image:none!important;
+ border:0!important;
+ border-radius:0!important;
+ box-shadow:none!important;
+ padding:0!important;
+}
