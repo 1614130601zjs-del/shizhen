@@ -6641,3 +6641,145 @@ html[data-ql-style="comic"] #ql-image-cache-modal .ql-cache-detail-actions butto
   font-size:11px!important;
  }
 }
+
+
+/* 0.5.121 follow-up: comic title de-shadow, serialized-story tagline, and album-frame detail modal overrides. */
+html[data-ql-style="comic"] #shizhen-panel .ql-brand strong{
+ color:#171717!important;
+ text-shadow:none!important;
+ -webkit-text-stroke:0 transparent!important;
+ filter:none!important;
+}
+html[data-ql-style="comic"] #shizhen-panel .ql-brand span{
+ display:block!important;
+ color:#555!important;
+ font-size:0!important;
+ line-height:1.45!important;
+ opacity:1!important;
+ letter-spacing:.025em!important;
+ text-shadow:none!important;
+}
+html[data-ql-style="comic"] #shizhen-panel .ql-brand span::after{
+ content:"每一格，都是正在连载的故事。"!important;
+ display:block!important;
+ color:#555!important;
+ font-size:11px!important;
+ line-height:1.45!important;
+ letter-spacing:.025em!important;
+ text-shadow:none!important;
+}
+
+/* The cache detail lives inside #ql-overlay; target the actual overlay tree and reuse .ql-album-photo's comic frame. */
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal{
+ background:rgba(0,0,0,.42)!important;
+ -webkit-backdrop-filter:grayscale(1) blur(2px)!important;
+ backdrop-filter:grayscale(1) blur(2px)!important;
+}
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-modal-panel{
+ color:#171717!important;
+ background:#f4f4f1!important;
+ border:3px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:4px 4px 0 #171717!important;
+}
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-hero{
+ display:grid!important;
+ grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)!important;
+ gap:12px!important;
+ padding:10px!important;
+ color:#171717!important;
+ background:#fff!important;
+ border:1.5px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:2px 2px 0 #171717!important;
+}
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-image-wrap{
+ box-sizing:border-box!important;
+ min-width:0!important;
+ min-height:150px!important;
+ padding:6px!important;
+ overflow:hidden!important;
+ border:1.5px solid #171717!important;
+ border-radius:2px!important;
+ background:#fff!important;
+ box-shadow:2px 2px 0 #171717!important;
+}
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-large{
+ display:block!important;
+ width:100%!important;
+ max-width:100%!important;
+ max-height:38dvh!important;
+ margin:0!important;
+ border:0!important;
+ border-radius:0!important;
+ background:#f4f4f1!important;
+ object-fit:contain!important;
+}
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-heading,
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-heading h3,
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-heading p{
+ color:#171717!important;
+ text-shadow:none!important;
+}
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-actions{
+ display:flex!important;
+ flex-flow:row wrap!important;
+ align-items:stretch!important;
+ justify-content:stretch!important;
+ gap:10px!important;
+ width:100%!important;
+}
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-actions button{
+ display:inline-flex!important;
+ flex:1 1 0!important;
+ align-items:center!important;
+ justify-content:center!important;
+ min-width:0!important;
+ min-height:46px!important;
+ padding:9px 8px!important;
+ color:#171717!important;
+ background:#fff!important;
+ border:2px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:2px 2px 0 #171717!important;
+ font-size:12px!important;
+ font-weight:900!important;
+ line-height:1.35!important;
+ text-align:center!important;
+ text-shadow:none!important;
+ opacity:1!important;
+}
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-actions button.ql-cache-action-primary{
+ color:#fff!important;
+ background:#171717!important;
+ border-color:#171717!important;
+ box-shadow:2px 2px 0 #777!important;
+}
+html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-modal-close{
+ color:#171717!important;
+ background:#fff!important;
+ border:2px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:2px 2px 0 #171717!important;
+}
+@media(max-width:520px){
+ html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-hero{
+  grid-template-columns:minmax(0,1fr)!important;
+  gap:10px!important;
+ }
+ html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-image-wrap{
+  min-height:110px!important;
+  max-height:34dvh!important;
+ }
+ html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-large{
+  max-height:34dvh!important;
+ }
+ html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-actions{
+  gap:8px!important;
+ }
+ html[data-ql-style="comic"] #ql-overlay #ql-image-cache-modal .ql-cache-detail-actions button{
+  flex:1 1 100%!important;
+  min-height:44px!important;
+  font-size:12px!important;
+ }
+}
