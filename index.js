@@ -6087,7 +6087,7 @@ async function qlBuildLlmTagMessages(zhText){
  // 名单优先：把本次名单直接写在提示词最后（比抽象的“三层顺序”更能压住世界书里具体的外貌描述）。
  try{
   const roster=qlRosterText();
-  if(roster&&!roster.startsWith('（角色词库里暂时'))system+='\n\n【名单优先·再次强调】下面是本次可直接写名字的角色名单。名单里的角色一律只写名字、服装、表情、视线、动作，不写任何固定外貌，哪怕上面世界书里写了他们的外貌也不得写入（外貌由插件替换）；只有不在名单里的角色，才按第 5 条的②③处理。\n'+roster;
+  if(roster&&!roster.startsWith('（角色词库里暂时'))system+='\n\n【角色词库·中文名称锁定】以下名单中的每行第一项是唯一输出主名称；“也可写”后的名称仅用于识别中文输入别名。输入命中主名称或任一别名，都必须输出该行第一项的中文主名称，逐字一致，绝不翻译成英文/拼音/罗马音。名单内角色只写中文主名称、服装、表情、视线、动作，不写固定外貌；世界书或作品资料不能覆盖这条。\n'+roster;
  }catch(e){console.warn('[拾帧 Lite] 追加角色名单失败（已忽略）',e);}
  return [{role:'system',content:system},{role:'user',content:String(zhText||'').trim()}];
 }
