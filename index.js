@@ -4653,7 +4653,7 @@ function qlTcSave(){
   const candidateKey=taskKey+':'+String(i+1);
   const rec=storeChatRecord(candidate.url,candidate.prompt,candidateKey,meta,candidate.generation);
   rec.albumCharacterName=name;rec.albumCharacterKey=cur.id||'';rec.collection='character-album';
-  rec.eggTitle=st.title||null;rec.eggBlocks=st.eggBlocks;rec.eggAlbumStyle=cfg().chatAlbumStyle||'follow';
+  rec.eggTitle=st.title||null;rec.eggBlocks=st.eggBlocks;rec.eggAlbumStyle=cfg().chatAlbumStyle||'follow';rec.theaterGroupId=taskKey;
  }
  save();history();
  const savedCount=st._qlCandidates.length;
@@ -4701,6 +4701,9 @@ function renderTheater(){
  // theaterHidden 是"从小剧场这个列表里移出"专用的标记，跟角色相册里的收藏状态互不影响——
  // 点"移出小剧场"不会取消收藏，图片还在角色相册里，只是不在小剧场列表里重复出现了。
  const allItems=(s.records||[]).filter(item=>item&&item.dataUrl&&Array.isArray(item.eggBlocks)&&item.eggBlocks.length&&!item.theaterHidden);
+ const grouped=new Map();
+ for(const item of allItems){const key=String(item.theaterGroupId||('legacy:'+String(item.id||item.taskKey||item.dataUrl)));if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push(item);}
+ const allGroups=[...grouped.values()];
  if(!allItems.length){
   const empty=document.createElement('p');empty.className='ql-muted';
   empty.textContent='还没有收藏过带彩蛋聊天室的图片。正文消息收藏图片时，如果那条消息带着彩蛋聊天室，会自动存一份快照到这里。';
@@ -4722,11 +4725,7 @@ function renderTheater(){
  const keyOf=item=>String(item.albumCharacterKey||item.albumCharacterName||'current');
  const nameOf=item=>String(s.albumNames?.[keyOf(item)]||item.albumCharacterName||'当前角色').trim()||'未命名相册';
  const groupOrder=[],groupCount=new Map();
- for(const item of allItems){
-  const name=nameOf(item);
-  if(!groupCount.has(name)){groupOrder.push(name);groupCount.set(name,0);}
-  groupCount.set(name,groupCount.get(name)+1);
- }
+ for(const group of allGroups){const name=nameOf(group[0]);if(!groupCount.has(name)){groupOrder.push(name);groupCount.set(name,0);}groupCount.set(name,groupCount.get(name)+1);}
  if(qlTheaterFilterKey&&!groupCount.has(qlTheaterFilterKey))qlTheaterFilterKey='';
  if(groupOrder.length>1){
   const row=document.createElement('div');row.className='ql-theater-filter-row';
@@ -4738,26 +4737,30 @@ function renderTheater(){
   row.append(label,select);
   host.append(row);
  }
- const items=qlTheaterFilterKey?allItems.filter(item=>nameOf(item)===qlTheaterFilterKey):allItems;
- items.slice().reverse().forEach(item=>{
+ const groupsToRender=qlTheaterFilterKey?allGroups.filter(group=>nameOf(group[0])===qlTheaterFilterKey):allGroups;
+ groupsToRender.slice().reverse().forEach(group=>{
+  const item=group[0],images=group.filter(record=>record.dataUrl);
   const card=document.createElement('div');card.className='ql-theater-card ql-card';
   const style=qlResolveAlbumStyle(item.eggAlbumStyle||s.chatAlbumStyle||'follow');
   // 摆放顺序跟正文/原来那张小漫画截图一致：标题在最上面，然后是图片，最后才是聊天室。
   if(item.eggTitle)card.append(qlMakeTitleBadge(item.eggTitle,item.eggAlbumStyle||s.chatAlbumStyle||'follow'));
-  if(item.dataUrl){
+  if(images.length){
    const figure=document.createElement('figure');figure.className='ql-chat-image ql-album-'+style;
-   const img=document.createElement('img');img.src=item.dataUrl;img.loading='lazy';
-   img.addEventListener('click',()=>openViewfinderImage(item.dataUrl));
-   figure.append(img);
-   applyChatTheme(figure);
-   card.append(figure);
+   const img=document.createElement('img');img.src=images[0].dataUrl;img.loading='lazy';
+   img.addEventListener('click',()=>openViewfinderImage(img.currentSrc||img.src));figure.append(img);
+   if(images.length>1){
+    let imageIndex=0;const counter=document.createElement('span');counter.className='ql-theater-image-count';counter.textContent='1/'+images.length;
+    const makeArrow=(direction,label,path)=>{const button=document.createElement('button');button.type='button';button.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-'+direction;button.setAttribute('aria-label',label);button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+path+'</svg>';button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();imageIndex=(imageIndex+(direction==='next'?1:-1)+images.length)%images.length;img.src=images[imageIndex].dataUrl;counter.textContent=(imageIndex+1)+'/'+images.length;});return button;};
+    figure.append(makeArrow('prev','上一张','<path d="m15 18-6-6 6-6"/>'),makeArrow('next','下一张','<path d="m9 18 6-6-6-6"/>'),counter);
+   }
+   applyChatTheme(figure);card.append(figure);
   }
   (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
   if(groupOrder.length>1){const who=document.createElement('p');who.className='ql-muted ql-theater-card-who';who.textContent='角色相册：'+nameOf(item);card.append(who);}
   const removeBtn=document.createElement('button');removeBtn.type='button';removeBtn.className='menu_button ql-theater-remove';removeBtn.textContent='移出小剧场';
   removeBtn.addEventListener('click',()=>{
    // 只隐藏在小剧场这个列表里，不碰角色相册那边的收藏状态——图片仍然留在角色相册里。
-   item.theaterHidden=true;save();renderTheater();
+   for(const record of group)record.theaterHidden=true;save();renderTheater();
   });
   card.append(removeBtn);
   // 这张卡片本身就在 #shizhen-panel 里面（挂了 .ql-card），跟设置页/取景区那些卡片一样，
