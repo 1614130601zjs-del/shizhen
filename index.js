@@ -4867,7 +4867,22 @@ function renderTheater(){
      qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt,renderedPrompt:String(record.basePrompt||record.prompt||prompt),url:record.dataUrl,generation,raw:'',sizeOverride:item.size||'',_qlCandidates:[{url:record.dataUrl,prompt,renderedPrompt:String(record.basePrompt||record.prompt||prompt),generation,_editRecord:record}],_qlIndex:0,_editRecords:[record],_renderHost:tagEditor,_inlineTheater:true,_inlineStatusEl:rerollStatus,_inlineRerollButton:rerollBtn};
      await qlTcReroll();
     });
-    deleteBtn.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();const record=currentRecord();if(!record)return;const index=(cfg().records||[]).indexOf(record);if(index>=0)cfg().records.splice(index,1);save();history();renderTheater();});
+    deleteBtn.addEventListener('click',event=>{
+     event.preventDefault();event.stopPropagation();
+     const record=currentRecord();if(!record)return;
+     const records=cfg().records||[];
+     const uid=qlUidOf(record);
+     const live=(uid?records.find(item=>qlUidOf(item)===uid):null)||records.find(item=>item===record);
+     if(!live)return;
+     // 从小剧场删除图片不是销毁影像：转入底片缓存，并保留原故事快照以便之后恢复。
+     if(live.albumCharacterName)live._theaterPreviousAlbumCharacterName=live.albumCharacterName;
+     if(live.albumCharacterKey!=null)live._theaterPreviousAlbumCharacterKey=live.albumCharacterKey;
+     delete live.albumCharacterName;delete live.albumCharacterKey;
+     delete live.promptEntryId;delete live.sourcePromptEntryId;delete live.sourcePromptEntryAppliedAt;
+     live.collection='cache';live.theaterHidden=true;
+     save();history();renderTheater();
+     status('图片已从小剧场移除，并转入底片缓存。');
+    });
     figure.append(controls,tagEditor,rerollStatus);
     if(images.length>1){
      const prev=qlCreateChatImageArrow('prev'),next=qlCreateChatImageArrow('next');
