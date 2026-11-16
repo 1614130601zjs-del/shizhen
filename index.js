@@ -178,7 +178,7 @@ function qlSetGenerationActive(v){qlGenerationActive=v;clearTimeout(qlGeneration
 // 现在把整条消息的文本节点按顺序拼成一份“逻辑文本”（<br> 当换行、不同段落之间补换行），在逻辑文本上匹配标记，
 // 再用 Range 跨节点把标记原位替换成按钮；按钮位置永远就是标记所在的位置。
 // （思路参考智绘姬的 findAndReplaceInElement，代码为自行实现。）
-const QL_MARKER_SRC='image###([\s\\S]*?)###';
+const QL_MARKER_SRC='image###([\\s\\S]*?)###';
 // 标题标记用跟 image###…### 完全一样的“纯文字口令”写法，不用尖括号标签——
 // 之前试过 <img-title>…</img-title>，结果酒馆把消息当 HTML 渲染时，浏览器/酒馆自带的内容过滤
 // 会把这种看起来像标签的东西直接当成一个未知 HTML 标签处理掉（标签被吃掉，只剩里面的纯文字），
