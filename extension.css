@@ -5875,18 +5875,18 @@ dialog.ql-egg-avatar-editor .ql-row input[type="range"]{flex:1}
 #shizhen-panel .ql-tc-tag-editor .ql-tc-tag-input{display:block;width:100%;min-height:88px;resize:vertical;margin:8px 0}
 #shizhen-panel .ql-tc-tag-editor .ql-muted{margin:6px 0;font-size:12px}
 
-/* 小剧场预览沿用正文图片卡：左右箭头叠在图片上，编辑 Tag/重 Roll/删除在图片下方。 */
-#shizhen-panel #ql-tc-result figure.ql-chat-image{position:relative!important;display:block!important;width:100%!important;max-width:min(100%,720px)!important;margin:6px auto!important;padding:8px!important;box-sizing:border-box!important;}
-#shizhen-panel #ql-tc-result figure.ql-chat-image>img{display:block!important;width:100%!important;height:auto!important;max-height:75vh!important;object-fit:contain!important;border-radius:8px!important;touch-action:pan-y!important;}
-#shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow{position:absolute!important;top:50%!important;z-index:12!important;display:flex!important;align-items:center!important;justify-content:center!important;transform:translateY(-50%)!important;width:38px!important;height:42px!important;min-width:38px!important;min-height:42px!important;margin:0!important;padding:0!important;border:1px solid rgba(255,255,255,.58)!important;border-radius:999px!important;color:#fff!important;background:rgba(24,20,28,.28)!important;box-shadow:0 1px 6px rgba(0,0,0,.15)!important;backdrop-filter:blur(5px)!important;}
-#shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow-prev{left:8px!important;right:auto!important;}
-#shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow-next{right:8px!important;left:auto!important;}
-#shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow svg{width:22px!important;height:22px!important;fill:none!important;stroke:currentColor!important;stroke-width:2.2!important;stroke-linecap:round!important;stroke-linejoin:round!important;}
-#shizhen-panel #ql-tc-result .ql-chat-image-controls{display:flex!important;flex-flow:row nowrap!important;align-items:center!important;justify-content:center!important;gap:clamp(8px,2vw,14px)!important;width:100%!important;padding:8px 4px 4px!important;margin:0!important;box-sizing:border-box!important;}
-#shizhen-panel #ql-tc-result .ql-chat-image-controls button{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 auto!important;width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important;margin:0!important;padding:7px!important;border-radius:50%!important;}
-#shizhen-panel #ql-tc-result .ql-chat-image-controls .ql-chat-image-edit svg,#shizhen-panel #ql-tc-result .ql-chat-image-controls .ql-chat-image-reroll svg,#shizhen-panel #ql-tc-result .ql-chat-image-controls .ql-chat-image-remove svg{width:20px!important;height:20px!important;fill:none!important;stroke:currentColor!important;stroke-width:2!important;stroke-linecap:round!important;stroke-linejoin:round!important;}
-#shizhen-panel #ql-tc-result .ql-chat-image-editor{margin-top:8px!important;}
-
+/* 小剧场生成结果直接沿用正文 .ql-chat-image 的结构与通用样式。
+   这里只保留结果区自己的按钮行布局，不再单独重写图片卡/箭头/工具栏样式。 */
+#shizhen-panel #ql-tc-result .ql-theater-result-actions{
+ display:flex!important;flex-flow:row wrap!important;align-items:center!important;
+ justify-content:center!important;gap:8px!important;width:100%!important;
+ margin:12px auto 4px!important;padding:0!important;box-sizing:border-box!important;
+}
+#shizhen-panel #ql-tc-result .ql-theater-result-actions button{
+ flex:0 0 auto!important;width:auto!important;min-width:88px!important;
+ min-height:36px!important;margin:0!important;padding:7px 14px!important;
+ box-sizing:border-box!important;
+}
 
 /* 拾帧整体界面：黑白漫画分镜。仅作用于插件面板，不改变正文生成卡的独立相册样式。 */
 #shizhen-panel[data-ql-style="comic"]{
