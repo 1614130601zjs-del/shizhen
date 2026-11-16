@@ -6052,6 +6052,8 @@ dialog.ql-egg-avatar-editor .ql-row input[type="range"]{flex:1}
 #shizhen-panel .ql-theater-footer-actions .ql-theater-reroll{display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:6px!important;min-width:94px!important;min-height:36px!important;padding:6px 12px!important;}
 #shizhen-panel .ql-theater-footer-actions .ql-theater-reroll svg{width:16px!important;height:16px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.8!important;stroke-linecap:round!important;stroke-linejoin:round!important;}
 #shizhen-panel .ql-theater-footer-actions .ql-theater-remove{align-self:auto!important;margin:0!important;min-height:36px!important;}
+#shizhen-panel .ql-theater-footer-actions .ql-chat-image-edit{display:inline-flex!important;align-items:center!important;justify-content:center!important;flex:0 0 36px!important;width:36px!important;min-width:36px!important;max-width:36px!important;height:36px!important;min-height:36px!important;padding:7px!important;margin:0!important;}
+#shizhen-panel .ql-theater-footer-actions .ql-chat-image-edit svg{display:block!important;width:20px!important;height:20px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.7!important;stroke-linecap:round!important;stroke-linejoin:round!important;}
 #shizhen-panel[data-ql-style="comic"] .ql-theater-footer-actions .ql-theater-reroll{box-shadow:2px 2px 0 #171717!important;}
 #shizhen-panel[data-ql-style="comic"] .ql-theater-remove{align-self:auto!important}
 #shizhen-panel[data-ql-style="comic"] ::-webkit-scrollbar{width:9px}
