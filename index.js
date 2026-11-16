@@ -4480,7 +4480,7 @@ async function qlTcMakeImage(st){
   generation=resolveChatImageGeneration(prompt,ctx,'egg');
  }
  const sizeSel=String(document.querySelector('#ql-tc-size')?.value||'');
- const sizeOv=sizeSel||st.sizeOverride||generation.sizeOverride||'';
+ const sizeOv=(Array.isArray(st._editRecords)&&st._editRecords.length?st.sizeOverride||sizeSel:sizeSel)||generation.sizeOverride||'';
  const url=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null,null,sizeOv);
  const candidate={url,prompt,generation,renderedPrompt:prompt,at:Date.now()};
  if(!Array.isArray(st._qlCandidates))st._qlCandidates=[];
@@ -4638,7 +4638,7 @@ async function qlTcGenerate(){
 async function qlTcReroll(){
  const st=qlTcState;if(!st||qlTcBusy)return;
  const statusEl=document.querySelector('#ql-tc-status');
- const editedPrompt=document.querySelector('#ql-tc-result .ql-tc-tag-input');if(editedPrompt)st.prompt=editedPrompt.value.trim();
+ const editedPrompt=(st._renderHost||document.querySelector('#ql-tc-result'))?.querySelector('.ql-tc-tag-input');if(editedPrompt)st.prompt=editedPrompt.value.trim();
  if(!st.prompt){if(statusEl)statusEl.textContent='画面 Tag 不能为空。';return;}
  qlTcBusy=true;
  try{
