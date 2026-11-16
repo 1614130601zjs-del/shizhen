@@ -3684,6 +3684,18 @@ function applyUiStyle(preset,customColor){
   }else for(const el of targets)['--qs-user-accent','--qs-user-on','--qs-tint'].forEach(k=>el.style.removeProperty(k));
  }
  const header=panel.querySelector('.ql-header');
+ const brand=panel.querySelector('.ql-brand'),brandTitle=brand?.querySelector('strong'),brandSubtitle=brand?.querySelector('span');
+ if(brandTitle&&brandSubtitle){
+  if(style==='comic'){
+   if(header){header.style.setProperty('background','#171717','important');header.style.setProperty('color','#fff','important');}
+   brandTitle.style.setProperty('color','#fff','important');brandTitle.style.setProperty('-webkit-text-fill-color','#fff','important');brandTitle.style.setProperty('text-shadow','none','important');brandTitle.style.setProperty('-webkit-text-stroke','0 transparent','important');brandTitle.style.setProperty('filter','none','important');
+   brandSubtitle.textContent='每一格，都是正在连载的故事。';brandSubtitle.style.setProperty('display','block','important');brandSubtitle.style.setProperty('color','#e8e8e8','important');brandSubtitle.style.setProperty('-webkit-text-fill-color','#e8e8e8','important');brandSubtitle.style.setProperty('font-size','11px','important');brandSubtitle.style.setProperty('line-height','1.45','important');brandSubtitle.style.setProperty('opacity','1','important');brandSubtitle.style.setProperty('text-shadow','none','important');
+  }else{
+   for(const el of [header,brandTitle,brandSubtitle])if(el)for(const key of ['background','color','-webkit-text-fill-color','text-shadow','-webkit-text-stroke','filter','display','font-size','line-height','opacity'])el.style.removeProperty(key);
+   brandSubtitle.textContent='故事仍在继续，快门为你停留。';
+  }
+ }
+
  if(header){const d=new Date();header.setAttribute('data-ql-date',"'"+String(d.getFullYear()).slice(2)+' '+String(d.getMonth()+1).padStart(2,'0')+' '+String(d.getDate()).padStart(2,'0'));}
  const select=$('#ql-ui-style');if(select&&select.value!==wanted&&[...select.options].some(o=>o.value===wanted))select.value=wanted;
  try{if(!cfg().chatAlbumStyle||cfg().chatAlbumStyle==='follow')applyChatAlbumStyleToAll('follow');}catch{}
@@ -5597,6 +5609,7 @@ function openViewfinderImage(url){
     $b('[data-jb=done]').hidden=!S.selecting;$b('[data-jb=clr]').hidden=!S.selecting;$b('[data-jb=more]').hidden=!!S.selecting;
     if(S.selecting)$b('.ql-jb-panel').hidden=true;
     $b('[data-jb=more]').textContent=$b('.ql-jb-panel').hidden?'设置 ▴':'收起 ▾';
+    overlay._qlPaintComicBar?.();
    };
    const syncSettings=()=>{
     const c=qlJellyCfg(),set=(id,fn)=>{const el=document.querySelector(id);if(el)fn(el);};
@@ -5650,6 +5663,29 @@ function openViewfinderImage(url){
  // 放大页挂在 body 下，不继承面板的 data-ql-style；显式同步当前主题，供主题专属 CSS 命中。
  const activeUiStyle=document.querySelector('#shizhen-panel')?.dataset.qlStyle||'default';
  overlay.dataset.qlStyle=activeUiStyle;
+ if(activeUiStyle==='comic'){
+  const set=(el,styles)=>{if(!el)return;for(const [key,value] of Object.entries(styles))el.style.setProperty(key.replace(/[A-Z]/g,match=>'-'+match.toLowerCase()),value,'important');};
+  const paper=overlay.querySelector('.ql-album-paper'),page=overlay.querySelector('.ql-album-single-page'),photo=overlay.querySelector('.ql-album-single-photo'),photoImg=overlay.querySelector('.ql-album-single-photo img'),close=overlay.querySelector('.ql-viewfinder-lightbox-close'),bar=overlay.querySelector('.ql-jelly-bar');
+  set(overlay,{boxSizing:'border-box',background:'transparent',border:'0',borderRadius:'2px',boxShadow:'none',color:'#171717',overflow:'visible',padding:'0 0 10px'});
+  set(paper,{boxSizing:'border-box',padding:'12px',border:'3px solid #171717',borderRadius:'2px',background:'#e9e9e5',backgroundImage:'radial-gradient(#c9c9c3 .8px,transparent .8px)',backgroundSize:'7px 7px',boxShadow:'6px 6px 0 #171717'});
+  set(page,{boxSizing:'border-box',width:'min(88vw,560px)',maxWidth:'100%',margin:'0 auto',padding:'12px 10px 14px',border:'2px solid #171717',borderRadius:'1px',background:'#fff',color:'#171717',boxShadow:'3px 3px 0 #171717',transform:'none'});
+  set(photo,{padding:'0',margin:'0',border:'0',background:'#f1f1ed'});
+  set(photoImg,{display:'block',width:'auto',maxWidth:'100%',maxHeight:'68dvh',margin:'0 auto',border:'0',borderRadius:'0',background:'#f1f1ed',objectFit:'contain'});
+  set(close,{top:'8px',right:'8px',zIndex:'10',width:'34px',height:'34px',minWidth:'34px',minHeight:'34px',color:'#171717',background:'#fff',border:'2px solid #171717',borderRadius:'2px',boxShadow:'2px 2px 0 #171717',textShadow:'none'});
+  set(bar,{top:'calc(100% + 2px)',width:'max-content',maxWidth:'calc(100vw - 18px)',margin:'8px 0 0',color:'#171717',fontFamily:'inherit'});
+  const paintComicBar=()=>{
+   if(!bar)return;
+   set(bar.querySelector('.ql-jb-head'),{display:'flex',gap:'4px',padding:'4px',background:'#f4f4f1',color:'#171717',border:'2px solid #171717',borderRadius:'2px',boxShadow:'3px 3px 0 #171717'});
+   set(bar.querySelector('.ql-jb-panel'),{background:'#f4f4f1',color:'#171717',border:'2px solid #171717',borderRadius:'2px',boxShadow:'3px 3px 0 #171717'});
+   bar.querySelectorAll('.ql-jb-row b,.ql-jb-hint,.ql-jb-msg,.ql-jb-brush').forEach(el=>set(el,{color:'#222',opacity:'1'}));
+   bar.querySelectorAll('button').forEach(button=>set(button,{color:button.classList.contains('is-active')?'#fff':'#171717',background:button.classList.contains('is-active')?'#171717':'#fff',border:'2px solid #171717',borderRadius:'2px',boxShadow:'2px 2px 0 #171717',fontWeight:'850',textShadow:'none',opacity:'1'}));
+   set(bar.querySelector('.ql-jb-dd-list'),{background:'#f4f4f1',border:'2px solid #171717',borderRadius:'2px',boxShadow:'3px 3px 0 #171717'});
+  };
+  overlay._qlPaintComicBar=paintComicBar;paintComicBar();
+  if(window.matchMedia?.('(max-width: 520px)').matches){set(page,{width:'calc(100vw - 52px)',padding:'10px 8px 12px'});set(photoImg,{maxHeight:'60dvh'});set(bar,{maxWidth:'calc(100vw - 12px)'});}
+ }else{
+  for(const el of [overlay,overlay.querySelector('.ql-album-paper'),overlay.querySelector('.ql-album-single-page'),overlay.querySelector('.ql-album-single-photo'),overlay.querySelector('.ql-album-single-photo img'),overlay.querySelector('.ql-viewfinder-lightbox-close'),overlay.querySelector('.ql-jelly-bar')])if(el)el.removeAttribute('style');
+ }
  overlay.querySelector('img').src=url;
  qlJellyClearSelection(overlay.querySelector('img'));{const jp=overlay.querySelector('.ql-jb-panel');if(jp)jp.hidden=true;}overlay._qlJellyMsg?.('');
  qlAttachJelly(overlay.querySelector('img'));overlay._qlPaintJellyBar?.();
