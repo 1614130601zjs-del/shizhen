@@ -6534,13 +6534,13 @@ html[data-ql-style="comic"] #ql-image-cache-modal .ql-cache-accordion-body pre{
 #shizhen-panel[data-ql-style] .ql-theater-card{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;}
 
 
-/* 小剧场详情：编辑、重 Roll、删图固定在原始图片下方，不再单独生成编辑抽屉。 */
-#shizhen-panel .ql-theater-image-controls{display:flex!important;align-items:center!important;justify-content:flex-end!important;gap:8px!important;width:100%!important;margin:9px 0 0!important;padding:0!important;}
-#shizhen-panel .ql-theater-image-controls button{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:58px!important;min-height:34px!important;padding:5px 10px!important;border:1px solid var(--SmartThemeBorderColor)!important;border-radius:2px!important;background:transparent!important;color:var(--SmartThemeBodyColor)!important;box-shadow:none!important;font-size:12px!important;}
-#shizhen-panel .ql-theater-image-controls .ql-chat-image-reroll{width:auto!important;height:34px!important;}
-#shizhen-panel .ql-theater-image-controls .ql-chat-image-remove{opacity:.8!important;}
-#shizhen-panel .ql-theater-image-editor{display:block!important;margin:9px 0 0!important;padding:9px 0 0!important;border-top:1px solid var(--SmartThemeBorderColor)!important;}
-#shizhen-panel .ql-theater-image-editor[hidden]{display:none!important;}
-#shizhen-panel .ql-theater-image-editor .ql-chat-image-tag-input{width:100%!important;min-height:88px!important;box-sizing:border-box!important;border-radius:2px!important;}
-#shizhen-panel .ql-theater-image-editor-hint{margin-top:5px!important;font-size:11px!important;opacity:.65!important;}
-@media(max-width:420px){#shizhen-panel .ql-theater-image-controls{justify-content:space-between!important;}#shizhen-panel .ql-theater-image-controls button{flex:1 1 0!important;min-width:0!important;}}
+/* 小剧场生成区与收藏详情共用正文图片工具栏；在拾帧面板内统一为中性黑白图标按钮，避免酒馆主题色生成蓝色胶囊。 */
+#shizhen-panel .ql-chat-image-controls{display:flex!important;align-items:center!important;justify-content:center!important;flex-wrap:wrap!important;gap:8px!important;width:100%!important;margin:10px 0 0!important;padding:0!important;background:transparent!important;border:0!important;box-shadow:none!important;}
+#shizhen-panel .ql-chat-image-controls button{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important;padding:7px!important;border:1px solid var(--SmartThemeBorderColor)!important;border-radius:3px!important;background:transparent!important;background-color:transparent!important;color:var(--SmartThemeBodyColor)!important;box-shadow:none!important;}
+#shizhen-panel .ql-chat-image-controls button svg{width:18px!important;height:18px!important;fill:none!important;stroke:currentColor!important;stroke-width:2!important;stroke-linecap:round!important;stroke-linejoin:round!important;pointer-events:none!important;}
+#shizhen-panel .ql-chat-image-controls button:disabled{opacity:.35!important;}
+#shizhen-panel .ql-chat-image-editor{display:block!important;margin:9px 0 0!important;padding:9px 0 0!important;border-top:1px solid var(--SmartThemeBorderColor)!important;}
+#shizhen-panel .ql-chat-image-editor[hidden]{display:none!important;}
+#shizhen-panel .ql-chat-image-editor .ql-chat-image-tag-input{width:100%!important;min-height:88px!important;box-sizing:border-box!important;border-radius:2px!important;}
+#shizhen-panel .ql-chat-image-editor-actions{display:flex!important;justify-content:flex-end!important;gap:8px!important;margin-top:8px!important;}
+#shizhen-panel .ql-chat-image-editor-actions button{min-height:32px!important;padding:5px 10px!important;border:1px solid var(--SmartThemeBorderColor)!important;border-radius:2px!important;background:transparent!important;color:var(--SmartThemeBodyColor)!important;box-shadow:none!important;}
