@@ -6073,3 +6073,64 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
 #shizhen-panel #ql-tc-result .ql-theater-card figure.ql-chat-image>.ql-chat-image-arrow{width:38px!important;height:42px!important;min-width:38px!important;min-height:42px!important;}
 #shizhen-panel #ql-tc-result .ql-theater-card>.ql-row{display:flex!important;flex-flow:row nowrap!important;align-items:center!important;justify-content:center!important;gap:8px!important;margin:8px 0 0!important;}
 #shizhen-panel #ql-tc-result .ql-theater-card>.ql-row>button{flex:0 0 auto!important;width:auto!important;min-width:88px!important;min-height:34px!important;margin:0!important;padding:6px 14px!important;}
+
+/* 小剧场结果卡：直接补齐正文相册的覆盖式翻页键规则。
+   正文原规则只给 #chat 写了 position:absolute；小剧场虽然有同样的 class，
+   但漏掉定位声明，按钮就会作为普通文档流元素掉到图片下面。 */
+#shizhen-panel #ql-tc-result figure.ql-chat-image{
+ position:relative!important;
+}
+#shizhen-panel #ql-tc-result figure.ql-chat-image>img{
+ display:block!important;width:100%!important;height:auto!important;
+ touch-action:pan-y!important;
+}
+#shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow{
+ position:absolute!important;top:50%!important;z-index:12!important;
+ display:flex!important;align-items:center!important;justify-content:center!important;
+ transform:translateY(-50%)!important;
+ width:38px!important;height:42px!important;min-width:38px!important;min-height:42px!important;
+ padding:0!important;margin:0!important;
+ border:1px solid rgba(255,255,255,.58)!important;border-radius:999px!important;
+ color:#fff!important;background:rgba(24,20,28,.28)!important;
+ box-shadow:0 1px 6px rgba(0,0,0,.15)!important;
+ backdrop-filter:blur(5px)!important;-webkit-backdrop-filter:blur(5px)!important;
+}
+#shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow-prev{left:8px!important;right:auto!important;}
+#shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow-next{right:8px!important;left:auto!important;}
+#shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow svg{
+ width:22px!important;height:22px!important;fill:none!important;stroke:currentColor!important;
+ stroke-width:2.2!important;stroke-linecap:round!important;stroke-linejoin:round!important;
+}
+#shizhen-panel #ql-tc-result .ql-chat-image-controls{
+ display:flex!important;flex-flow:row nowrap!important;align-items:center!important;
+ justify-content:space-evenly!important;gap:clamp(18px,5vw,32px)!important;
+ width:100%!important;padding:8px clamp(12px,5vw,24px) 4px!important;
+ margin:0!important;box-sizing:border-box!important;overflow:visible!important;
+ background:transparent!important;border:0!important;box-shadow:none!important;
+}
+#shizhen-panel #ql-tc-result .ql-chat-image-controls button{
+ display:inline-flex!important;align-items:center!important;justify-content:center!important;
+ flex:0 0 28px!important;width:28px!important;min-width:28px!important;max-width:28px!important;
+ height:28px!important;min-height:28px!important;margin:0!important;padding:5px!important;
+ border-radius:9px!important;background:transparent!important;box-shadow:none!important;
+}
+#shizhen-panel #ql-tc-result .ql-chat-image-controls button svg{
+ display:block!important;width:15px!important;height:15px!important;
+ fill:none!important;stroke:currentColor!important;stroke-width:1.8!important;
+ stroke-linecap:round!important;stroke-linejoin:round!important;
+}
+#shizhen-panel[data-ql-style="comic"] #ql-tc-result figure.ql-chat-image{
+ background:transparent!important;
+}
+#shizhen-panel[data-ql-style="comic"] #ql-tc-result .ql-chat-image-controls,
+#shizhen-panel[data-ql-style="comic"] #ql-tc-result .ql-chat-image-controls button{
+ background:transparent!important;box-shadow:none!important;
+}
+@media(max-width:360px){
+ #shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow{
+  width:32px!important;min-width:32px!important;height:36px!important;min-height:36px!important;
+ }
+ #shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow-prev{left:5px!important;}
+ #shizhen-panel #ql-tc-result figure.ql-chat-image>.ql-chat-image-arrow-next{right:5px!important;}
+ #shizhen-panel #ql-tc-result .ql-chat-image-controls{gap:14px!important;}
+}
