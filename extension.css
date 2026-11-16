@@ -6169,3 +6169,12 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
  transform:translateY(calc(-50% + 1px))!important;
  transition:transform .08s ease-out!important;
 }
+
+/* 小剧场相册首页：复用拾帧相册卡片结构，点击封面进入原有故事详情。 */
+#shizhen-panel .ql-theater-gallery-shell{padding:10px 0!important;border:0!important;background:transparent!important;box-shadow:none!important;}
+#shizhen-panel .ql-theater-album-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important;}
+#shizhen-panel .ql-theater-album-card{overflow:hidden!important;}
+#shizhen-panel .ql-theater-album-open{text-align:left!important;color:inherit!important;}
+#shizhen-panel .ql-theater-album-card .ql-album-card-cover{aspect-ratio:4/3!important;}
+#shizhen-panel .ql-theater-detail-back{display:inline-flex!important;align-items:center!important;margin:0 0 10px!important;padding:6px 12px!important;}
+@media(max-width:380px){#shizhen-panel .ql-theater-album-grid{gap:7px!important;}}
