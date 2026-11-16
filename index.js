@@ -4464,7 +4464,7 @@ async function qlTcMakeImage(st){
   const activeCombo=c.activeConfigMode!=='separate'&&Number(c.activeComboIndex)>=0?c.combinations[Number(c.activeComboIndex)]:null;
   const presetIndex=activeCombo?Number(activeCombo.artistIndex??-1):Number(c.activePresetIndex??-1);
   generation.presetIndex=presetIndex;generation.preset=presetIndex>=0?c.presets[presetIndex]:null;
- }else if(/^\\d+$/.test(tv)&&c.combinations[Number(tv)]){
+ }else if(/^\d+$/.test(tv)&&c.combinations[Number(tv)]){
   generation=qlResolveWithNames(prompt,ctx,t=>resolveCombinationGeneration(t,Number(tv),c),{noGeneric:true});
  }else{
   generation=resolveChatImageGeneration(prompt,ctx,'egg');
