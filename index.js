@@ -4810,9 +4810,10 @@ function renderTheater(){
    const card=document.createElement('div');card.className='ql-theater-card ql-card';
    const style=qlResolveAlbumStyle(item.eggAlbumStyle||s.chatAlbumStyle||'follow');
    if(item.eggTitle)card.append(qlMakeTitleBadge(item.eggTitle,item.eggAlbumStyle||s.chatAlbumStyle||'follow'));
+   let imageIndex=0;
    if(images.length){
     const figure=document.createElement('figure');figure.className='ql-chat-image ql-album-'+style;
-    let imageIndex=0;const img=document.createElement('img');img.src=images[0].dataUrl;img.loading='lazy';
+    const img=document.createElement('img');img.src=images[0].dataUrl;img.loading='lazy';
     img.addEventListener('click',()=>openViewfinderImage(img.currentSrc||img.src));figure.append(img);
     if(images.length>1){
      const counter=document.createElement('span');counter.className='ql-theater-image-count';counter.textContent='1/'+images.length;
@@ -4836,7 +4837,7 @@ function renderTheater(){
     if(!target.parentNode)card.append(target);
     target.hidden=false;
     const rawPrompt=String(selected.basePrompt||selected.prompt||'');
-    const marked=/^\\s*[\\[【]\\s*彩蛋/.test(rawPrompt)?rawPrompt:'[彩蛋]'+rawPrompt;
+    const marked=/^\s*[\[【]\s*彩蛋/.test(rawPrompt)?rawPrompt:'[彩蛋]'+rawPrompt;
     const generation=resolveChatImageGeneration(marked,getContext(),'egg');
     qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:marked,renderedPrompt:marked,url:selected.dataUrl,generation,raw:'',sizeOverride:selected.size||'',_qlCandidates:[{url:selected.dataUrl,prompt:marked,generation,renderedPrompt:marked}],_qlIndex:0,_editRecords:[selected],_renderHost:target,_hideEggBlocks:true,_editButtonHost:footerActions};
     qlTcRenderResult();target.scrollIntoView({behavior:'smooth',block:'nearest'});
