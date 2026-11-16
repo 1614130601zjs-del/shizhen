@@ -4489,11 +4489,6 @@ async function qlTcMakeImage(st){
  st.generation=generation;st.url=url;st.prompt=prompt;st.renderedPrompt=prompt;
  return url;
 }
-function qlTcShowRaw(host,raw){
- const det=document.createElement('details');const sum=document.createElement('summary');sum.textContent='模型原始输出（排查用）';
- const pre=document.createElement('pre');pre.style.whiteSpace='pre-wrap';pre.textContent=String(raw||'');
- det.append(sum,pre);host.append(det);
-}
 function qlTcRenderResult(){
  const st=qlTcState;
  const host=st?._renderHost||document.querySelector('#ql-tc-result');if(!host)return;
@@ -4548,7 +4543,6 @@ function qlTcRenderResult(){
  // 编辑已收藏的小剧场时，直接把生成区的内容节点放进当前详情，不再额外套一张 ql-card。
  if(Array.isArray(st._editRecords)&&st._editRecords.length)host.append(...Array.from(card.childNodes));
  else host.append(card);
- qlTcShowRaw(host,st.raw);
 }
 async function qlTcFetchWorldInfo(input,ctx){
  try{
