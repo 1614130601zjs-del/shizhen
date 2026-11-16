@@ -6163,3 +6163,9 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
  #shizhen-panel .ql-theater-card .ql-egg-room-name{font-size:12px!important;padding-left:7px!important;padding-right:7px!important;}
  #shizhen-panel .ql-theater-card .ql-egg-room-count{font-size:10px!important;padding:2px 5px!important;}
 }
+
+/* 小剧场翻页箭头：保留图片垂直居中定位，仅将主题按钮的按压位移收敛为 1px。 */
+#shizhen-panel#shizhen-panel:is(#shizhen-panel)[data-ql-style] .ql-theater-card figure.ql-chat-image>.ql-chat-image-arrow.ql-chat-image-arrow:not(:disabled):active{
+ transform:translateY(calc(-50% + 1px))!important;
+ transition:transform .08s ease-out!important;
+}
