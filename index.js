@@ -2435,6 +2435,15 @@ function applyChatAlbumButtonStyle(button,style){if(!button)return;button.classL
 function applyChatAlbumTitleStyle(badge,style){if(!badge)return;badge.classList.remove(...QL_ALBUM_STYLE_CLASSES);badge.classList.add('ql-chat-image-title','ql-album-'+qlResolveAlbumStyle(style));}
 function applyChatTheme(element){if(!element)return;const preset=cfg().themePreset==='custom'?'custom':(['sage','lavender','oat','ink'].includes(cfg().themePreset)?cfg().themePreset:'mist');const palette=resolveThemePalette(preset,cfg().themeColor);const qlKeys=['--ql-accent','--ql-panel','--ql-card','--ql-text','--ql-muted','--ql-border','--ql-field','--ql-button-bg','--ql-button-hover','--ql-button-active','--ql-button-border','--ql-button-text'];const themeKeys=['--SmartThemeBodyColor','--SmartThemeBorderColor','--SmartThemeBlurTintColor','--SmartThemeEmColor','--SmartThemeQuoteColor','--SmartThemeUnderlineColor'];for(const key of [...qlKeys,...themeKeys])element.style.removeProperty(key);if(palette){const buttonBg='color-mix(in srgb, '+palette.accent+' 15%, '+palette.card+')';const buttonHover='color-mix(in srgb, '+palette.accent+' 25%, '+palette.card+')';const buttonActive=buttonBg;element.style.setProperty('--ql-accent',palette.accent);element.style.setProperty('--ql-panel',palette.panel);element.style.setProperty('--ql-card',palette.card);element.style.setProperty('--ql-text',palette.text);element.style.setProperty('--ql-muted',palette.muted);element.style.setProperty('--ql-border',palette.border);element.style.setProperty('--ql-field',palette.field);element.style.setProperty('--ql-button-bg',buttonBg);element.style.setProperty('--ql-button-hover',buttonHover);element.style.setProperty('--ql-button-active',buttonActive);element.style.setProperty('--ql-button-border',palette.border);element.style.setProperty('--ql-button-text',palette.text);element.style.setProperty('--SmartThemeBodyColor',palette.text);element.style.setProperty('--SmartThemeBorderColor',palette.border);element.style.setProperty('--SmartThemeBlurTintColor',palette.card);element.style.setProperty('--SmartThemeEmColor',palette.accent);element.style.setProperty('--SmartThemeQuoteColor',palette.muted);element.style.setProperty('--SmartThemeUnderlineColor',palette.accent);}}
 function applyChatAlbumStyleToAll(style){qlApplyCustomAlbumCss(style);document.querySelectorAll('.ql-chat-image').forEach(card=>{applyChatAlbumStyle(card,style);applyChatTheme(card);});document.querySelectorAll('#chat .ql-inline-image-trigger').forEach(button=>{applyChatAlbumButtonStyle(button,style);applyChatTheme(button);});document.querySelectorAll('#chat .ql-chat-image-title').forEach(badge=>{applyChatAlbumTitleStyle(badge,style);applyChatTheme(badge);});}
+// 正文与小剧场共用同一份图片翻页按钮 DOM，交互由各自的图片组提供。
+function qlCreateChatImageArrow(direction){
+ const isPrev=direction==='prev';
+ const button=document.createElement('button');
+ button.type='button';button.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-'+(isPrev?'prev':'next');
+ button.setAttribute('aria-label',isPrev?'上一张':'下一张');button.title=isPrev?'上一张':'下一张';
+ button.innerHTML=isPrev?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
+ return button;
+}
 function addMessageImage(host,url,prompt,taskKey,recordMeta={},anchor=null) {
  if(!host)return;
  // 只复用“活的”卡片（_qlCandidates 是挂在元素对象上的状态）；被重新序列化过的旧卡片在 processLatestAssistantMessage 里会被替换。
@@ -2444,8 +2453,8 @@ function addMessageImage(host,url,prompt,taskKey,recordMeta={},anchor=null) {
   const img=document.createElement('img');img.loading='lazy';img.alt='拾帧生成图片';
   const controls=document.createElement('div');controls.className='ql-chat-image-controls';
   const edit=document.createElement('button');edit.type='button';edit.className='menu_button ql-chat-image-edit';edit.setAttribute('aria-label','修改 tag');edit.title='修改 tag';edit.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h10l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20z"/><path d="M15 3.5V8h4M8 12h8M8 16h6"/><path d="m14.5 18.5 4.8-4.8 1.5 1.5-4.8 4.8-2 .5z"/></svg>';
-  const prev=document.createElement('button');prev.type='button';prev.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-prev';prev.setAttribute('aria-label','上一张');prev.title='上一张';prev.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
-  const next=document.createElement('button');next.type='button';next.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-next';next.setAttribute('aria-label','下一张');next.title='下一张';next.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
+   const prev=qlCreateChatImageArrow('prev');
+   const next=qlCreateChatImageArrow('next');
   const reroll=document.createElement('button');reroll.type='button';reroll.className='menu_button ql-chat-image-reroll';reroll.setAttribute('aria-label','重 Roll');reroll.title='重 Roll';reroll.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M20 20v-4h-4"/></svg>';
   const collapse=document.createElement('button');collapse.type='button';collapse.className='ql-chat-image-collapse';collapse.setAttribute('aria-label','折叠图片');collapse.title='折叠图片';collapse.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg><span>拾帧相册 · PHOTO ALBUM</span>';
   const remove=document.createElement('button');remove.type='button';remove.className='menu_button ql-chat-image-remove';remove.setAttribute('aria-label','删除当前图片');remove.title='仅从正文隐藏当前图片，缓存和相册中的原图保留';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="m6 7 1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>';
@@ -4750,8 +4759,11 @@ function renderTheater(){
    img.addEventListener('click',()=>openViewfinderImage(img.currentSrc||img.src));figure.append(img);
    if(images.length>1){
     let imageIndex=0;const counter=document.createElement('span');counter.className='ql-theater-image-count';counter.textContent='1/'+images.length;
-    const makeArrow=(direction,label,path)=>{const button=document.createElement('button');button.type='button';button.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-'+direction;button.setAttribute('aria-label',label);button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+path+'</svg>';button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();imageIndex=(imageIndex+(direction==='next'?1:-1)+images.length)%images.length;img.src=images[imageIndex].dataUrl;counter.textContent=(imageIndex+1)+'/'+images.length;});return button;};
-    figure.append(makeArrow('prev','上一张','<path d="m15 18-6-6 6-6"/>'),makeArrow('next','下一张','<path d="m9 18 6-6-6-6"/>'),counter);
+    const prev=qlCreateChatImageArrow('prev'),next=qlCreateChatImageArrow('next');
+    const stepImage=delta=>{imageIndex=(imageIndex+delta+images.length)%images.length;img.src=images[imageIndex].dataUrl;counter.textContent=(imageIndex+1)+'/'+images.length;};
+    prev.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();stepImage(-1);});
+    next.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();stepImage(1);});
+    figure.append(prev,next,counter);
    }
    applyChatTheme(figure);card.append(figure);
   }
