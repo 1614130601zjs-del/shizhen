@@ -3830,7 +3830,7 @@ function history(){
   if(currentKey&&groups.has(currentKey)){
    const key=currentKey,allItems=groups.get(key),name=titleFor(key,allItems);
    const kindFilterAlbum=String(settings.albumKindFilter||'');
-   const isEggRecord=r=>/^\s*[\[【]\s*彩蛋/.test(String(r?.basePrompt||''));
+   const isEggRecord=r=>r?.source==='theater'||!!r?.theaterGroupId||/^\s*[\[【]\s*彩蛋/.test(String(r?.basePrompt||''));
    const items=kindFilterAlbum?allItems.filter(r=>kindFilterAlbum==='egg'?isEggRecord(r):!isEggRecord(r)):allItems;
    const mode=settings.albumViewMode==='flip'?'flip':'spread';
    const moving=moveMode==='select';
@@ -4536,7 +4536,7 @@ function qlTcRenderResult(){
  if(!st._hideEggBlocks)(st.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
  const row=document.createElement('div');row.className='ql-theater-result-actions';
  const saveButton=document.createElement('button');saveButton.type='button';saveButton.className='menu_button ql-primary';saveButton.textContent=st._editRecords?'保存修改':'收入小剧场';saveButton.dataset.tcSave='1';saveButton.disabled=!active||String(st.prompt||'').trim()!==String(st.renderedPrompt||'').trim();saveButton.addEventListener('click',qlTcSave);row.append(saveButton);
- const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{qlTcState=null;qlTcRenderResult();const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
+ const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{if(st._renderHost)st._renderHost.innerHTML='';else qlTcRenderResult();qlTcState=null;const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
  card.append(row);host.append(card);qlTcShowRaw(host,st.raw);
 }
 async function qlTcFetchWorldInfo(input,ctx){
