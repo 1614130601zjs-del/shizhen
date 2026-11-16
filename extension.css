@@ -6180,6 +6180,15 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
  transition:transform .08s ease-out!important;
 }
 
+/* 小剧场 Tag 输入框：去除主题填充色，保留轻边界。 */
+#shizhen-panel .ql-theater-inline-editor .ql-chat-image-tag-input{
+ color:var(--SmartThemeBodyColor,inherit)!important;
+ background:transparent!important;
+ border:1px solid var(--SmartThemeBorderColor)!important;
+ border-radius:2px!important;
+ box-shadow:none!important;
+}
+
 /* 小剧场 Tag 编辑区：复用生成结果的原生结构，外层挂载节点不产生额外卡片盒子。 */
 #shizhen-panel .ql-theater-inline-editor{display:block!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;border-radius:0!important;}
 #shizhen-panel .ql-theater-inline-editor>.ql-theater-card{display:contents!important;}
