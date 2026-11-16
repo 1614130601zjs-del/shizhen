@@ -4516,10 +4516,10 @@ async function qlTcGenerateText(mode,input,ctx){
   return String(await ctx.generateQuietPrompt({quietPrompt,responseLength:2048})||'').trim();
  }
  let system=quietPrompt;
- try{const borrowed=qlPresetBorrowText();if(borrowed)system+='\\n\\n【当前预设参考】\\n'+borrowed;}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
- if(s.llmTagUseWorldInfo!==false){try{const wi=await qlFetchWorldInfoForTag(input);if(wi)system+='\\n\\n【当前角色卡世界书参考】\\n'+wi;}catch(error){console.warn('[拾帧] 小剧场读取世界书失败（已忽略）',error);}}
- try{const roster=qlRosterText();if(roster&&!roster.startsWith('（角色词库里暂时'))system+='\\n\\n【当前角色名单】\\n'+roster;}catch{}
- const history=Array.isArray(ctx?.chat)?ctx.chat.slice(-12).filter(m=>m&&typeof m.mes==='string'&&m.mes.trim()).map(m=>({role:m.is_user?'user':'assistant',content:String(m.mes).replace(/<[^>]*>/g,' ').replace(/\\s+/g,' ').trim().slice(0,3000)})).filter(m=>m.content):[];
+ try{const borrowed=qlPresetBorrowText();if(borrowed)system+='\n\n【当前预设参考】\n'+borrowed;}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
+ if(s.llmTagUseWorldInfo!==false){try{const wi=await qlFetchWorldInfoForTag(input);if(wi)system+='\n\n【当前角色卡世界书参考】\n'+wi;}catch(error){console.warn('[拾帧] 小剧场读取世界书失败（已忽略）',error);}}
+ try{const roster=qlRosterText();if(roster&&!roster.startsWith('（角色词库里暂时'))system+='\n\n【当前角色名单】\n'+roster;}catch{}
+ const history=Array.isArray(ctx?.chat)?ctx.chat.slice(-12).filter(m=>m&&typeof m.mes==='string'&&m.mes.trim()).map(m=>({role:m.is_user?'user':'assistant',content:String(m.mes).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,3000)})).filter(m=>m.content):[];
  return qlRequestLlmTagViaCustomApi([{role:'system',content:system},...history,{role:'user',content:'请根据上面的聊天上下文和小剧场创作任务，严格按指定口令格式输出。'}]);
 }
 async function qlTcGenerate(){
