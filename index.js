@@ -4535,8 +4535,10 @@ function qlTcRenderResult(){
   cancelTag.addEventListener('click',()=>{textarea.value=String(st.prompt||'');editor.hidden=true;});
   reroll.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(!editor.hidden)st.prompt=textarea.value.trim();qlTcReroll();});
   remove.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if(candidates.length<=1)return;candidates.splice(Number(st._qlIndex),1);st._qlIndex=Math.min(Number(st._qlIndex),candidates.length-1);const chosen=candidates[st._qlIndex];st.url=chosen.url;st.generation=chosen.generation;st.prompt=chosen.prompt;st.renderedPrompt=chosen.renderedPrompt||chosen.prompt;qlTcRenderResult();const status=document.querySelector('#ql-tc-status');if(status)status.textContent='已删除当前候选图，其他图片已保留。';});
-  figure.append(img,prev,next,controls,editor);
+  figure.append(img,prev,next,controls);
   applyChatAlbumStyle(figure,styleKey);applyChatTheme(figure);card.append(figure);
+  // Tag 编辑区作为图片卡片的下一个独立区块，直接向下展开，不再嵌套在图片 figure 内。
+  card.append(editor);
  }
  if(!st._hideEggBlocks)(st.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
  const row=document.createElement('div');row.className='ql-theater-result-actions';
