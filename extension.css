@@ -5868,3 +5868,9 @@ dialog.ql-egg-avatar-editor .ql-row{display:flex;align-items:center;gap:8px;marg
 dialog.ql-egg-avatar-editor .ql-row label{flex:none;font-size:12px;color:#ccc}
 dialog.ql-egg-avatar-editor .ql-row input[type="range"]{flex:1}
 .ql-egg-avatar-editor-actions{justify-content:flex-end;margin-top:14px}
+
+/* 小剧场画面 Tag 编辑：沿用插件输入框与低饱和边框，不覆盖聊天室/图片卡片样式。 */
+#shizhen-panel .ql-tc-tag-editor{border-top:1px solid var(--ql-border,var(--SmartThemeBorderColor,rgba(127,127,127,.2)));padding-top:8px;margin-top:4px}
+#shizhen-panel .ql-tc-tag-editor summary{cursor:pointer;font-weight:600;font-size:13px}
+#shizhen-panel .ql-tc-tag-editor .ql-tc-tag-input{display:block;width:100%;min-height:88px;resize:vertical;margin:8px 0}
+#shizhen-panel .ql-tc-tag-editor .ql-muted{margin:6px 0;font-size:12px}
