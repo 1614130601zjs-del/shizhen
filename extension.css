@@ -6169,7 +6169,7 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
    导致左右翻页键跟着图片中线一起上下跳。图片完整 contain 显示，不裁切原图。 */
 #shizhen-panel .ql-theater-card figure.ql-chat-image{
  position:relative!important;
- aspect-ratio:832 / 1216!important;
+ aspect-ratio:1024 / 1024!important;
  overflow:hidden!important;
 }
 #shizhen-panel .ql-theater-card figure.ql-chat-image>img{
