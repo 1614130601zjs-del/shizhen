@@ -6180,7 +6180,10 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
  transition:transform .08s ease-out!important;
 }
 
-/* 小剧场 Tag 编辑区：作为图片下方的独立纵向区域展开，不嵌套在图片框内。 */
+/* 小剧场 Tag 编辑区：复用生成结果的原生结构，外层挂载节点不产生额外卡片盒子。 */
+#shizhen-panel .ql-theater-inline-editor{display:block!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;border-radius:0!important;}
+#shizhen-panel .ql-theater-inline-editor>.ql-theater-card{display:contents!important;}
+
 #shizhen-panel .ql-theater-inline-editor .ql-chat-image-editor{display:block!important;width:100%!important;box-sizing:border-box!important;margin:12px 0 4px!important;padding:10px 0 0!important;border-top:1px solid var(--SmartThemeBorderColor)!important;}
 #shizhen-panel .ql-theater-inline-editor .ql-chat-image-tag-input{display:block!important;width:100%!important;min-height:96px!important;box-sizing:border-box!important;}
 #shizhen-panel .ql-theater-inline-editor .ql-chat-image-editor-actions{display:flex!important;flex-direction:row!important;justify-content:flex-end!important;gap:8px!important;margin-top:10px!important;}
