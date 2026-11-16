@@ -5647,6 +5647,9 @@ function openViewfinderImage(url){
   document.body.append(overlay);
  }
  applyChatTheme(overlay);
+ // 放大页挂在 body 下，不继承面板的 data-ql-style；显式同步当前主题，供主题专属 CSS 命中。
+ const activeUiStyle=document.querySelector('#shizhen-panel')?.dataset.qlStyle||'default';
+ overlay.dataset.qlStyle=activeUiStyle;
  overlay.querySelector('img').src=url;
  qlJellyClearSelection(overlay.querySelector('img'));{const jp=overlay.querySelector('.ql-jb-panel');if(jp)jp.hidden=true;}overlay._qlJellyMsg?.('');
  qlAttachJelly(overlay.querySelector('img'));overlay._qlPaintJellyBar?.();
