@@ -6678,3 +6678,175 @@ html[data-ql-style="comic"] #ql-image-cache-modal .ql-cache-accordion-body pre{
 #shizhen-panel .ql-theater-card .ql-egg-info-drawer[hidden]{display:none!important;}
 #shizhen-panel .ql-theater-card .ql-egg-info-drawer:not([hidden]){display:block!important;position:relative!important;z-index:2!important;width:100%!important;box-sizing:border-box!important;pointer-events:auto!important;}
 #shizhen-panel .ql-theater-card .ql-egg-chat-panel{overflow-x:hidden!important;overflow-y:auto!important;}
+
+
+/* ===== 修正正文聊天室标题栏：为右侧情报与收起按钮预留完整空间 ===== */
+#chat .ql-egg-chat-header,
+#shizhen-panel .ql-egg-chat-header{
+ box-sizing:border-box!important;
+ display:flex!important;
+ align-items:center!important;
+ gap:7px!important;
+ padding-right:76px!important;
+ min-width:0!important;
+}
+#chat .ql-egg-room-name,
+#shizhen-panel .ql-egg-room-name{
+ flex:1 1 auto!important;
+ min-width:0!important;
+ max-width:100%!important;
+ overflow:hidden!important;
+ text-overflow:ellipsis!important;
+ white-space:nowrap!important;
+}
+#chat .ql-egg-room-count,
+#shizhen-panel .ql-egg-room-count{
+ position:relative!important;
+ z-index:1!important;
+ flex:0 0 auto!important;
+ white-space:nowrap!important;
+ margin:0!important;
+}
+#chat .ql-egg-info-toggle,#chat .ql-egg-chat-close,
+#shizhen-panel .ql-egg-info-toggle,#shizhen-panel .ql-egg-chat-close{
+ z-index:2!important;
+ top:50%!important;
+ transform:translateY(-50%)!important;
+}
+#chat .ql-egg-info-toggle,#shizhen-panel .ql-egg-info-toggle{right:40px!important}
+#chat .ql-egg-chat-close,#shizhen-panel .ql-egg-chat-close{right:8px!important}
+#chat .ql-egg-info-toggle:active,#chat .ql-egg-chat-close:active,
+#shizhen-panel .ql-egg-info-toggle:active,#shizhen-panel .ql-egg-chat-close:active{
+ transform:translateY(-50%) translate(1px,1px)!important;
+}
+@media(max-width:380px){
+ #chat .ql-egg-chat-header,#shizhen-panel .ql-egg-chat-header{gap:5px!important;padding-right:74px!important}
+ #chat .ql-egg-room-name,#shizhen-panel .ql-egg-room-name{font-size:12px!important;padding-left:6px!important;padding-right:6px!important}
+ #chat .ql-egg-room-count,#shizhen-panel .ql-egg-room-count{font-size:10px!important;padding:2px 5px!important}
+}
+
+/* ---------- 像素掌机：改为复古直板手机 / 单色 LCD ---------- */
+#shizhen-panel[data-ql-style="pixel"]{
+ --qs-shell:#343b36;
+ --qs-shell2:#252c27;
+ --qs-page:#dce6c7;
+ --qs-line:#657452;
+ --qs-ink:#263321;
+ --qs-mute:#59694b;
+ --qs-light:#e9f0d8;
+ --qs-light2:#f3f6e8;
+ --qs-press:#b9ca9b;
+ --qs-dk:#202721;
+ --qs-on-sig:#f0f5df;
+ background:linear-gradient(135deg,#465048,#303832 58%,#252c27)!important;
+ border:6px solid #202721!important;
+ border-radius:18px!important;
+ box-shadow:inset 0 0 0 2px #778176,0 10px 26px rgba(0,0,0,.34)!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-header{
+ position:relative!important;
+ background:linear-gradient(#4a554d,#343d36)!important;
+ color:#f0f3e9!important;
+ border-bottom:5px solid #202721!important;
+ border-radius:10px 10px 0 0!important;
+ padding:12px 14px!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-brand strong{
+ color:#f0f3e9!important;
+ letter-spacing:.14em!important;
+ text-shadow:1px 2px 0 #182019!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-brand span{
+ color:#c3ceb5!important;
+ opacity:1!important;
+ letter-spacing:.08em!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-header #ql-close{
+ background:#dce6c7!important;
+ color:#263321!important;
+ border:2px solid #182019!important;
+ border-radius:5px!important;
+ box-shadow:2px 3px 0 #182019!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-tabs{
+ background:linear-gradient(#303832,#202721)!important;
+ border-bottom:5px solid #182019!important;
+ padding:9px 10px 11px!important;
+ gap:6px!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-tab{
+ border:2px solid #111812!important;
+ border-radius:5px!important;
+ background:linear-gradient(#f0f3e8,#cbd5bb)!important;
+ color:#283326!important;
+ box-shadow:inset 1px 1px 0 #fff,0 2px 0 #111812!important;
+ font-weight:800!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-tab.active{
+ background:linear-gradient(#c6d6a6,#9eaf7c)!important;
+ color:#172116!important;
+ border-color:#111812!important;
+ box-shadow:inset 0 0 0 2px #e8efd8,0 1px 0 #111812!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-tab.active::before{color:#263321!important}
+#shizhen-panel[data-ql-style="pixel"] .ql-page{
+ background-color:var(--qs-page)!important;
+ background-image:repeating-linear-gradient(0deg,rgba(48,66,35,.055) 0 1px,transparent 1px 3px)!important;
+ border-left:4px solid #303a30!important;
+ border-right:4px solid #303a30!important;
+ color:#263321!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-card{
+ background:linear-gradient(145deg,#edf2df,#dce6c7)!important;
+ border:2px solid #687653!important;
+ border-radius:4px!important;
+ box-shadow:inset 1px 1px 0 rgba(255,255,255,.85),3px 3px 0 rgba(42,55,34,.22)!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-card h3{
+ background:#344132!important;
+ color:#edf3dc!important;
+ border:1px solid #202a20!important;
+ border-radius:2px!important;
+ box-shadow:2px 2px 0 rgba(32,42,32,.25)!important;
+ letter-spacing:.1em!important;
+}
+#shizhen-panel[data-ql-style="pixel"] button:not(.ql-tab):not(.ql-cache-image):not([data-ql-detail]):not(#ql-close){
+ border:2px solid #202a20!important;
+ border-radius:5px!important;
+ background:linear-gradient(#f0f3e8,#cbd5bb)!important;
+ color:#263321!important;
+ box-shadow:0 3px 0 #202a20!important;
+}
+#shizhen-panel[data-ql-style="pixel"] button:not(.ql-tab):not(.ql-cache-image):not([data-ql-detail]):not(#ql-close):active{
+ transform:translateY(2px)!important;
+ box-shadow:0 1px 0 #202a20!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-primary{
+ background:linear-gradient(#687d55,#405438)!important;
+ color:#f2f6e5!important;
+ border-color:#202a20!important;
+ box-shadow:0 3px 0 #202a20,inset 1px 1px 0 rgba(255,255,255,.22)!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-subtab{
+ border:1px solid #687653!important;
+ border-radius:4px!important;
+ background:#e9efda!important;
+ color:#263321!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-subtab.active{
+ background:#405438!important;
+ color:#f2f6e5!important;
+ border-color:#202a20!important;
+}
+#shizhen-panel[data-ql-style="pixel"] input:not([type="checkbox"]):not([type="color"]),
+#shizhen-panel[data-ql-style="pixel"] textarea,
+#shizhen-panel[data-ql-style="pixel"] select{
+ background:#edf3dc!important;
+ color:#263321!important;
+ border:2px solid #687653!important;
+ border-radius:3px!important;
+ box-shadow:inset 2px 2px 0 rgba(49,67,37,.12)!important;
+}
+#shizhen-panel[data-ql-style="pixel"] .ql-muted{color:#536347!important;opacity:1!important}
+#shizhen-panel[data-ql-style="pixel"] ::-webkit-scrollbar-track{background:#cbd6b8!important}
+#shizhen-panel[data-ql-style="pixel"] ::-webkit-scrollbar-thumb{background:#667653!important;border:2px solid #cbd6b8!important}
