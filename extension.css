@@ -6942,3 +6942,6 @@ dialog.ql-viewfinder-lightbox[data-ql-style="comic"] .ql-jelly-bar button[hidden
 
 /* Comic subtitle is real DOM text now; remove the former pseudo-element copy. */
 #shizhen-panel[data-ql-style="comic"] .ql-brand span::after{content:none!important;display:none!important;}
+
+/* Keep the comic tagline as one real text node; suppress the legacy pseudo-element at equal specificity. */
+html[data-ql-style="comic"] #shizhen-panel .ql-brand span::after{content:none!important;display:none!important;}
