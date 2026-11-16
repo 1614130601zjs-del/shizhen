@@ -4824,11 +4824,25 @@ function renderTheater(){
    }
    (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
    if(groupOrder.length>1){const who=document.createElement('p');who.className='ql-muted ql-theater-card-who';who.textContent='角色相册：'+nameOf(item);card.append(who);}
+   const footerActions=document.createElement('div');footerActions.className='ql-theater-footer-actions';
+   const rerollTheaterBtn=document.createElement('button');rerollTheaterBtn.type='button';rerollTheaterBtn.className='menu_button ql-theater-reroll';rerollTheaterBtn.title='重 Roll 当前画面';rerollTheaterBtn.setAttribute('aria-label','重 Roll 当前画面');rerollTheaterBtn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M20 20v-4h-4"/></svg><span>重 Roll</span>';
+   rerollTheaterBtn.addEventListener('click',event=>{
+    event.preventDefault();event.stopPropagation();
+    const selected=images[imageIndex]||images[0];if(!selected)return;
+    const target=card.querySelector('.ql-theater-inline-editor')||document.createElement('div');
+    target.className='ql-theater-inline-editor';if(!target.parentNode)card.append(target);
+    const rawPrompt=String(selected.basePrompt||selected.prompt||'');
+    const marked=/^\\s*[\\[【]\\s*彩蛋/.test(rawPrompt)?rawPrompt:'[彩蛋]'+rawPrompt;
+    const generation=resolveChatImageGeneration(marked,getContext(),'egg');
+    qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:marked,renderedPrompt:marked,url:selected.dataUrl,generation,raw:'',sizeOverride:selected.size||'',_qlCandidates:[{url:selected.dataUrl,prompt:marked,generation,renderedPrompt:marked}],_qlIndex:0,_editRecords:[selected],_renderHost:target,_hideEggBlocks:true};
+    qlTcRenderResult();target.scrollIntoView({behavior:'smooth',block:'nearest'});
+    target.querySelector('.ql-chat-image-reroll')?.click();
+   });
    const removeBtn=document.createElement('button');removeBtn.type='button';removeBtn.className='menu_button ql-theater-remove';removeBtn.textContent='移出小剧场';
    removeBtn.addEventListener('click',()=>{
     for(const record of group)record.theaterHidden=true;save();delete host.dataset.theaterGroup;renderTheater();
    });
-   card.append(removeBtn);host.append(card);
+   footerActions.append(rerollTheaterBtn,removeBtn);card.append(footerActions);host.append(card);
   });
  }
  const libBtn=document.querySelector('#ql-egg-avatar-lib-btn'),libHost=document.querySelector('#ql-egg-avatar-lib');
