@@ -178,13 +178,13 @@ function qlSetGenerationActive(v){qlGenerationActive=v;clearTimeout(qlGeneration
 // 现在把整条消息的文本节点按顺序拼成一份“逻辑文本”（<br> 当换行、不同段落之间补换行），在逻辑文本上匹配标记，
 // 再用 Range 跨节点把标记原位替换成按钮；按钮位置永远就是标记所在的位置。
 // （思路参考智绘姬的 findAndReplaceInElement，代码为自行实现。）
-const QL_MARKER_SRC='image###([\s\\S]*?)###';
+const QL_MARKER_SRC='image###([\\s\\S]*?)###';
 // 标题标记用跟 image###…### 完全一样的“纯文字口令”写法，不用尖括号标签——
 // 之前试过 <img-title>…</img-title>，结果酒馆把消息当 HTML 渲染时，浏览器/酒馆自带的内容过滤
 // 会把这种看起来像标签的东西直接当成一个未知 HTML 标签处理掉（标签被吃掉，只剩里面的纯文字），
 // 等我们的代码扫描消息 DOM 的时候，原文里早就找不到任何“<img-title>”这几个字符了，所以渲染不出来。
 // title###…### 长得不像任何合法标签，不会被当成 HTML 解析/过滤掉，能完整原样留在消息文字里。
-const QL_TITLE_MARKER_SRC='title###([\s\\S]*?)###';
+const QL_TITLE_MARKER_SRC='title###([\\s\\S]*?)###';
 const QL_SKIP_SELECTOR='script,style,textarea,pre,code,button,.ql-chat-image,.ql-inline-image-trigger';
 const QL_BLOCK_SELECTOR='p,div,li,blockquote,h1,h2,h3,h4,h5,h6,pre,tr,td,th';
 const qlNormalizePrompt=value=>String(value||'').replace(/\s+/g,' ').trim();
@@ -4621,7 +4621,7 @@ async function qlTcGenerate(){
   if(!raw)throw new Error('模型返回空内容');
   const parsed=qlTcParse(raw);
   if(!parsed.prompt||!parsed.eggBlocks.length){
-   qlTcState=null;if(resultHost){resultHost.innerHTML='';qlTcShowRaw(resultHost,raw);}
+   qlTcState=null;if(resultHost)resultHost.innerHTML='';
    throw new Error(!parsed.prompt?'模型输出里没有找到 image###…### 画面提示词':'模型输出里没有找到 eggroom### 聊天室口令（没有聊天室就不会显示在小剧场里）');
   }
   let prompt=parsed.prompt;
