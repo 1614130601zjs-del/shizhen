@@ -4491,6 +4491,27 @@ async function qlTcMakeImage(st){
  st.generation=generation;st.url=url;st.prompt=prompt;st.renderedPrompt=prompt;
  return url;
 }
+// 生成小剧场与已收藏小剧场共用同一套图片工具栏和 Tag 编辑器，避免按钮 DOM / SVG / 样式分叉。
+function qlCreateTheaterImageActionButtons({includeEdit=true,removeDisabled=false,removeTitle='删除当前图片'}={}){
+ const make=(className,label,title,path)=>{const button=document.createElement('button');button.type='button';button.className='menu_button '+className;button.setAttribute('aria-label',label);button.title=title;button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+path+'</svg>';return button;};
+ const edit=make('ql-chat-image-edit','编辑','编辑 Tag 和重 Roll','<path d="M5 3.5h10l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20z"/><path d="M15 3.5V8h4M8 12h8M8 16h6"/><path d="m14.5 18.5 4.8-4.8 1.5 1.5-4.8 4.8-2 .5z');
+ const reroll=make('ql-chat-image-reroll','重 Roll','重 Roll','<path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M20 20v-4h-4"/>');
+ const remove=make('ql-chat-image-remove','删除当前图片',removeTitle,'<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="m6 7 1 14h10l1-14"/><path d="M9 7V4h6v3"/>');
+ remove.disabled=!!removeDisabled;
+ const controls=document.createElement('div');controls.className='ql-chat-image-controls';
+ if(includeEdit)controls.append(edit);
+ controls.append(reroll,remove);
+ return {controls,edit,reroll,remove};
+}
+function qlCreateTheaterTagEditor({value='',hidden=true,ariaLabel='画面提示词'}={}){
+ const editor=document.createElement('div');editor.className='ql-chat-image-editor';editor.hidden=!!hidden;
+ const textarea=document.createElement('textarea');textarea.className='ql-tc-tag-input ql-chat-image-tag-input';textarea.rows=3;textarea.value=String(value||'');textarea.setAttribute('aria-label',ariaLabel);
+ const actions=document.createElement('div');actions.className='ql-chat-image-editor-actions';
+ const saveTag=document.createElement('button');saveTag.type='button';saveTag.className='menu_button ql-chat-image-tag-save';saveTag.textContent='保存 Tag';
+ const cancelTag=document.createElement('button');cancelTag.type='button';cancelTag.className='menu_button ql-chat-image-tag-cancel';cancelTag.textContent='取消';
+ actions.append(saveTag,cancelTag);editor.append(textarea,actions);
+ return {editor,textarea,saveTag,cancelTag};
+}
 function qlTcRenderResult(){
  const st=qlTcState;
  const host=st?._renderHost||document.querySelector('#ql-tc-result');if(!host)return;
@@ -4504,23 +4525,10 @@ function qlTcRenderResult(){
  if(active){
   const figure=document.createElement('figure');figure.className='ql-chat-image ql-album-'+qlResolveAlbumStyle(styleKey);
   const img=document.createElement('img');img.src=active.url;img.loading='lazy';img.alt='小剧场候选图片';img.addEventListener('click',()=>openViewfinderImage(img.currentSrc||img.src));
-  const edit=document.createElement('button');edit.type='button';edit.className='menu_button ql-chat-image-edit';edit.setAttribute('aria-label','编辑');edit.title='编辑 Tag 和重 Roll';edit.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h10l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20z"/><path d="M15 3.5V8h4M8 12h8M8 16h6"/><path d="m14.5 18.5 4.8-4.8 1.5 1.5-4.8 4.8-2 .5z"/></svg>';
   const prev=document.createElement('button');prev.type='button';prev.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-prev';prev.setAttribute('aria-label','上一张');prev.title='上一张';prev.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
   const next=document.createElement('button');next.type='button';next.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-next';next.setAttribute('aria-label','下一张');next.title='下一张';next.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
-  const reroll=document.createElement('button');reroll.type='button';reroll.className='menu_button ql-chat-image-reroll';reroll.setAttribute('aria-label','重 Roll');reroll.title='重 Roll';reroll.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M20 20v-4h-4"/></svg>';
-  const remove=document.createElement('button');remove.type='button';remove.className='menu_button ql-chat-image-remove';remove.setAttribute('aria-label','删除当前图片');remove.title=candidates.length<=1?'至少保留一张图片':'删除当前候选图';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="m6 7 1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>';
-  const controls=document.createElement('div');controls.className='ql-chat-image-controls';
-  if(st._editButtonHost){
-   // 小剧场详情页保留 footer 中的原始编辑按钮，不再把按钮移入图片区或替换节点；
-   // 否则首次点击会销毁触发点击的节点，用户看起来像是按钮没有反应。
-   controls.append(reroll,remove);
-  }else controls.append(edit,reroll,remove);
-  const editor=document.createElement('div');editor.className='ql-chat-image-editor';editor.hidden=!st._editButtonHost;
-  const textarea=document.createElement('textarea');textarea.className='ql-tc-tag-input ql-chat-image-tag-input';textarea.rows=3;textarea.value=String(active.prompt||'');textarea.setAttribute('aria-label','画面提示词');
-  const editorActions=document.createElement('div');editorActions.className='ql-chat-image-editor-actions';
-  const saveTag=document.createElement('button');saveTag.type='button';saveTag.className='menu_button ql-chat-image-tag-save';saveTag.textContent='保存 Tag';
-  const cancelTag=document.createElement('button');cancelTag.type='button';cancelTag.className='menu_button ql-chat-image-tag-cancel';cancelTag.textContent='取消';
-  editorActions.append(saveTag,cancelTag);editor.append(textarea,editorActions);
+  const {controls,edit,reroll,remove}=qlCreateTheaterImageActionButtons({includeEdit:!st._editButtonHost,removeDisabled:candidates.length<=1,removeTitle:candidates.length<=1?'至少保留一张图片':'删除当前候选图'});
+  const {editor,textarea,saveTag,cancelTag}=qlCreateTheaterTagEditor({value:active.prompt,hidden:!st._editButtonHost});
   const switchTo=index=>{if(index<0||index>=candidates.length)return;st._qlIndex=index;const chosen=candidates[index];st.url=chosen.url;st.generation=chosen.generation;st.prompt=chosen.prompt;st.renderedPrompt=chosen.renderedPrompt||chosen.prompt;qlTcRenderResult();};
   prev.disabled=Number(st._qlIndex)<=0;next.disabled=Number(st._qlIndex)>=candidates.length-1;remove.disabled=candidates.length<=1;
   prev.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();switchTo(Number(st._qlIndex)-1);});
@@ -4821,18 +4829,14 @@ function renderTheater(){
     const figure=document.createElement('figure');figure.className='ql-chat-image ql-album-'+style;
     const img=document.createElement('img');img.src=images[0].dataUrl;img.loading='lazy';
     img.addEventListener('click',()=>openViewfinderImage(img.currentSrc||img.src));figure.append(img);
-    const controls=document.createElement('div');controls.className='ql-chat-image-controls ql-theater-image-controls';
-    const editBtn=document.createElement('button');editBtn.type='button';editBtn.className='menu_button ql-chat-image-edit';editBtn.textContent='编辑';editBtn.title='编辑当前图片 Tag';
-    const rerollBtn=document.createElement('button');rerollBtn.type='button';rerollBtn.className='menu_button ql-chat-image-reroll';rerollBtn.textContent='重 Roll';rerollBtn.title='按当前 Tag 重新生成';
-    const deleteBtn=document.createElement('button');deleteBtn.type='button';deleteBtn.className='menu_button ql-chat-image-remove';deleteBtn.textContent='删图';deleteBtn.title='从小剧场与相册记录中删除当前图片';
-    const tagEditor=document.createElement('div');tagEditor.className='ql-chat-image-editor ql-theater-image-editor';tagEditor.hidden=true;
-    const tagInput=document.createElement('textarea');tagInput.className='ql-tc-tag-input ql-chat-image-tag-input';tagInput.rows=3;tagInput.setAttribute('aria-label','当前图片 Tag');
-    const editorHint=document.createElement('div');editorHint.className='ql-theater-image-editor-hint';editorHint.textContent='修改 Tag 后点击「重 Roll」生成并保存新图片。';
-    tagEditor.append(tagInput,editorHint);
+    const {controls,edit:editBtn,reroll:rerollBtn,remove:deleteBtn}=qlCreateTheaterImageActionButtons({removeTitle:'从小剧场与相册记录中删除当前图片'});
+    const {editor:tagEditor,textarea:tagInput,saveTag,cancelTag}=qlCreateTheaterTagEditor({hidden:true,ariaLabel:'当前图片 Tag'});
     const currentRecord=()=>images[imageIndex];
     const loadCurrentTag=()=>{const record=currentRecord();const raw=String(record?.basePrompt||record?.prompt||'');tagInput.value=/^\\s*[\\[【]\\s*彩蛋/.test(raw)?raw:'[彩蛋]'+raw;};
     loadCurrentTag();
     editBtn.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();tagEditor.hidden=!tagEditor.hidden;if(!tagEditor.hidden)loadCurrentTag();});
+    saveTag.addEventListener('click',()=>{const value=tagInput.value.trim();if(!value){tagInput.focus();return;}tagInput.value=value;tagEditor.hidden=true;const status=document.querySelector('#ql-tc-status');if(status)status.textContent=value===String(currentRecord()?.basePrompt||currentRecord()?.prompt||'').trim()?'Tag 已保存。':'Tag 已修改，点击重 Roll 才会生成新图片。';});
+    cancelTag.addEventListener('click',()=>{loadCurrentTag();tagEditor.hidden=true;});
     rerollBtn.addEventListener('click',async event=>{
      event.preventDefault();event.stopPropagation();const record=currentRecord();if(!record||qlTcBusy)return;
      const prompt=String(tagInput.value||'').trim();if(!prompt){tagInput.focus();return;}
@@ -4841,7 +4845,7 @@ function renderTheater(){
      await qlTcReroll();
     });
     deleteBtn.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();const record=currentRecord();if(!record)return;const index=(cfg().records||[]).indexOf(record);if(index>=0)cfg().records.splice(index,1);save();history();renderTheater();});
-    controls.append(editBtn,rerollBtn,deleteBtn);figure.append(controls,tagEditor);
+    figure.append(controls,tagEditor);
     if(images.length>1){
      const counter=document.createElement('span');counter.className='ql-theater-image-count';counter.textContent='1/'+images.length;
      const prev=qlCreateChatImageArrow('prev'),next=qlCreateChatImageArrow('next');
