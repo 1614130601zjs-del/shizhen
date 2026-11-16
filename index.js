@@ -4514,12 +4514,11 @@ function qlTcRenderResult(){
   const remove=document.createElement('button');remove.type='button';remove.className='menu_button ql-chat-image-remove';remove.setAttribute('aria-label','删除当前图片');remove.title=candidates.length<=1?'至少保留一张图片':'删除当前候选图';remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="m6 7 1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>';
   const controls=document.createElement('div');controls.className='ql-chat-image-controls';
   if(st._editButtonHost){
+   // 小剧场详情页保留 footer 中的原始编辑按钮，不再把按钮移入图片区或替换节点；
+   // 否则首次点击会销毁触发点击的节点，用户看起来像是按钮没有反应。
    controls.append(reroll,remove);
-   st._editButtonHost.querySelector('.ql-chat-image-edit')?.remove();
-   const removeAction=st._editButtonHost.querySelector('.ql-theater-remove');
-   if(removeAction)st._editButtonHost.insertBefore(edit,removeAction);else st._editButtonHost.append(edit);
   }else controls.append(edit,reroll,remove);
-  const editor=document.createElement('div');editor.className='ql-chat-image-editor';editor.hidden=true;
+  const editor=document.createElement('div');editor.className='ql-chat-image-editor';editor.hidden=!st._editButtonHost;
   const textarea=document.createElement('textarea');textarea.className='ql-tc-tag-input ql-chat-image-tag-input';textarea.rows=3;textarea.value=String(active.prompt||'');textarea.setAttribute('aria-label','画面提示词');
   const editorActions=document.createElement('div');editorActions.className='ql-chat-image-editor-actions';
   const saveTag=document.createElement('button');saveTag.type='button';saveTag.className='menu_button ql-chat-image-tag-save';saveTag.textContent='保存 Tag';
@@ -4542,7 +4541,7 @@ function qlTcRenderResult(){
  if(!st._hideEggBlocks)(st.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
  const row=document.createElement('div');row.className='ql-theater-result-actions';
  const saveButton=document.createElement('button');saveButton.type='button';saveButton.className='menu_button ql-primary';saveButton.textContent=st._editRecords?'保存修改':'收入小剧场';saveButton.dataset.tcSave='1';saveButton.disabled=!active||String(st.prompt||'').trim()!==String(st.renderedPrompt||'').trim();saveButton.addEventListener('click',qlTcSave);row.append(saveButton);
- const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{if(st._renderHost)st._renderHost.innerHTML='';else qlTcRenderResult();st._editButtonHost?.querySelector('.ql-chat-image-edit')?.remove();qlTcState=null;const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
+ const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{if(st._renderHost)st._renderHost.innerHTML='';else qlTcRenderResult();qlTcState=null;const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
  card.append(row);host.append(card);qlTcShowRaw(host,st.raw);
 }
 async function qlTcFetchWorldInfo(input,ctx){
@@ -4674,7 +4673,7 @@ function qlTcSave(){
   record.config=snapshotConfig(candidate.prompt,generation.negative);record.updatedAt=Date.now();record.dataUrl=candidate.url;
   save();history();renderTheater();
   if(typeof candidate.url==='string'&&/^data:image\//i.test(candidate.url))persistImageToTavern(candidate.url,record.taskKey||('theater-edit-'+Date.now())).then(path=>{if(record.dataUrl===candidate.url){record.dataUrl=path;save();history();renderTheater();}}).catch(error=>console.warn('[拾帧] 小剧场重绘图转存失败，原图仍保留。',error));
-  if(st._renderHost)st._renderHost.innerHTML='';st._editButtonHost?.querySelector('.ql-chat-image-edit')?.remove();qlTcState=null;const statusEl=document.querySelector('#ql-tc-status');if(statusEl)statusEl.textContent='已保存修改；原小剧场分组、聊天室和角色相册归属均已保留。';return;
+  if(st._renderHost)st._renderHost.innerHTML='';qlTcState=null;const statusEl=document.querySelector('#ql-tc-status');if(statusEl)statusEl.textContent='已保存修改；原小剧场分组、聊天室和角色相册归属均已保留。';return;
  }
  const name=String(cur.name||ctx.name2||'当前角色').trim()||'当前角色';
  const taskKey='theater:'+Date.now().toString(36)+':'+Math.random().toString(36).slice(2,6);
@@ -4826,14 +4825,16 @@ function renderTheater(){
     applyChatTheme(figure);card.append(figure);
    }
    (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
-   if(groupOrder.length>1){const who=document.createElement('p');who.className='ql-muted ql-theater-card-who';who.textContent='角色相册：'+nameOf(item);card.append(who);}
    const footerActions=document.createElement('div');footerActions.className='ql-theater-footer-actions';
    const editTheaterBtn=document.createElement('button');editTheaterBtn.type='button';editTheaterBtn.className='menu_button ql-chat-image-edit';editTheaterBtn.title='编辑 Tag 和重 Roll';editTheaterBtn.setAttribute('aria-label','编辑');editTheaterBtn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h10l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20z"/><path d="M15 3.5V8h4M8 12h8M8 16h6"/><path d="m14.5 18.5 4.8-4.8 1.5 1.5-4.8 4.8-2 .5z"/></svg>';
    editTheaterBtn.addEventListener('click',event=>{
     event.preventDefault();event.stopPropagation();
     const selected=images[imageIndex]||images[0];if(!selected)return;
     const target=card.querySelector('.ql-theater-inline-editor')||document.createElement('div');
-    target.className='ql-theater-inline-editor';if(!target.parentNode)card.append(target);
+    target.className='ql-theater-inline-editor';
+    if(target.childElementCount){target.hidden=!target.hidden;target.scrollIntoView({behavior:'smooth',block:'nearest'});return;}
+    if(!target.parentNode)card.append(target);
+    target.hidden=false;
     const rawPrompt=String(selected.basePrompt||selected.prompt||'');
     const marked=/^\\s*[\\[【]\\s*彩蛋/.test(rawPrompt)?rawPrompt:'[彩蛋]'+rawPrompt;
     const generation=resolveChatImageGeneration(marked,getContext(),'egg');
