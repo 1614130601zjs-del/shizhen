@@ -4527,18 +4527,65 @@ function qlTcRenderResult(){
  const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{qlTcState=null;qlTcRenderResult();const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
  card.append(row);host.append(card);qlTcShowRaw(host,st.raw);
 }
+async function qlTcFetchWorldInfo(input,ctx){
+ try{
+  const mod=await import('/scripts/world-info.js');
+  const check=mod?.checkWorldInfo;
+  if(typeof check!=='function')return '';
+  const chat=Array.isArray(ctx?.chat)?ctx.chat.slice(-12).filter(m=>m&&typeof m.mes==='string'&&m.mes.trim()).map(m=>String(m.mes)):[];
+  const scanText=[...chat,String(input||'').trim()].filter(Boolean);
+  const res=await check(scanText,1000000000,true);
+  const activated=res?.allActivatedEntries;
+  if(!activated)return '';
+  const entries=activated instanceof Map?[...activated.values()]:[...activated];
+  const sub=typeof ctx?.substituteParams==='function'?ctx.substituteParams:(x=>x);
+  const seen=new Set(),chunks=[];
+  for(const entry of entries){
+   if(!entry)continue;
+   let text='';
+   try{text=String(sub(String(entry.content||''))||'').trim();}catch{text=String(entry.content||'').trim();}
+   if(text&&!seen.has(text)){seen.add(text);chunks.push(text);}
+  }
+  return chunks.join('\\n\\n').trim();
+ }catch(error){
+  console.warn('[拾帧] 小剧场读取世界书失败（已忽略）',error);
+  return '';
+ }
+}
+function qlTcCharacterCardText(ctx){
+ try{
+  const id=ctx?.characterId;
+  const cards=Array.isArray(ctx?.characters)&&ctx.characters.length?ctx.characters:(Array.isArray(window.characters)?window.characters:[]);
+  const card=id!=null&&Number.isInteger(Number(id))&&Number(id)>=0?cards[Number(id)]:null;
+  if(!card)return '';
+  const fields=[
+   ['角色名',card.name||card.avatar],
+   ['角色描述',card.description],
+   ['性格',card.personality],
+   ['场景设定',card.scenario],
+   ['开场白',card.first_mes],
+   ['对话示例',card.mes_example],
+   ['创作者备注',card.creator_notes],
+   ['角色系统提示',card.system_prompt],
+   ['角色后置指令',card.post_history_instructions]
+  ];
+  return fields.filter(([,value])=>String(value||'').trim()).map(([label,value])=>'【'+label+'】\\n'+String(value).trim()).join('\\n\\n');
+ }catch(error){console.warn('[拾帧] 小剧场读取角色卡失败（已忽略）',error);return '';}
+}
 async function qlTcGenerateText(mode,input,ctx){
  const quietPrompt=qlTcBuildQuietPrompt(mode,input),s=cfg();
  if(s.llmTagMode!=='custom'){
   if(typeof ctx?.generateQuietPrompt!=='function')throw new Error('当前酒馆版本不支持静默生成（generateQuietPrompt）');
   return String(await ctx.generateQuietPrompt({quietPrompt,responseLength:2048})||'').trim();
  }
- let system=quietPrompt;
- try{const borrowed=qlPresetBorrowText();if(borrowed)system+='\n\n【当前预设参考】\n'+borrowed;}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
- if(s.llmTagUseWorldInfo!==false){try{const wi=await qlFetchWorldInfoForTag(input);if(wi)system+='\n\n【当前角色卡世界书参考】\n'+wi;}catch(error){console.warn('[拾帧] 小剧场读取世界书失败（已忽略）',error);}}
- try{const roster=qlRosterText();if(roster&&!roster.startsWith('（角色词库里暂时'))system+='\n\n【当前角色名单】\n'+roster;}catch{}
- const history=Array.isArray(ctx?.chat)?ctx.chat.slice(-12).filter(m=>m&&typeof m.mes==='string'&&m.mes.trim()).map(m=>({role:m.is_user?'user':'assistant',content:String(m.mes).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,3000)})).filter(m=>m.content):[];
- return qlRequestLlmTagViaCustomApi([{role:'system',content:system},...history,{role:'user',content:'请根据上面的聊天上下文和小剧场创作任务，严格按指定口令格式输出。'}]);
+ const materials=[];
+ try{const borrowed=qlPresetBorrowText();if(borrowed)materials.push('【当前预设资料】\\n'+borrowed);}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
+ try{const card=qlTcCharacterCardText(ctx);if(card)materials.push('【当前角色卡资料】\\n'+card);}catch{}
+ try{const roster=qlRosterText();if(roster&&!roster.startsWith('（角色词库里暂时'))materials.push('【拾帧角色名单资料】\\n'+roster);}catch{}
+ if(s.llmTagUseWorldInfo!==false){const wi=await qlTcFetchWorldInfo(input,ctx);if(wi)materials.push('【当前激活的世界书内容（请遵循其中与本次小剧场相关的规则及输出要求）】\\n'+wi);}
+ const history=Array.isArray(ctx?.chat)?ctx.chat.slice(-12).filter(m=>m&&typeof m.mes==='string'&&m.mes.trim()).map(m=>({role:m.is_user?'user':'assistant',content:String(m.mes).replace(/<[^>]*>/g,' ').replace(/\\s+/g,' ').trim().slice(0,3000)})).filter(m=>m.content):[];
+ const system=[...materials,quietPrompt].filter(Boolean).join('\\n\\n');
+ return qlRequestLlmTagViaCustomApi([{role:'system',content:system},...history,{role:'user',content:'请结合上面的预设、角色卡、聊天上下文和已激活世界书内容完成小剧场；世界书中的设定与输出规则优先，严格按小剧场口令结构返回。'}]);
 }
 async function qlTcGenerate(){
  if(qlTcBusy)return;
