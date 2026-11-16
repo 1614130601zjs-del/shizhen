@@ -4582,7 +4582,7 @@ async function qlTcGenerateText(mode,input,ctx){
  try{const borrowed=qlPresetBorrowText();if(borrowed)materials.push('【当前预设资料】\n'+borrowed);}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
  try{const card=qlTcCharacterCardText(ctx);if(card)materials.push('【当前角色卡资料】\n'+card);}catch{}
  try{const roster=qlRosterText();if(roster&&!roster.startsWith('（角色词库里暂时'))materials.push('【拾帧角色名单资料】\n'+roster);}catch{}
- if(s.llmTagUseWorldInfo!==false){const wi=await qlTcFetchWorldInfo(input,ctx);if(wi)materials.push('【当前激活的世界书内容（请遵循其中与本次小剧场相关的规则及输出要求）】\n'+wi);}
+ const wi=await qlTcFetchWorldInfo(input,ctx);if(wi)materials.push('【当前激活的世界书内容（请遵循其中与本次小剧场相关的规则及输出要求）】\n'+wi);
  const history=Array.isArray(ctx?.chat)?ctx.chat.slice(-12).filter(m=>m&&typeof m.mes==='string'&&m.mes.trim()).map(m=>({role:m.is_user?'user':'assistant',content:String(m.mes).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,3000)})).filter(m=>m.content):[];
  const system=[...materials,quietPrompt].filter(Boolean).join('\n\n');
  return qlRequestLlmTagViaCustomApi([{role:'system',content:system},...history,{role:'user',content:'请结合上面的预设、角色卡、聊天上下文和已激活世界书内容完成小剧场；世界书中的设定与输出规则优先，严格按小剧场口令结构返回。'}]);
