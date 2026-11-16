@@ -4666,8 +4666,8 @@ function qlTcSave(){
   record.preset=preset?{name:preset.name||'',positive:preset.positive||'',negative:preset.negative||'',index:presetIndex,source:preset.source||'local'}:null;
   record.vibe=vibe?{name:vibe.name||'',entries:(vibe.entries||[]).map(entry=>({strength:entry.strength??0.6,informationExtracted:entry.informationExtracted??1,identifier:entry.identifier||entry.raw?.identifier||'',type:entry.type||entry.raw?.type||'image'}))}:null;
   record.config=snapshotConfig(candidate.prompt,generation.negative);record.updatedAt=Date.now();record.dataUrl=candidate.url;
-  save();history();renderAlbums();renderTheater();
-  if(typeof candidate.url==='string'&&/^data:image\\//i.test(candidate.url))persistImageToTavern(candidate.url,record.taskKey||('theater-edit-'+Date.now())).then(path=>{if(record.dataUrl===candidate.url){record.dataUrl=path;save();history();renderAlbums();renderTheater();}}).catch(error=>console.warn('[拾帧] 小剧场重绘图转存失败，原图仍保留。',error));
+  save();history();renderTheater();
+  if(typeof candidate.url==='string'&&/^data:image\//i.test(candidate.url))persistImageToTavern(candidate.url,record.taskKey||('theater-edit-'+Date.now())).then(path=>{if(record.dataUrl===candidate.url){record.dataUrl=path;save();history();renderTheater();}}).catch(error=>console.warn('[拾帧] 小剧场重绘图转存失败，原图仍保留。',error));
   if(st._renderHost)st._renderHost.innerHTML='';qlTcState=null;const statusEl=document.querySelector('#ql-tc-status');if(statusEl)statusEl.textContent='已保存修改；原小剧场分组、聊天室和角色相册归属均已保留。';return;
  }
  const name=String(cur.name||ctx.name2||'当前角色').trim()||'当前角色';
@@ -4675,7 +4675,7 @@ function qlTcSave(){
  const meta={source:'theater',mesStamp:'',characterName:name,characterKey:cur.id||''};
  for(let i=0;i<st._qlCandidates.length;i++){
   const candidate=st._qlCandidates[i];if(!candidate?.url||!candidate?.generation)continue;
-  if(!/^\\s*[\\[【]\\s*彩蛋/.test(String(candidate.prompt||'')))candidate.prompt='[彩蛋]'+String(candidate.prompt||'');
+  if(!/^\s*[\[【]\s*彩蛋/.test(String(candidate.prompt||'')))candidate.prompt='[彩蛋]'+String(candidate.prompt||'');
   const candidateKey=taskKey+':'+String(i+1);
   const rec=storeChatRecord(candidate.url,candidate.prompt,candidateKey,meta,candidate.generation);
   rec.albumCharacterName=name;rec.albumCharacterKey=cur.id||'';rec.collection='character-album';
@@ -4810,7 +4810,7 @@ function renderTheater(){
     let imageIndex=0;const img=document.createElement('img');img.src=images[0].dataUrl;img.loading='lazy';
     img.addEventListener('click',()=>openViewfinderImage(img.currentSrc||img.src));figure.append(img);
     const editSaved=document.createElement('button');editSaved.type='button';editSaved.className='menu_button ql-chat-image-edit';editSaved.setAttribute('aria-label','修改 Tag');editSaved.title='修改 Tag / 重 Roll';editSaved.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h10l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20z"/><path d="M15 3.5V8h4M8 12h8M8 16h6"/><path d="m14.5 18.5 4.8-4.8 1.5 1.5-4.8 4.8-2 .5z"/></svg>';
-    editSaved.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();const target=document.createElement('div');target.className='ql-theater-inline-editor';card.append(target);const selected=images[imageIndex]||images[0];const rawPrompt=String(selected.basePrompt||selected.prompt||'');const marked=/^\\s*[\\[【]\\s*彩蛋/.test(rawPrompt)?rawPrompt:'[彩蛋]'+rawPrompt;const generation=resolveChatImageGeneration(marked,getContext(),'egg');qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:marked,renderedPrompt:marked,url:selected.dataUrl,generation,raw:'',sizeOverride:selected.size||'',_qlCandidates:[{url:selected.dataUrl,prompt:marked,generation,renderedPrompt:marked}],_qlIndex:0,_editRecords:[selected],_renderHost:target,_hideEggBlocks:true};qlTcRenderResult();target.scrollIntoView({behavior:'smooth',block:'nearest'});});figure.append(editSaved);
+    editSaved.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();const target=document.createElement('div');target.className='ql-theater-inline-editor';card.append(target);const selected=images[imageIndex]||images[0];const rawPrompt=String(selected.basePrompt||selected.prompt||'');const marked=/^\s*[\[【]\s*彩蛋/.test(rawPrompt)?rawPrompt:'[彩蛋]'+rawPrompt;const generation=resolveChatImageGeneration(marked,getContext(),'egg');qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:marked,renderedPrompt:marked,url:selected.dataUrl,generation,raw:'',sizeOverride:selected.size||'',_qlCandidates:[{url:selected.dataUrl,prompt:marked,generation,renderedPrompt:marked}],_qlIndex:0,_editRecords:[selected],_renderHost:target,_hideEggBlocks:true};qlTcRenderResult();target.scrollIntoView({behavior:'smooth',block:'nearest'});});figure.append(editSaved);
     if(images.length>1){
      const counter=document.createElement('span');counter.className='ql-theater-image-count';counter.textContent='1/'+images.length;
      const prev=qlCreateChatImageArrow('prev'),next=qlCreateChatImageArrow('next');
