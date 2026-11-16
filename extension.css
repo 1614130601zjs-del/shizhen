@@ -6241,3 +6241,7 @@ html[data-ql-style="comic"] dialog.ql-viewfinder-lightbox{
 #shizhen-panel .ql-theater-edit-tile>.ql-theater-inline-editor{grid-column:1/-1!important;width:100%!important;min-width:0!important;}
 #shizhen-panel .ql-theater-restore{position:absolute!important;right:5px!important;bottom:5px!important;z-index:2!important;}
 @media(max-width:420px){#shizhen-panel .ql-theater-edit-tile{grid-template-columns:62px minmax(0,1fr) auto!important;gap:7px!important;}#shizhen-panel .ql-theater-edit-thumb{width:62px!important;height:76px!important;}#shizhen-panel .ql-theater-edit-actions button{min-width:58px!important;padding-inline:5px!important;}}
+
+#shizhen-panel .ql-theater-group-editor[hidden],
+#shizhen-panel .ql-theater-edit-tile>.ql-theater-inline-editor[hidden]{display:none!important;}
+#shizhen-panel .ql-theater-edit-tile{position:relative!important;}
