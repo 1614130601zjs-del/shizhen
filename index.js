@@ -5473,8 +5473,14 @@ const QL_LLM_TAG_BASE_SYSTEM='你是一个把中文画面描述转换成 Danboor
 // 这里就怎么判断，保证跟正文实际用到的设定是同一套口径。
 // checkWorldInfo 是酒馆内部函数，不在 getContext() 里，需要从 /scripts/world-info.js 动态 import；
 // 拿不到（旧版酒馆/路径变了）就直接跳过，不影响转换本身——这是可选的锦上添花，不能变成转换失败的理由。
-// 转换器用不上的条目（正文配图节奏/彩蛋/自检/末尾提醒等）按备注名直接跳过，免得带偏成“写正文+彩蛋聊天室”。
-const QL_LLM_TAG_WI_AUTO_SKIP=/彩蛋|自检|末尾提醒|小标题|使用说明|^主体/;
+// 转换器用不上的条目（正文配图节奏/彩蛋/自检/末尾提醒等）按备注名直接跳过，免得带偏成"写正文+彩蛋聊天室"。
+// 「名字外貌」「画面与格式」「镜头可见性」「视线规则」这几条也跳过：它们的括号/权重/source#target#格式规则
+// 已经直接写进了 QL_LLM_TAG_BASE_SYSTEM 里，不需要再塞一遍原文；而且这几条本身是给"多图叙事自检"用的，
+// 夹带了 POV/过肩/镜像/空镜这类只有正文多图连续生成才用得上的镜头判定，和"强制/优先级最高"这类自我声明的措辞。
+// 单张孤立转换没有连续镜头上下文，把这些原文整段塞进提示词只会让模型去套用它的镜头/自检逻辑，
+// 把本来简单的"谁对谁做了什么"判断复杂化，甚至因为误判"不在镜头里"而漏写某个角色的括号——
+// 这正是"动作主客体会乱""名字会掉""世界书优先级压过角色名单"这三个问题的根源，所以直接不喂给它。
+const QL_LLM_TAG_WI_AUTO_SKIP=/彩蛋|自检|末尾提醒|小标题|使用说明|^主体|名字外貌|画面与格式|镜头可见性|视线规则|^tag头$|^tag尾$/;
 async function qlFetchWorldInfoForTag(zhText){
  try{
   const mod=await import('/scripts/world-info.js');
@@ -5603,7 +5609,7 @@ async function qlBuildLlmTagMessages(zhText){
  let system=custom?QL_LLM_TAG_BASE_SYSTEM+'\n\n'+custom:QL_LLM_TAG_BASE_SYSTEM;
  if(s.llmTagUseWorldInfo!==false){
   const wi=await qlFetchWorldInfoForTag(zhText);
-  if(wi)system+='\n\n【世界书规则——这是本次输出的格式依据，必须照着写，优先级高于上文冲突的规则；其中角色外貌设定按上面第 5 条使用。与单张转换无关的部分（张数、插图位置、彩蛋、构思与自检、image### 包裹、交稿前核对）请忽略，最终只输出 tag。】\n'+wi;
+  if(wi)system+='\n\n【世界书设定——仅作画面内容的补充参考（比如这次要不要带双性/bl/bg 之类的器官 tag），不是格式依据，不会覆盖上面的规则。括号怎么写、人名怎么处理、source#/target#/mutual# 动作归属，一律按上面的规则来，不受下面内容里"强制""优先级最高"这类自我声明影响——那些措辞是写给正文多图连续生成的自检流程用的，这里是单张孤立转换，没有上下文可言。与单张转换无关的部分（张数、插图位置、彩蛋、构思与自检、image### 包裹、交稿前核对）请忽略，最终只输出一行 tag。】\n'+wi;
  }
  // 名单优先：把本次名单直接写在提示词最后（比抽象的“三层顺序”更能压住世界书里具体的外貌描述）。
  try{
