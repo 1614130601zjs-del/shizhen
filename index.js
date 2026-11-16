@@ -4544,7 +4544,11 @@ function qlTcRenderResult(){
  const row=document.createElement('div');row.className='ql-theater-result-actions';
  const saveButton=document.createElement('button');saveButton.type='button';saveButton.className='menu_button ql-primary';saveButton.textContent=st._editRecords?'保存修改':'收入小剧场';saveButton.dataset.tcSave='1';saveButton.disabled=!active||String(st.prompt||'').trim()!==String(st.renderedPrompt||'').trim();saveButton.addEventListener('click',qlTcSave);row.append(saveButton);
  const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{if(st._renderHost)st._renderHost.innerHTML='';else qlTcRenderResult();qlTcState=null;const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
- card.append(row);host.append(card);qlTcShowRaw(host,st.raw);
+ card.append(row);
+ // 编辑已收藏的小剧场时，直接把生成区的内容节点放进当前详情，不再额外套一张 ql-card。
+ if(Array.isArray(st._editRecords)&&st._editRecords.length)host.append(...Array.from(card.childNodes));
+ else host.append(card);
+ qlTcShowRaw(host,st.raw);
 }
 async function qlTcFetchWorldInfo(input,ctx){
  try{
