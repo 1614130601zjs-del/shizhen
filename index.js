@@ -4507,7 +4507,7 @@ function qlTcRenderResult(){
  if(active){
   const figure=document.createElement('figure');figure.className='ql-chat-image ql-album-'+qlResolveAlbumStyle(styleKey);
   const img=document.createElement('img');img.src=active.url;img.loading='lazy';img.alt='小剧场候选图片';img.addEventListener('click',()=>openViewfinderImage(img.currentSrc||img.src));
-  const edit=document.createElement('button');edit.type='button';edit.className='menu_button ql-chat-image-edit';edit.setAttribute('aria-label','修改 tag');edit.title='编辑画面 Tag';edit.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h10l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20z"/><path d="M15 3.5V8h4M8 12h8M8 16h6"/><path d="m14.5 18.5 4.8-4.8 1.5 1.5-4.8 4.8-2 .5z"/></svg>';
+  const edit=document.createElement('button');edit.type='button';edit.className='menu_button ql-chat-image-edit';edit.setAttribute('aria-label','编辑');edit.title='编辑 Tag 和重 Roll';edit.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h10l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20z"/><path d="M15 3.5V8h4M8 12h8M8 16h6"/><path d="m14.5 18.5 4.8-4.8 1.5 1.5-4.8 4.8-2 .5z"/></svg><span>编辑</span>';
   const prev=document.createElement('button');prev.type='button';prev.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-prev';prev.setAttribute('aria-label','上一张');prev.title='上一张';prev.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
   const next=document.createElement('button');next.type='button';next.className='menu_button ql-chat-image-arrow ql-chat-image-arrow-next';next.setAttribute('aria-label','下一张');next.title='下一张';next.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
   const reroll=document.createElement('button');reroll.type='button';reroll.className='menu_button ql-chat-image-reroll';reroll.setAttribute('aria-label','重 Roll');reroll.title='重 Roll';reroll.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M20 20v-4h-4"/></svg>';
@@ -4828,8 +4828,8 @@ function renderTheater(){
    (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
    if(groupOrder.length>1){const who=document.createElement('p');who.className='ql-muted ql-theater-card-who';who.textContent='角色相册：'+nameOf(item);card.append(who);}
    const footerActions=document.createElement('div');footerActions.className='ql-theater-footer-actions';
-   const rerollTheaterBtn=document.createElement('button');rerollTheaterBtn.type='button';rerollTheaterBtn.className='menu_button ql-theater-reroll';rerollTheaterBtn.title='重 Roll 当前画面';rerollTheaterBtn.setAttribute('aria-label','重 Roll 当前画面');rerollTheaterBtn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M20 20v-4h-4"/></svg><span>重 Roll</span>';
-   rerollTheaterBtn.addEventListener('click',event=>{
+   const editTheaterBtn=document.createElement('button');editTheaterBtn.type='button';editTheaterBtn.className='menu_button ql-chat-image-edit';editTheaterBtn.title='编辑 Tag 和重 Roll';editTheaterBtn.setAttribute('aria-label','编辑');
+   editTheaterBtn.addEventListener('click',event=>{
     event.preventDefault();event.stopPropagation();
     const selected=images[imageIndex]||images[0];if(!selected)return;
     const target=card.querySelector('.ql-theater-inline-editor')||document.createElement('div');
@@ -4839,13 +4839,13 @@ function renderTheater(){
     const generation=resolveChatImageGeneration(marked,getContext(),'egg');
     qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt:marked,renderedPrompt:marked,url:selected.dataUrl,generation,raw:'',sizeOverride:selected.size||'',_qlCandidates:[{url:selected.dataUrl,prompt:marked,generation,renderedPrompt:marked}],_qlIndex:0,_editRecords:[selected],_renderHost:target,_hideEggBlocks:true,_editButtonHost:footerActions};
     qlTcRenderResult();target.scrollIntoView({behavior:'smooth',block:'nearest'});
-    target.querySelector('.ql-chat-image-reroll')?.click();
+    footerActions.querySelector('.ql-chat-image-edit')?.click();
    });
    const removeBtn=document.createElement('button');removeBtn.type='button';removeBtn.className='menu_button ql-theater-remove';removeBtn.textContent='移出小剧场';
    removeBtn.addEventListener('click',()=>{
     for(const record of group)record.theaterHidden=true;save();delete host.dataset.theaterGroup;renderTheater();
    });
-   footerActions.append(rerollTheaterBtn,removeBtn);card.append(footerActions);host.append(card);
+   footerActions.append(editTheaterBtn,removeBtn);card.append(footerActions);host.append(card);
   });
  }
  const libBtn=document.querySelector('#ql-egg-avatar-lib-btn'),libHost=document.querySelector('#ql-egg-avatar-lib');
