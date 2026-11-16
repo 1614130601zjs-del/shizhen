@@ -6528,5 +6528,5 @@ html[data-ql-style="comic"] #ql-image-cache-modal .ql-cache-accordion-body pre{
  }
 }
 
-/* 小剧场仅去掉最外层卡片外观；保留卡片本身的布局，以及内部相册边框、图片框和聊天室包裹。 */
-#shizhen-panel .ql-theater-card{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;}
+/* 小剧场仅去掉标题与整组内容外侧的最外层框；提高主题选择器优先级，避免漫画主题重新加回边框。内部图片相框、点阵底板与布局均保留。 */
+#shizhen-panel[data-ql-style] .ql-theater-card{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;}
