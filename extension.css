@@ -6549,6 +6549,11 @@ html[data-ql-style="comic"] #ql-image-cache-modal .ql-cache-accordion-body pre{
 #shizhen-panel .ql-chat-image-editor-actions button{min-height:32px!important;padding:5px 10px!important;border:1px solid var(--SmartThemeBorderColor)!important;border-radius:2px!important;background:transparent!important;color:var(--SmartThemeBodyColor)!important;box-shadow:none!important;}
 
 
+
+
+/* 小剧场图片下方的编辑、重 Roll、删除三个操作按钮：拉开间距，避免手机上挤成一团。 */
+#shizhen-panel .ql-theater-card figure.ql-chat-image .ql-chat-image-controls{gap:16px!important;}
+
 /* 小剧场重 Roll 状态：固定显示在图片操作区下方，不依赖创作页顶部状态栏。 */
 #shizhen-panel .ql-theater-reroll-status{display:block!important;width:100%!important;box-sizing:border-box!important;margin:8px 0 0!important;padding:6px 9px!important;border-left:2px solid var(--SmartThemeBorderColor)!important;background:transparent!important;color:var(--SmartThemeBodyColor)!important;font-size:12px!important;line-height:1.5!important;opacity:.82!important;}
 #shizhen-panel .ql-theater-reroll-status[hidden]{display:none!important;}
