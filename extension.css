@@ -6945,3 +6945,79 @@ dialog.ql-viewfinder-lightbox[data-ql-style="comic"] .ql-jelly-bar button[hidden
 
 /* Keep the comic tagline as one real text node; suppress the legacy pseudo-element at equal specificity. */
 html[data-ql-style="comic"] #shizhen-panel .ql-brand span::after{content:none!important;display:none!important;}
+
+/* Comic theme popup surfaces: keep every detached/editor popup on opaque monochrome paper. */
+html[data-ql-style="comic"] #shizhen-panel .ql-album-crop-modal{
+ background:rgba(0,0,0,.68)!important;
+ backdrop-filter:grayscale(1) blur(3px)!important;
+ -webkit-backdrop-filter:grayscale(1) blur(3px)!important;
+}
+html[data-ql-style="comic"] #shizhen-panel .ql-album-crop-panel{
+ color:#171717!important;
+ background-color:#f7f7f4!important;
+ background-image:radial-gradient(#d0d0ca .65px,transparent .65px)!important;
+ background-size:6px 6px!important;
+ border:3px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:5px 5px 0 #171717!important;
+}
+html[data-ql-style="comic"] #shizhen-panel .ql-album-crop-heading strong,
+html[data-ql-style="comic"] #shizhen-panel .ql-album-crop-heading span,
+html[data-ql-style="comic"] #shizhen-panel .ql-album-crop-control{
+ color:#171717!important;
+ opacity:1!important;
+}
+html[data-ql-style="comic"] #shizhen-panel .ql-album-crop-viewport{
+ background:#e8e8e3!important;
+ border:2px solid #171717!important;
+ box-shadow:none!important;
+}
+html[data-ql-style="comic"] #shizhen-panel .ql-album-crop-actions button,
+html[data-ql-style="comic"] #shizhen-panel .ql-album-crop-actions [data-crop-save]{
+ color:#171717!important;
+ background:#fff!important;
+ border:2px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:2px 2px 0 #171717!important;
+}
+html[data-ql-style="comic"] #shizhen-panel .ql-album-crop-actions [data-crop-save]{
+ color:#fff!important;
+ background:#171717!important;
+}
+html[data-ql-style="comic"] :is(.ql-detail-choice-overlay>div,.ql-album-move-overlay>.ql-album-move-panel,.ql-qdialog>.ql-qdialog-panel,[data-ql-download-sheet] section){
+ color:#171717!important;
+ background-color:#f7f7f4!important;
+ background-image:radial-gradient(#d0d0ca .55px,transparent .55px)!important;
+ background-size:6px 6px!important;
+ border:2px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:4px 4px 0 #171717!important;
+}
+html[data-ql-style="comic"] :is(.ql-detail-choice-overlay,.ql-album-move-overlay,.ql-qdialog,[data-ql-download-sheet]){
+ background:rgba(0,0,0,.68)!important;
+ backdrop-filter:grayscale(1) blur(3px)!important;
+ -webkit-backdrop-filter:grayscale(1) blur(3px)!important;
+}
+html[data-ql-style="comic"] :is(.ql-detail-choice-overlay,.ql-album-move-overlay,.ql-qdialog,[data-ql-download-sheet]) :is(h3,p,label,span,strong){
+ color:#171717!important;
+}
+html[data-ql-style="comic"] :is(.ql-detail-choice-overlay,.ql-album-move-overlay,.ql-qdialog,[data-ql-download-sheet]) button{
+ color:#171717!important;
+ background:#fff!important;
+ border:2px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:2px 2px 0 #171717!important;
+ text-shadow:none!important;
+}
+html[data-ql-style="comic"] :is(.ql-detail-choice-overlay,.ql-album-move-overlay,.ql-qdialog,[data-ql-download-sheet]) :is(.ql-primary,.ql-cache-action-primary,[data-crop-save]){
+ color:#fff!important;
+ background:#171717!important;
+ border-color:#171717!important;
+}
+html[data-ql-style="comic"] :is(.ql-detail-choice-overlay,.ql-album-move-overlay,.ql-qdialog,[data-ql-download-sheet]) :is(input,textarea,select){
+ color:#171717!important;
+ background:#fff!important;
+ border:1.5px solid #171717!important;
+ border-radius:1px!important;
+}
+
