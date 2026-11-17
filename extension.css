@@ -17,54 +17,77 @@
 #chat .ql-chat-image-title-line,#shizhen-panel .ql-chat-image-title-line{display:none}
 #chat .ql-chat-image-title-label,#shizhen-panel .ql-chat-image-title-label{display:inline-block;padding:3px 12px;font-size:12px;font-weight:600;letter-spacing:.02em;line-height:1.5;border-radius:999px;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));background:color-mix(in srgb,var(--ql-accent,var(--SmartThemeQuoteColor)) 18%,var(--ql-card,var(--SmartThemeBlurTintColor)));color:var(--ql-text,var(--SmartThemeBodyColor));overflow-wrap:anywhere}
 
-/* 彩蛋聊天室：v1 先用黑白漫画风格固定呈现（跟黑白漫画分镜卡是同一套视觉语言），不跟相册风格联动。
+/* 彩蛋聊天室：结构统一，配色跟相册风格联动——JS 建聊天室时会跟按钮/卡片一样套上当前选中的
+   ql-album-xxx class（没专门适配的风格走下面这套默认配色，跟随主题色）。黑白漫画已经适配好一套
+   专属配色，写在后面 .ql-album-comic 里，跟漫画分镜卡/按钮同一套视觉语言，三者现在是绑在一起切换的。
    折叠态只显示小按钮；点开后展开面板，标题栏 sticky 吸顶，点聊天区域逐条弹出对话。 */
-#chat .ql-egg-chat,#shizhen-panel .ql-egg-chat{position:relative;display:block;margin:2px 2px 14px;max-width:100%;color:#171717;font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
+#chat .ql-egg-chat,#shizhen-panel .ql-egg-chat{position:relative;display:block;margin:2px 2px 14px;max-width:100%;color:var(--ql-text,var(--SmartThemeBodyColor));font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
 /* 折叠态：按钮居中，上面挂一条短短的虚线"引线"，看着像是从上面的相册照片垂下来的，
    不是凭空飘在那里的一个孤立按钮。 */
 #chat .ql-egg-chat.ql-egg-collapsed,#shizhen-panel .ql-egg-chat.ql-egg-collapsed{display:flex;flex-direction:column;align-items:center}
-#chat .ql-egg-chat.ql-egg-collapsed::before,#shizhen-panel .ql-egg-chat.ql-egg-collapsed::before{content:"";display:block;width:2px;height:10px;margin-bottom:3px;background-image:repeating-linear-gradient(to bottom,#171717 0 3px,transparent 3px 6px)}
-#chat .ql-egg-chat-trigger,#shizhen-panel .ql-egg-chat-trigger{display:inline-flex;align-items:center;gap:6px;margin:0;padding:6px 14px;background:#fff;border:2px solid #171717;border-radius:999px;box-shadow:3px 3px 0 #171717;color:#171717;font-weight:900;font-size:13px;cursor:pointer;transition:all .1s ease}
-#chat .ql-egg-chat-trigger:active,#shizhen-panel .ql-egg-chat-trigger:active{box-shadow:0 0 0 #171717;transform:translate(3px,3px)}
+#chat .ql-egg-chat.ql-egg-collapsed::before,#shizhen-panel .ql-egg-chat.ql-egg-collapsed::before{content:"";display:block;width:2px;height:10px;margin-bottom:3px;background-image:repeating-linear-gradient(to bottom,var(--ql-border,var(--SmartThemeBorderColor)) 0 3px,transparent 3px 6px)}
+#chat .ql-egg-chat-trigger,#shizhen-panel .ql-egg-chat-trigger{display:inline-flex;align-items:center;gap:6px;margin:0;padding:6px 14px;background:var(--ql-button-bg,var(--SmartThemeBlurTintColor));border:1px solid var(--ql-border,var(--SmartThemeBorderColor));border-radius:999px;color:var(--ql-text,var(--SmartThemeBodyColor));font-weight:900;font-size:13px;cursor:pointer;transition:all .1s ease}
+#chat .ql-egg-chat-trigger:active,#shizhen-panel .ql-egg-chat-trigger:active{transform:translate(1px,1px)}
 #chat .ql-egg-chat.ql-egg-collapsed .ql-egg-chat-panel,#shizhen-panel .ql-egg-chat.ql-egg-collapsed .ql-egg-chat-panel{display:none}
 #chat .ql-egg-chat:not(.ql-egg-collapsed) .ql-egg-chat-trigger,#shizhen-panel .ql-egg-chat:not(.ql-egg-collapsed) .ql-egg-chat-trigger{display:none}
 /* 用固定 height（不是 max-height）：聊天室一展开大小就定死了，逐条弹消息的时候只是内部
    滚动区域在变化，外框不会跟着每弹一条就长高一截。 */
-#chat .ql-egg-chat-panel,#shizhen-panel .ql-egg-chat-panel{box-sizing:border-box;height:min(68vh,460px);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;border:3px solid #171717;border-radius:6px;background:#f7f6f2;background-image:radial-gradient(#e2e2e2 1px,transparent 1px);background-size:4px 4px;box-shadow:5px 5px 0 #171717}
-#chat .ql-egg-chat-header,#shizhen-panel .ql-egg-chat-header{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;margin:0;padding:10px 42px 10px 10px;background:#fff;border-bottom:3px solid #171717}
-#chat .ql-egg-room-name,#shizhen-panel .ql-egg-room-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 10px;font-size:13px;font-weight:900;letter-spacing:.05em;background:#171717;color:#fff;border-radius:2px;box-shadow:2px 2px 0 #fff,3px 3px 0 #171717;font-family:'Impact','Arial Black','PingFang SC',sans-serif}
-#chat .ql-egg-room-count,#shizhen-panel .ql-egg-room-count{flex:none;padding:2px 7px;font-size:11px;font-weight:900;border:2px solid #171717;border-radius:2px;transform:rotate(-2deg);background:#fff;color:#171717}
-#chat .ql-egg-info-toggle,#chat .ql-egg-chat-close,#shizhen-panel .ql-egg-info-toggle,#shizhen-panel .ql-egg-chat-close{position:absolute;top:5px;width:36px;height:36px;min-width:36px;min-height:36px;margin:0;padding:0;display:flex;align-items:center;justify-content:center;z-index:8;pointer-events:auto;touch-action:manipulation;border:2px solid #171717;border-radius:50%;background:#fff;color:#171717;box-shadow:2px 2px 0 #171717;cursor:pointer}
+#chat .ql-egg-chat-panel,#shizhen-panel .ql-egg-chat-panel{box-sizing:border-box;height:min(68vh,460px);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));border-radius:6px;background:var(--ql-card,var(--SmartThemeBlurTintColor));box-shadow:0 6px 16px rgba(0,0,0,.14)}
+#chat .ql-egg-chat-header,#shizhen-panel .ql-egg-chat-header{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;margin:0;padding:10px 42px 10px 10px;background:var(--ql-panel,var(--SmartThemeBlurTintColor));border-bottom:1px solid var(--ql-border,var(--SmartThemeBorderColor))}
+#chat .ql-egg-room-name,#shizhen-panel .ql-egg-room-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 10px;font-size:13px;font-weight:900;letter-spacing:.05em;background:var(--ql-accent,var(--SmartThemeQuoteColor));color:var(--ql-button-text,#fff);border-radius:999px}
+#chat .ql-egg-room-count,#shizhen-panel .ql-egg-room-count{flex:none;padding:2px 7px;font-size:11px;font-weight:900;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));border-radius:999px;background:var(--ql-card,var(--SmartThemeBlurTintColor));color:var(--ql-text,var(--SmartThemeBodyColor))}
+#chat .ql-egg-info-toggle,#chat .ql-egg-chat-close,#shizhen-panel .ql-egg-info-toggle,#shizhen-panel .ql-egg-chat-close{position:absolute;top:5px;width:36px;height:36px;min-width:36px;min-height:36px;margin:0;padding:0;display:flex;align-items:center;justify-content:center;z-index:8;pointer-events:auto;touch-action:manipulation;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));border-radius:50%;background:var(--ql-card,var(--SmartThemeBlurTintColor));color:var(--ql-text,var(--SmartThemeBodyColor));cursor:pointer}
 #chat .ql-egg-info-toggle,#shizhen-panel .ql-egg-info-toggle{right:43px}
 #chat .ql-egg-info-toggle svg,#shizhen-panel .ql-egg-info-toggle svg{width:18px!important;height:18px!important;pointer-events:none!important}
 #chat .ql-egg-chat-header,#shizhen-panel .ql-egg-chat-header{padding-right:88px!important}
 #chat .ql-egg-chat-close,#shizhen-panel .ql-egg-chat-close{right:8px;font-size:15px;font-weight:900;line-height:1}
-#chat .ql-egg-info-toggle:active,#chat .ql-egg-chat-close:active,#shizhen-panel .ql-egg-info-toggle:active,#shizhen-panel .ql-egg-chat-close:active{box-shadow:0 0 0 #171717;transform:translate(2px,2px)}
-#chat .ql-egg-info-drawer,#shizhen-panel .ql-egg-info-drawer{padding:12px;background:#fff;border-bottom:3px solid #171717;font-size:12px;line-height:1.6}
+#chat .ql-egg-info-toggle:active,#chat .ql-egg-chat-close:active,#shizhen-panel .ql-egg-info-toggle:active,#shizhen-panel .ql-egg-chat-close:active{transform:translate(1px,1px)}
+#chat .ql-egg-info-drawer,#shizhen-panel .ql-egg-info-drawer{padding:12px;background:var(--ql-panel,var(--SmartThemeBlurTintColor));border-bottom:1px solid var(--ql-border,var(--SmartThemeBorderColor));font-size:12px;line-height:1.6}
 #chat .ql-egg-info-drawer[hidden],#shizhen-panel .ql-egg-info-drawer[hidden]{display:none}
-#chat .ql-egg-info-line,#shizhen-panel .ql-egg-info-line{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed #ccc}
+#chat .ql-egg-info-line,#shizhen-panel .ql-egg-info-line{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--ql-border,var(--SmartThemeBorderColor))}
 #chat .ql-egg-info-line b,#shizhen-panel .ql-egg-info-line b{flex:none;font-weight:900}
 #chat .ql-egg-info-line span,#shizhen-panel .ql-egg-info-line span{min-width:0;text-align:right;overflow-wrap:anywhere;font-weight:700}
-#chat .ql-egg-divider,#shizhen-panel .ql-egg-divider{height:5px;background:#171717;margin:10px 0}
+#chat .ql-egg-divider,#shizhen-panel .ql-egg-divider{height:1px;background:var(--ql-border,var(--SmartThemeBorderColor));margin:10px 0}
 #chat .ql-egg-narrator-card,#chat .ql-egg-msg,#shizhen-panel .ql-egg-narrator-card,#shizhen-panel .ql-egg-msg{display:flex;align-items:flex-start;gap:8px}
 #chat .ql-egg-msg-right,#shizhen-panel .ql-egg-msg-right{flex-direction:row-reverse}
 /* 头像框从圆形小图标改成稍大的圆角正方形(用户要求)；overflow:hidden+position:relative是给
    传了图之后塞进去的 <img> 用的，裁切范围/缩放靠 img 自己的 object-position+transform 控制，
    容器本身只负责"开个固定大小的窗口"。 */
-#chat .ql-egg-avatar,#shizhen-panel .ql-egg-avatar{position:relative;overflow:hidden;flex:none;width:42px;height:42px;display:flex;align-items:center;justify-content:center;border:2px solid #171717;border-radius:10px;color:#fff;font-weight:900;font-size:16px;box-shadow:2px 2px 0 #171717}
+#chat .ql-egg-avatar,#shizhen-panel .ql-egg-avatar{position:relative;overflow:hidden;flex:none;width:42px;height:42px;display:flex;align-items:center;justify-content:center;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));border-radius:10px;color:#fff;font-weight:900;font-size:16px}
 #chat .ql-egg-avatar img,#shizhen-panel .ql-egg-avatar img{width:100%;height:100%;object-fit:cover;pointer-events:none}
 #chat .ql-egg-narrator-main,#chat .ql-egg-msg-main,#shizhen-panel .ql-egg-narrator-main,#shizhen-panel .ql-egg-msg-main{min-width:0;max-width:calc(100% - 42px);display:flex;flex-direction:column;align-items:flex-start;gap:3px}
 #chat .ql-egg-msg-right .ql-egg-msg-main,#shizhen-panel .ql-egg-msg-right .ql-egg-msg-main{align-items:flex-end}
-#chat .ql-egg-narrator-name,#chat .ql-egg-msg-name,#shizhen-panel .ql-egg-narrator-name,#shizhen-panel .ql-egg-msg-name{font-size:11px;font-weight:900;padding:2px 8px;border-radius:2px;background:#171717;color:#fff;box-shadow:2px 2px 0 #fff,3px 3px 0 #171717;max-width:100%;overflow-wrap:anywhere}
-#chat .ql-egg-narrator-bubble,#chat .ql-egg-msg-bubble,#shizhen-panel .ql-egg-narrator-bubble,#shizhen-panel .ql-egg-msg-bubble{padding:8px 11px;border:2px solid #171717;border-radius:3px 12px 12px 12px;background:#fff;color:#171717;font-size:13px;line-height:1.6;overflow-wrap:anywhere;max-width:100%}
-#chat .ql-egg-msg-right .ql-egg-msg-bubble,#shizhen-panel .ql-egg-msg-right .ql-egg-msg-bubble{background:#171717;color:#fff;border-radius:12px 3px 12px 12px}
+#chat .ql-egg-narrator-name,#chat .ql-egg-msg-name,#shizhen-panel .ql-egg-narrator-name,#shizhen-panel .ql-egg-msg-name{font-size:11px;font-weight:900;padding:2px 8px;border-radius:999px;background:var(--ql-accent,var(--SmartThemeQuoteColor));color:var(--ql-button-text,#fff);max-width:100%;overflow-wrap:anywhere}
+#chat .ql-egg-narrator-bubble,#chat .ql-egg-msg-bubble,#shizhen-panel .ql-egg-narrator-bubble,#shizhen-panel .ql-egg-msg-bubble{padding:8px 11px;border:1px solid var(--ql-border,var(--SmartThemeBorderColor));border-radius:3px 12px 12px 12px;background:var(--ql-card,var(--SmartThemeBlurTintColor));color:var(--ql-text,var(--SmartThemeBodyColor));font-size:13px;line-height:1.6;overflow-wrap:anywhere;max-width:100%}
+#chat .ql-egg-msg-right .ql-egg-msg-bubble,#shizhen-panel .ql-egg-msg-right .ql-egg-msg-bubble{background:var(--ql-accent,var(--SmartThemeQuoteColor));color:var(--ql-button-text,#fff);border-radius:12px 3px 12px 12px}
 /* flex:1 很关键：面板是固定高度，消息没塞满的时候，下面一大截空白其实是面板自己的背景，
    不属于 body 这个元素，点上去不会触发监听；让 body 撑满面板剩余高度，空白处才真的点得到。 */
 /* 以前气泡上是 cursor:auto（当时点气泡不会翻页，得找气泡之间的缝）；现在整个消息区点哪里
    都能翻下一条，气泡上也该是手型指针，别再让人以为只有缝隙能点。 */
 #chat .ql-egg-chat-body,#shizhen-panel .ql-egg-chat-body{flex:1 1 auto;min-height:0;margin:0;padding:12px;display:flex;flex-direction:column;gap:12px;cursor:pointer}
 #chat .ql-egg-chat-body .ql-egg-msg,#chat .ql-egg-chat-body .ql-egg-msg *,#shizhen-panel .ql-egg-chat-body .ql-egg-msg,#shizhen-panel .ql-egg-chat-body .ql-egg-msg *{cursor:pointer}
-#chat .ql-egg-chat-hint,#shizhen-panel .ql-egg-chat-hint{align-self:center;margin:0;padding:4px 12px;font-size:11px;font-weight:700;color:#888;border:1px dashed #bbb;border-radius:999px}
+#chat .ql-egg-chat-hint,#shizhen-panel .ql-egg-chat-hint{align-self:center;margin:0;padding:4px 12px;font-size:11px;font-weight:700;color:var(--ql-muted,var(--SmartThemeBodyColor));border:1px dashed var(--ql-border,var(--SmartThemeBorderColor));border-radius:999px}
+
+/* 黑白漫画相册风格：聊天室维持原本那套粗黑线+硬阴影+网点底纹的漫画分镜配色，
+   只在 ql-album-comic 时生效，跟漫画分镜卡/按钮绑在一起切换。 */
+#chat .ql-egg-chat.ql-album-comic,#shizhen-panel .ql-egg-chat.ql-album-comic{color:#171717}
+#chat .ql-egg-chat.ql-album-comic.ql-egg-collapsed::before,#shizhen-panel .ql-egg-chat.ql-album-comic.ql-egg-collapsed::before{background-image:repeating-linear-gradient(to bottom,#171717 0 3px,transparent 3px 6px)}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-chat-trigger,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-chat-trigger{background:#fff;border:2px solid #171717;box-shadow:3px 3px 0 #171717;color:#171717}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-chat-trigger:active,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-chat-trigger:active{box-shadow:0 0 0 #171717;transform:translate(3px,3px)}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-chat-panel,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-chat-panel{border:3px solid #171717;border-radius:6px;background:#f7f6f2;background-image:radial-gradient(#e2e2e2 1px,transparent 1px);background-size:4px 4px;box-shadow:5px 5px 0 #171717}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-chat-header,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-chat-header{background:#fff;border-bottom:3px solid #171717}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-room-name,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-room-name{background:#171717;color:#fff;border-radius:2px;box-shadow:2px 2px 0 #fff,3px 3px 0 #171717;font-family:'Impact','Arial Black','PingFang SC',sans-serif}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-room-count,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-room-count{border:2px solid #171717;border-radius:2px;transform:rotate(-2deg);background:#fff;color:#171717}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-info-toggle,#chat .ql-egg-chat.ql-album-comic .ql-egg-chat-close,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-info-toggle,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-chat-close{border:2px solid #171717;border-radius:50%;background:#fff;color:#171717;box-shadow:2px 2px 0 #171717}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-info-toggle:active,#chat .ql-egg-chat.ql-album-comic .ql-egg-chat-close:active,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-info-toggle:active,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-chat-close:active{box-shadow:0 0 0 #171717;transform:translate(2px,2px)}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-info-drawer,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-info-drawer{background:#fff;border-bottom:3px solid #171717}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-info-line,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-info-line{border-bottom:1px dashed #ccc}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-divider,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-divider{height:5px;background:#171717}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-avatar,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-avatar{border:2px solid #171717;border-radius:10px;box-shadow:2px 2px 0 #171717}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-narrator-name,#chat .ql-egg-chat.ql-album-comic .ql-egg-msg-name,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-narrator-name,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-msg-name{background:#171717;color:#fff;border-radius:2px;box-shadow:2px 2px 0 #fff,3px 3px 0 #171717}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-narrator-bubble,#chat .ql-egg-chat.ql-album-comic .ql-egg-msg-bubble,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-narrator-bubble,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-msg-bubble{border:2px solid #171717;border-radius:3px 12px 12px 12px;background:#fff;color:#171717}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-msg-right .ql-egg-msg-bubble,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-msg-right .ql-egg-msg-bubble{background:#171717;color:#fff;border-radius:12px 3px 12px 12px}
+#chat .ql-egg-chat.ql-album-comic .ql-egg-chat-hint,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-chat-hint{color:#888;border:1px dashed #bbb}
 
 /* Horizontal candidate swipes while preserving normal vertical page scrolling. */
 #chat .ql-chat-image img,#chat .ql-statusbar-card img,#shizhen-panel .ql-chat-image img,#shizhen-panel .ql-statusbar-card img{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:default}

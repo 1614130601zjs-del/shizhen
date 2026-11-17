@@ -544,7 +544,7 @@ function qlMakeEggInfoLine(label,value){
 }
 // 整个聊天室只建一次 DOM：默认折叠只显示"进入聊天室"小按钮，点开后展开成面板，跟现有图片卡片
 // 的折叠按钮是同一套思路（classList.toggle 一个 collapsed 类，CSS 负责切换显示哪一块）。
-function qlBuildEggChat(room,messages,ordinal,infoOpen=false){
+function qlBuildEggChat(room,messages,ordinal,infoOpen=false,styleOverride){
  const wrap=document.createElement('div');wrap.className='ql-egg-chat ql-egg-collapsed';
  // _qlEggLive：标记这个卡片是刚刚现建的、监听还“活着”。酒馆之外的东西（正则/前端美化框架等）
  // 把消息 HTML 重新序列化写回之后，这个 JS 属性不会跟着序列化留下来——扫描时看到 .ql-egg-chat
@@ -599,6 +599,9 @@ function qlBuildEggChat(room,messages,ordinal,infoOpen=false){
  closeBtn.addEventListener('click',()=>wrap.classList.add('ql-egg-collapsed'));
  infoBtn.setAttribute('aria-expanded',String(!!infoOpen));
  infoBtn.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();drawer.hidden=!drawer.hidden;wrap.dataset.qlEggInfoOpen=String(!drawer.hidden);infoBtn.setAttribute('aria-expanded',String(!drawer.hidden));});
+ // 聊天室外观跟按钮/卡片一样绑定到相册样式：styleOverride 给已收藏快照用（保留收藏当时的样式，
+ // 不随之后改动全局设置而变），不传时跟当前全局设置走（跟正文里按钮/卡片的实时渲染逻辑一致）。
+ applyChatAlbumStyle(wrap,styleOverride!==undefined?styleOverride:(cfg().chatAlbumStyle||'follow'));
  applyChatTheme(wrap);
  return wrap;
 }
@@ -2435,7 +2438,7 @@ function applyChatAlbumButtonStyle(button,style){if(!button)return;button.classL
 // 不然就会一直停留在生成那一刻的旧风格上（哪怕卡片本身已经跟着换了）。
 function applyChatAlbumTitleStyle(badge,style){if(!badge)return;badge.classList.remove(...QL_ALBUM_STYLE_CLASSES);badge.classList.add('ql-chat-image-title','ql-album-'+qlResolveAlbumStyle(style));}
 function applyChatTheme(element){if(!element)return;const preset=cfg().themePreset==='custom'?'custom':(['sage','lavender','oat','ink'].includes(cfg().themePreset)?cfg().themePreset:'mist');const palette=resolveThemePalette(preset,cfg().themeColor);const qlKeys=['--ql-accent','--ql-panel','--ql-card','--ql-text','--ql-muted','--ql-border','--ql-field','--ql-button-bg','--ql-button-hover','--ql-button-active','--ql-button-border','--ql-button-text'];const themeKeys=['--SmartThemeBodyColor','--SmartThemeBorderColor','--SmartThemeBlurTintColor','--SmartThemeEmColor','--SmartThemeQuoteColor','--SmartThemeUnderlineColor'];for(const key of [...qlKeys,...themeKeys])element.style.removeProperty(key);if(palette){const buttonBg='color-mix(in srgb, '+palette.accent+' 15%, '+palette.card+')';const buttonHover='color-mix(in srgb, '+palette.accent+' 25%, '+palette.card+')';const buttonActive=buttonBg;element.style.setProperty('--ql-accent',palette.accent);element.style.setProperty('--ql-panel',palette.panel);element.style.setProperty('--ql-card',palette.card);element.style.setProperty('--ql-text',palette.text);element.style.setProperty('--ql-muted',palette.muted);element.style.setProperty('--ql-border',palette.border);element.style.setProperty('--ql-field',palette.field);element.style.setProperty('--ql-button-bg',buttonBg);element.style.setProperty('--ql-button-hover',buttonHover);element.style.setProperty('--ql-button-active',buttonActive);element.style.setProperty('--ql-button-border',palette.border);element.style.setProperty('--ql-button-text',palette.text);element.style.setProperty('--SmartThemeBodyColor',palette.text);element.style.setProperty('--SmartThemeBorderColor',palette.border);element.style.setProperty('--SmartThemeBlurTintColor',palette.card);element.style.setProperty('--SmartThemeEmColor',palette.accent);element.style.setProperty('--SmartThemeQuoteColor',palette.muted);element.style.setProperty('--SmartThemeUnderlineColor',palette.accent);}}
-function applyChatAlbumStyleToAll(style){qlApplyCustomAlbumCss(style);document.querySelectorAll('.ql-chat-image').forEach(card=>{applyChatAlbumStyle(card,style);applyChatTheme(card);});document.querySelectorAll('#chat .ql-inline-image-trigger').forEach(button=>{applyChatAlbumButtonStyle(button,style);applyChatTheme(button);});document.querySelectorAll('#chat .ql-chat-image-title').forEach(badge=>{applyChatAlbumTitleStyle(badge,style);applyChatTheme(badge);});}
+function applyChatAlbumStyleToAll(style){qlApplyCustomAlbumCss(style);document.querySelectorAll('.ql-chat-image').forEach(card=>{applyChatAlbumStyle(card,style);applyChatTheme(card);});document.querySelectorAll('#chat .ql-inline-image-trigger').forEach(button=>{applyChatAlbumButtonStyle(button,style);applyChatTheme(button);});document.querySelectorAll('#chat .ql-chat-image-title').forEach(badge=>{applyChatAlbumTitleStyle(badge,style);applyChatTheme(badge);});document.querySelectorAll('#chat .ql-egg-chat').forEach(wrap=>{applyChatAlbumStyle(wrap,style);applyChatTheme(wrap);});}
 // 正文与小剧场共用同一份图片翻页按钮 DOM，交互由各自的图片组提供。
 function qlCreateChatImageArrow(direction){
  const isPrev=direction==='prev';
@@ -4557,7 +4560,7 @@ function qlTcRenderResult(){
   // Tag 编辑区作为图片卡片的下一个独立区块，直接向下展开，不再嵌套在图片 figure 内。
   card.append(editor);
  }
- if(!st._hideEggBlocks)(st.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
+ if(!st._hideEggBlocks)(st.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages,undefined,false,styleKey));});
  const row=document.createElement('div');row.className='ql-theater-result-actions';
  const saveButton=document.createElement('button');saveButton.type='button';saveButton.className='menu_button ql-primary';saveButton.textContent=st._editRecords?'保存修改':'收入小剧场';saveButton.dataset.tcSave='1';saveButton.disabled=!active||String(st.prompt||'').trim()!==String(st.renderedPrompt||'').trim();saveButton.addEventListener('click',qlTcSave);row.append(saveButton);
  const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{if(st._renderHost)st._renderHost.innerHTML='';else qlTcRenderResult();qlTcState=null;const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
@@ -4893,7 +4896,7 @@ function renderTheater(){
     }
     applyChatTheme(figure);card.append(figure);
    }
-   (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages));});
+   (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages,undefined,false,style));});
    const footerActions=document.createElement('div');footerActions.className='ql-theater-footer-actions';
    const removeBtn=document.createElement('button');removeBtn.type='button';removeBtn.className='menu_button ql-theater-remove';removeBtn.textContent='移出小剧场';
    removeBtn.addEventListener('click',()=>{
