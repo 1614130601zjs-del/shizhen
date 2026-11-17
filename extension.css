@@ -89,6 +89,29 @@
 #chat .ql-egg-chat.ql-album-comic .ql-egg-msg-right .ql-egg-msg-bubble,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-msg-right .ql-egg-msg-bubble{background:#171717;color:#fff;border-radius:12px 3px 12px 12px}
 #chat .ql-egg-chat.ql-album-comic .ql-egg-chat-hint,#shizhen-panel .ql-egg-chat.ql-album-comic .ql-egg-chat-hint{color:#888;border:1px dashed #bbb}
 
+/* 拍立得手账相册风格：聊天室换成手账本画风——虚线缝边分隔、胶带贴纸式的房间名/说话人名签，
+   头像带轻微歪斜像贴歪的拍立得小照片，气泡做成便签/撕纸的不规则圆角，自己说的话那一侧
+   带淡淡暖粉色晕染，整体是暖调米白纸感，跟卡片/按钮/标题徽章同一套语言，不是简单套色。 */
+#chat .ql-egg-chat.ql-album-polaroid,#shizhen-panel .ql-egg-chat.ql-album-polaroid{--qa-sig:var(--qs-user-accent,#ee8aa0);color:#5a4750}
+#chat .ql-egg-chat.ql-album-polaroid.ql-egg-collapsed::before,#shizhen-panel .ql-egg-chat.ql-album-polaroid.ql-egg-collapsed::before{width:1.5px;background-image:repeating-linear-gradient(to bottom,color-mix(in srgb,var(--qa-sig) 55%,#c9b8bb) 0 3px,transparent 3px 7px)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-chat-trigger,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-chat-trigger{background:#fffdfb;border:1px solid color-mix(in srgb,var(--qa-sig) 30%,#e8dcd8);border-radius:3px;box-shadow:0 3px 8px rgba(120,80,80,.18);color:#5a4750;transform:rotate(-.8deg)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-chat-trigger:active,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-chat-trigger:active{transform:rotate(-.8deg) translate(1px,1px)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-chat-panel,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-chat-panel{border:1px solid color-mix(in srgb,var(--qa-sig) 28%,#e8dcd8);border-radius:4px;background:#fffdfb;box-shadow:0 10px 22px rgba(120,80,80,.2)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-chat-header,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-chat-header{position:relative;background:#fffdfb;border-bottom:1px dashed color-mix(in srgb,var(--qa-sig) 45%,#c9b8bb)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-chat-header::before,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-chat-header::before{content:"";position:absolute;left:50%;top:-1px;width:56px;height:14px;margin-left:-28px;transform:rotate(-1.5deg);background:color-mix(in srgb,var(--qa-sig) 40%,#fff8);border-left:1.5px dotted rgba(255,255,255,.7);border-right:1.5px dotted rgba(255,255,255,.7)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-room-name,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-room-name{background:color-mix(in srgb,var(--qa-sig) 42%,#fffdf8);color:#5a4750;border:1px dotted rgba(255,255,255,.75);box-shadow:0 2px 5px rgba(120,80,80,.2);transform:rotate(-1deg)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-room-count,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-room-count{border:1px dashed color-mix(in srgb,var(--qa-sig) 50%,#c9b8bb);border-radius:999px;background:#fffdfb;color:#8a7278}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-info-toggle,#chat .ql-egg-chat.ql-album-polaroid .ql-egg-chat-close,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-info-toggle,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-chat-close{border:1px solid color-mix(in srgb,var(--qa-sig) 30%,#e8dcd8);background:#fffdfb;color:#5a4750;box-shadow:0 2px 5px rgba(120,80,80,.18)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-info-drawer,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-info-drawer{background:#fffdfb;border-bottom:1px dashed color-mix(in srgb,var(--qa-sig) 45%,#c9b8bb)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-info-line,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-info-line{border-bottom:1px dotted #d8c8c4}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-divider,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-divider{height:0;border-top:1.5px dashed color-mix(in srgb,var(--qa-sig) 45%,#c9b8bb);margin:14px 0;opacity:.8}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-avatar,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-avatar{border:3px solid #fffdfb;border-radius:2px;box-shadow:0 2px 6px rgba(120,80,80,.3),0 0 0 1px color-mix(in srgb,var(--qa-sig) 25%,#e8dcd8);transform:rotate(-2deg)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-msg-right .ql-egg-avatar,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-msg-right .ql-egg-avatar{transform:rotate(2deg)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-narrator-name,#chat .ql-egg-chat.ql-album-polaroid .ql-egg-msg-name,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-narrator-name,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-msg-name{background:color-mix(in srgb,var(--qa-sig) 38%,#fffdf8);color:#5a4750;border:1px dotted rgba(255,255,255,.75);box-shadow:0 1px 3px rgba(120,80,80,.18)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-narrator-bubble,#chat .ql-egg-chat.ql-album-polaroid .ql-egg-msg-bubble,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-narrator-bubble,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-msg-bubble{border:1px solid color-mix(in srgb,var(--qa-sig) 22%,#e8dcd8);border-radius:2px 10px 10px 10px;background:#fffdfb;color:#5a4750;box-shadow:0 2px 6px rgba(120,80,80,.14)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-msg-right .ql-egg-msg-bubble,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-msg-right .ql-egg-msg-bubble{border-radius:10px 2px 10px 10px;background:color-mix(in srgb,var(--qa-sig) 16%,#fffdfb);border-color:color-mix(in srgb,var(--qa-sig) 30%,#e8dcd8)}
+#chat .ql-egg-chat.ql-album-polaroid .ql-egg-chat-hint,#shizhen-panel .ql-egg-chat.ql-album-polaroid .ql-egg-chat-hint{color:#9c8389;border:1px dashed color-mix(in srgb,var(--qa-sig) 35%,#d8c8c4)}
+
 /* Horizontal candidate swipes while preserving normal vertical page scrolling. */
 #chat .ql-chat-image img,#chat .ql-statusbar-card img,#shizhen-panel .ql-chat-image img,#shizhen-panel .ql-statusbar-card img{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:default}
 
@@ -4959,6 +4982,11 @@ html[data-ql-style="pixel"] :is(.ql-detail-choice-overlay,[data-ql-download-shee
 #chat .ql-chat-image.ql-album-polaroid,#shizhen-panel .ql-chat-image.ql-album-polaroid{--qa-sig:var(--qs-user-accent,#ee8aa0);padding:14px 14px 20px!important;border:1px solid color-mix(in srgb,var(--qa-sig) 30%,#e8dcd8)!important;border-radius:3px!important;background:#fffdfb!important;box-shadow:0 10px 22px rgba(120,80,80,.25),0 1px 0 #fff inset!important;color:#5a4750!important;transform:rotate(-.8deg)!important}
 #chat .ql-chat-image.ql-album-polaroid::after,#shizhen-panel .ql-chat-image.ql-album-polaroid::after{content:""!important;display:block!important;position:absolute!important;left:50%!important;top:-11px!important;width:78px!important;height:22px!important;margin-left:-39px!important;transform:rotate(2deg)!important;background:color-mix(in srgb,var(--qa-sig) 45%,#fff8)!important;border-left:2px dotted rgba(255,255,255,.7)!important;border-right:2px dotted rgba(255,255,255,.7)!important;box-shadow:0 1px 3px rgba(0,0,0,.12)!important}
 #chat .ql-chat-image.ql-album-polaroid>img,#shizhen-panel .ql-chat-image.ql-album-polaroid>img{border:1px solid rgba(90,70,80,.18)!important;border-radius:1px!important;box-shadow:inset 0 0 10px rgba(0,0,0,.08)}
+/* 拍立得标题徽章：跟卡片顶上那条胶带同一套做法——左右两条默认隐藏的装饰线打开做成虚线"缝边"，
+   中间的标签本身做成一小截胶带贴纸，不是简单套色。 */
+#chat .ql-chat-image-title.ql-album-polaroid,#shizhen-panel .ql-chat-image-title.ql-album-polaroid{--qa-sig:var(--qs-user-accent,#ee8aa0);gap:6px!important;transform:rotate(-1deg)!important}
+#chat .ql-chat-image-title.ql-album-polaroid .ql-chat-image-title-line,#shizhen-panel .ql-chat-image-title.ql-album-polaroid .ql-chat-image-title-line{display:block!important;flex:1 1 10px;height:0!important;border-top:1.5px dashed color-mix(in srgb,var(--qa-sig) 55%,#c9b8bb)!important;opacity:.75}
+#chat .ql-chat-image-title.ql-album-polaroid .ql-chat-image-title-label,#shizhen-panel .ql-chat-image-title.ql-album-polaroid .ql-chat-image-title-label{padding:5px 16px 6px!important;background:color-mix(in srgb,var(--qa-sig) 42%,#fffdf8)!important;border:1px dotted rgba(255,255,255,.75)!important;border-radius:1px!important;color:#5a4750!important;font:700 12.5px/18px system-ui,"PingFang SC","Microsoft YaHei",sans-serif!important;letter-spacing:.05em!important;box-shadow:0 2px 5px rgba(120,80,80,.22)!important;text-shadow:0 1px 0 rgba(255,255,255,.5)!important}
 
 /* 简约书笺：双线框 + 顶部居中题签 + 朱印 */
 #chat .ql-chat-image.ql-album-scroll,#shizhen-panel .ql-chat-image.ql-album-scroll{--qa-sig:var(--qs-user-accent,#b5402c);padding:36px 18px 22px!important;border:1px solid #b9b196!important;border-radius:1px!important;background:#f7f5ec!important;box-shadow:inset 0 0 0 5px #f7f5ec,inset 0 0 0 6px #b9b196,0 8px 18px rgba(50,45,30,.2)!important;color:#262522!important}
@@ -7006,6 +7034,27 @@ html[data-ql-style="comic"] #shizhen-panel .ql-album-crop-actions [data-crop-sav
 html[data-ql-style="comic"] #shizhen-panel .ql-album-crop-actions [data-crop-save]{
  color:#fff!important;
  background:#171717!important;
+}
+/* 裁剪面板里缩放/左右/上下那三条自绘 SVG 滑条，一直没有专属配色，走的是全局的
+   --SmartThemeBlurTintColor/--ql-accent 兜底色（默认雾灰蓝色预设），跟黑白漫画的纯黑白
+   不搭——圆形滑块(thumb)看着像个蓝色小气泡。这里强制改成黑白，呼应上面裁剪面板的配色。 */
+html[data-ql-style="comic"] #shizhen-panel .ql-crop-slider-base{
+ stroke:#171717!important;
+ opacity:.25!important;
+}
+html[data-ql-style="comic"] #shizhen-panel .ql-crop-slider-fill{
+ stroke:#171717!important;
+ opacity:.9!important;
+}
+html[data-ql-style="comic"] #shizhen-panel .ql-crop-slider-thumb{
+ fill:#fff!important;
+ stroke:#171717!important;
+ stroke-width:2.5!important;
+ filter:none!important;
+}
+html[data-ql-style="comic"] #shizhen-panel .ql-crop-slider:focus-visible .ql-crop-slider-thumb{
+ stroke:#171717!important;
+ stroke-width:3!important;
 }
 html[data-ql-style="comic"] :is(.ql-detail-choice-overlay>div,.ql-album-move-overlay>.ql-album-move-panel,.ql-qdialog>.ql-qdialog-panel,[data-ql-download-sheet] section){
  color:#171717!important;
