@@ -3390,6 +3390,9 @@ const QL_ALBUM_SKELETON=`/* ====================================================
    #chat .ql-chat-image-title.ql-album-custom .ql-chat-image-title-line    左右两条装饰线（默认不显示，想要就自己打开）
    #chat .ql-chat-image-title.ql-album-custom .ql-chat-image-title-line-l  左边那条
    #chat .ql-chat-image-title.ql-album-custom .ql-chat-image-title-line-r  右边那条
+   标题文字长短不定，徽章外层务必写 width:100%+justify-content:center（让装饰线去占满
+   两侧剩余空间），标签本身写 flex-shrink:0+white-space:nowrap（保持单行自适应宽度，
+   不要被挤到内部换行撑成两行）。骨架里的示例已经是这个写法，照抄即可。
 
    【二、相册卡片 + 未展开按钮】
    #chat .ql-chat-image.ql-album-custom          卡片外框（里面是一张 <img> 和一排 .ql-chat-image-controls 按钮）
@@ -3429,9 +3432,10 @@ const QL_ALBUM_SKELETON=`/* ====================================================
    4. 三部分的主色、字体、边框粗细尽量统一，不然切到这套风格时会像拼凑的。
    ===================================================================== */
 #chat .ql-chat-image-title.ql-album-custom{
-  gap:8px;
+  width:100%; justify-content:center; gap:8px;
 }
 #chat .ql-chat-image-title.ql-album-custom .ql-chat-image-title-label{
+  flex-shrink:0; white-space:nowrap;
   padding:4px 16px; background:#FFFFFF; border:2px solid #8E9C8F; border-radius:999px;
   color:#4A5A4E; font:700 13px/20px system-ui,"PingFang SC","Microsoft YaHei",sans-serif; letter-spacing:.08em;
   box-shadow:0 3px 8px rgba(0,0,0,.12);
