@@ -7021,3 +7021,62 @@ html[data-ql-style="comic"] :is(.ql-detail-choice-overlay,.ql-album-move-overlay
  border-radius:1px!important;
 }
 
+/* Comic follow-up: album operation pill and download CTA need true monochrome contrast. */
+html[data-ql-style="comic"] #shizhen-panel .ql-album-toolbar > button[data-album-move],
+html[data-ql-style="comic"] #shizhen-panel .ql-album-toolbar > button[data-album-back],
+html[data-ql-style="comic"] #shizhen-panel .ql-album-heading-action{
+ color:#171717!important;
+ background:#fff!important;
+ border:2px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:2px 2px 0 #171717!important;
+ text-shadow:none!important;
+}
+html[data-ql-style="comic"] #shizhen-panel .ql-album-toolbar > button[data-album-move]{
+ background:#171717!important;
+ color:#fff!important;
+ border-color:#171717!important;
+}
+html[data-ql-style="comic"] dialog[data-ql-download-sheet]{
+ color:#171717!important;
+ background:rgba(0,0,0,.72)!important;
+ backdrop-filter:grayscale(1) blur(3px)!important;
+ -webkit-backdrop-filter:grayscale(1) blur(3px)!important;
+}
+html[data-ql-style="comic"] dialog[data-ql-download-sheet] > section{
+ color:#171717!important;
+ background-color:#f7f7f4!important;
+ background-image:radial-gradient(#d0d0ca .55px,transparent .55px)!important;
+ background-size:6px 6px!important;
+ border:3px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:5px 5px 0 #171717!important;
+}
+html[data-ql-style="comic"] dialog[data-ql-download-sheet] :is(strong,div,p){
+ color:#171717!important;
+}
+html[data-ql-style="comic"] dialog[data-ql-download-sheet] p{
+ opacity:1!important;
+}
+html[data-ql-style="comic"] dialog[data-ql-download-sheet] img{
+ background:#fff!important;
+ border:2px solid #171717!important;
+ border-radius:1px!important;
+}
+html[data-ql-style="comic"] dialog[data-ql-download-sheet] a{
+ display:block!important;
+ color:#fff!important;
+ background:#171717!important;
+ border:2px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:3px 3px 0 #777!important;
+ text-shadow:none!important;
+}
+html[data-ql-style="comic"] dialog[data-ql-download-sheet] .ql-download-modal-close{
+ color:#171717!important;
+ background:#fff!important;
+ border:2px solid #171717!important;
+ border-radius:2px!important;
+ box-shadow:2px 2px 0 #171717!important;
+}
+
