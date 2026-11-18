@@ -4529,19 +4529,34 @@ function renderViewfinderRoles(){
 // 提交给 NAI 的内容（角色名替换、外貌分块、组合/预设/Vibe）复用取景区和正文同一套解析。
 let qlTcBusy=false;
 let qlTcState=null;
+function qlTcPanelCount(styleValue){return styleValue==='comic2'?2:styleValue==='comic4'?4:1;}
 function qlTcBuildQuietPrompt(mode,text,styleValue){
  const label=mode==='plot'?'剧情词':'画面词';
  const modeRule=mode==='plot'
   ?'根据用户给的剧情词，自己决定最适合表现它的一个画面，并把剧情写进聊天室对话里。'
   :'画面以用户给的画面词为准：其中的角色、动作、构图不要改动（中文的话按世界书/生图规则转成 tag，人名保留原文）；聊天室内容围绕这张画面展开。';
  const isComic=/^comic/.test(String(styleValue||''));
- const panelCount=styleValue==='comic2'?2:styleValue==='comic4'?4:1;
+ const panelCount=qlTcPanelCount(styleValue);
  // 彩蛋（Q 版）：不写质量词/体型词，交给插件自己的「彩蛋不注入通用词」逻辑拉去 Q 版比例；
  // 条漫（正常比例）：不要 Q 版/夸张变形，质量词和体型词也不用模型自己写（插件会按正文规则注入），
  // 否则模型瞎写的体型词可能和插件注入的互相打架。分镜要求单独追加，避免两种模式共用一套说辞。
+ //
+ // 分镜结构（panelCount>1）参考用户给的实际可用例子改过：质量词/体型词仍然不用模型自己写（插件注入），
+ // 但角色外貌必须只在最前面写一次——插件的 qlReplaceCharacterNames 本来就只认第一次出现的本名，
+ // 同一个本名后面再出现会被直接整条丢掉（不是保留成普通 tag），如果每一格都重复写一次本名+外貌，
+ // 等于后面几格里这个角色的名字全部凭空消失，分镜里就对不上是谁在做动作，而且提示词本身也会被写得
+ // 很长，NAI 的 tag 上限根本读不完。所以分镜里提到人物用一个简短代称（角色A/角色B之类）顶替本名，
+ // 代称不是注册过的角色名，插件不会去匹配它，会原样留在提示词里，分镜之间也能保持代称一致。
  const imagePromptRule=isComic
   ?('画面提示词：沿用世界书里生图相关条目的规则（角色括号、名字写法、视线、source#/target# 等）；这是条漫小剧场，人物按正常人体比例画，不要 Q 版/夸张变形；不要自己写质量词和体型词（插件会按正文规则自动处理，写了反而可能冲突）。世界书里没有相关规则时，就写英文逗号分隔的 Danbooru 风格 tag，人名保留原文。'
-    +(panelCount>1?('这张图要构图成 '+panelCount+' 格分镜的条漫画面：只写一个 comic、'+panelCount+'koma 标签远远不够，必须把这 '+panelCount+' 格各自的人物动作/表情/构图都拆开写成具体的 tag，一格都不能只用分镜标签敷衍——先想清楚这 '+panelCount+' 个瞬间分别是什么画面，每个瞬间单独列出人物姿势、表情、视角、道具等 tag，再把 '+panelCount+'koma 标签和所有格子的 tag 一起合并写进这一条 image### 里（参考 Danbooru 上真实 '+panelCount+'koma 漫画的打标方式：一张图会把每一格出现过的所有动作/表情都当成这张图里出现过的内容，一起打成一串 tag，而不是只写一个分镜数量标签）。分镜之间的人物外观描述要保持一致；如果这段内容实在不适合拆分镜，就画一张完整画面，不要为了凑格子硬拆。'):''))
+    +(panelCount>1?(
+      '这张图要构图成 '+panelCount+' 格分镜的条漫画面，整条画面提示词都写在同一条 image###…### 里（不要拆成多条），内部必须按下面这个顺序组织，逗号分隔：'
+      +'1）分镜排版共用标签（comic、'+panelCount+'koma 这类，写一条就够）；'
+      +'2）出场角色的本名+外貌，每个角色只写一次（比如「Lucien, 外貌tag…」），哪怕这个角色要在好几格里出现，本名和外貌都不要重复写第二遍——重复写不仅让提示词爆长，插件处理人名时也只认第一次出现，后面重复的本名会被整条丢掉，等于那几格里凭空没了这个人；'
+      +'3）如果几格共享同一个场景/氛围，再写一条所有分镜共用的背景类 tag；'
+      +'4）最后按「Panel 1: …」「Panel 2: …」…的顺序，每格单独写这一格的人物动作/表情/构图 tag，越精简越好；每一格提到是谁在做动作时，不要再写该角色的本名或外貌，改用一个简短代称（比如“角色A”“角色B”，或者“甲”“乙”，从头到尾各角色固定用同一个代称），只写这一格新增的动作/表情，不要重复描述外观。'
+      +'先想清楚这 '+panelCount+' 个瞬间分别是什么画面，再按上面的顺序写出来；如果这段内容实在不适合拆分镜，就画一张完整画面，不要为了凑格子硬拆。'
+    ):''))
   :'画面提示词：沿用世界书里生图相关条目的规则（角色括号、名字写法、视线、source#/target# 等）；这是彩蛋小剧场，可以是 Q 版 / 搞怪的画面，不要写质量词和体型词。世界书里没有相关规则时，就写英文逗号分隔的 Danbooru 风格 tag，人名保留原文。';
  return [
   '【小剧场创作任务】',
@@ -4627,6 +4642,22 @@ function qlTcRenderResult(){
  const st=qlTcState;
  const host=st?._renderHost||document.querySelector('#ql-tc-result');if(!host)return;
  host.innerHTML='';if(!st)return;
+ // 文字口令解析失败（比如被 responseLength 截断，image### 没收尾）：没有画面/聊天室可展示，
+ // 但模型原始输出还在，不能就这么把 raw 吞掉让用户干等——摆出来方便判断是不是被截断了，
+ // 并给个「重新生成文字」按钮，不用再手打一遍画面词/剧情词。
+ if(st._parseFailed){
+  const card=document.createElement('div');card.className='ql-theater-card ql-card';
+  const note=document.createElement('p');note.className='ql-muted';note.textContent='模型没按口令格式写全（常见原因：输出太长被截断），下面是模型的原始输出，可以看看具体在哪断的：';
+  const pre=document.createElement('textarea');pre.readOnly=true;pre.rows=10;pre.className='ql-chat-image-tag-input';pre.value=String(st.raw||'');
+  card.append(note,pre);
+  const row=document.createElement('div');row.className='ql-theater-result-actions';
+  const retryText=document.createElement('button');retryText.type='button';retryText.className='menu_button ql-primary';retryText.textContent='重新生成文字';
+  retryText.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();qlTcGenerate();});
+  row.append(retryText);
+  const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';
+  discard.addEventListener('click',()=>{host.innerHTML='';qlTcState=null;const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});
+  row.append(discard);card.append(row);host.append(card);return;
+ }
  const candidates=Array.isArray(st._qlCandidates)?st._qlCandidates:[];
  const active=candidates[Number(st._qlIndex)]||null;
  if(active){st.url=active.url;st.generation=active.generation;st.prompt=active.prompt;st.renderedPrompt=active.renderedPrompt||active.prompt;}
@@ -4658,6 +4689,13 @@ function qlTcRenderResult(){
  }
  if(!st._hideEggBlocks)(st.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages,undefined,false,styleKey));});
  const row=document.createElement('div');row.className='ql-theater-result-actions';
+ // 文字部分已经写好（有画面提示词），但还没出图成功（第一次生成失败，或者还没试过）：
+ // 给个重新出图按钮，直接拿已有的 prompt 重试，不用再花一次 LLM 调用重写文字。
+ if(!active&&!Array.isArray(st._editRecords)&&String(st.prompt||'').trim()){
+  const retryImage=document.createElement('button');retryImage.type='button';retryImage.className='menu_button ql-primary';retryImage.textContent='重新出图';
+  retryImage.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();qlTcReroll();});
+  row.append(retryImage);
+ }
  const saveButton=document.createElement('button');saveButton.type='button';saveButton.className='menu_button ql-primary';saveButton.textContent=st._editRecords?'保存修改':'收入小剧场';saveButton.dataset.tcSave='1';saveButton.disabled=!active||String(st.prompt||'').trim()!==String(st.renderedPrompt||'').trim();saveButton.addEventListener('click',qlTcSave);row.append(saveButton);
  const discard=document.createElement('button');discard.type='button';discard.className='menu_button';discard.textContent='丢弃';discard.addEventListener('click',()=>{if(st._renderHost)st._renderHost.innerHTML='';else qlTcRenderResult();qlTcState=null;const t=document.querySelector('#ql-tc-status');if(t)t.textContent='已丢弃。';});row.append(discard);
  card.append(row);
@@ -4714,7 +4752,11 @@ async function qlTcGenerateText(mode,input,ctx,styleValue){
  const quietPrompt=qlTcBuildQuietPrompt(mode,input,styleValue),s=cfg();
  if(s.llmTagMode!=='custom'){
   if(typeof ctx?.generateQuietPrompt!=='function')throw new Error('当前酒馆版本不支持静默生成（generateQuietPrompt）');
-  return String(await ctx.generateQuietPrompt({quietPrompt,responseLength:2048})||'').trim();
+  // 分镜模式要求模型把每一格的内容都拆开列出来，输出比普通彩蛋长不少；2048 很容易在
+  // image###…### 还没写完、甚至聊天室部分还没写就被截断，截断后 image### 缺收尾的 ###，
+  // 正则匹配不到，就会报“没有找到 image###…### 画面提示词”——其实不是真没写，是被掐断了。
+  const panelCount=qlTcPanelCount(styleValue);
+  return String(await ctx.generateQuietPrompt({quietPrompt,responseLength:panelCount>1?4096:2560})||'').trim();
  }
  const materials=[];
  try{const borrowed=qlPresetBorrowText();if(borrowed)materials.push('【当前预设资料】\n'+borrowed);}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
@@ -4727,7 +4769,7 @@ async function qlTcGenerateText(mode,input,ctx,styleValue){
 }
 async function qlTcGenerate(){
  if(qlTcBusy)return;
- const statusEl=document.querySelector('#ql-tc-status'),btn=document.querySelector('#ql-tc-generate'),resultHost=document.querySelector('#ql-tc-result');
+ const statusEl=document.querySelector('#ql-tc-status'),btn=document.querySelector('#ql-tc-generate');
  const input=String(document.querySelector('#ql-tc-input')?.value||'').trim();
  const mode=document.querySelector('#ql-tc-mode')?.value==='plot'?'plot':'scene';
  const styleValue=String(document.querySelector('#ql-tc-style')?.value||'egg');
@@ -4744,7 +4786,9 @@ async function qlTcGenerate(){
   if(!raw)throw new Error('模型返回空内容');
   const parsed=qlTcParse(raw);
   if(!parsed.prompt||!parsed.eggBlocks.length){
-   qlTcState=null;if(resultHost)resultHost.innerHTML='';
+   // 不再直接吞掉 raw：解析失败多半是输出被截断，把原始文字摆出来方便判断，
+   // 并留一个「重新生成文字」按钮，不用用户重新手打一遍画面词/剧情词。
+   qlTcState={title:parsed.title||'',eggBlocks:[],prompt:'',raw,url:'',generation:null,renderedPrompt:'',styleMode,_qlCandidates:[],_qlIndex:-1,_parseFailed:true};
    throw new Error(!parsed.prompt?'模型输出里没有找到 image###…### 画面提示词':'模型输出里没有找到 eggroom### 聊天室口令（没有聊天室就不会显示在小剧场里）');
   }
   let prompt=parsed.prompt;
@@ -4760,7 +4804,10 @@ async function qlTcGenerate(){
  }catch(error){
   console.error('[拾帧 Lite] 小剧场创作失败',error);
   if(statusEl)statusEl.textContent='生成失败：'+(error?.message||String(error));
-  if(qlTcState&&qlTcState.eggBlocks&&!qlTcState.url){qlTcState=null;}
+  // 以前这里只要 qlTcState 有文字没图片就直接清空——文字（标题/聊天室/画面提示词）等于白写，
+  // 用户还得重新花一次 LLM 调用。现在改成保留状态并重新渲染，渲染里会给「重新出图」按钮，
+  // 网络问题导致出图失败时可以直接重试，不丢文字。
+  if(qlTcState)qlTcRenderResult();
  }finally{
   qlTcBusy=false;if(btn)btn.disabled=false;
  }
