@@ -1171,6 +1171,18 @@ function qlActiveUserEntry(s,userName){
 }
 // 词库外的名字怎么处理：默认 ask＝先弹窗提醒去加词条（选「仍然生成」时名字会被去掉，不会原样提交）；strip＝不弹窗直接去掉；go＝只提示、名字原样保留。
 function qlMissingAction(){const v=cfg().missingNameAction;return ['ask','go','strip'].includes(v)?v:'ask';}
+// 角色词条是否属于「当前这张角色卡」：characterKey 存的是保存那一刻角色卡列表里的下标，
+// 酒馆角色卡顺序一变（增删角色卡、重新导入）下标就会跟着漂移，继续用下标判断会把词条错配给
+// 现在排在这个位置的另一张卡——两张卡同时显示同一批词条、删一边两边都消失，根源都在这。
+// avatar 是角色卡的稳定身份，词条只要记录了 avatar 就该优先信它，不再看下标；
+// 只有真没存 avatar 的老词条，才退回按下标匹配（兼容早期数据，有漂移风险但没有更好的依据）。
+function qlEntryMatchesCard(e,cardKey,cardAvatar){
+ if(!e||typeof e!=='object')return false;
+ if(e.characterKey==null||e.characterKey===''||e.characterKey==='__user__')return false;
+ const hasAvatar=!!String(e.characterAvatar||'').trim();
+ if(hasAvatar)return !!cardAvatar&&String(e.characterAvatar)===String(cardAvatar);
+ return String(e.characterKey)===String(cardKey??'');
+}
 function qlNameReplaceMode(s=cfg()){
  if(s.nameReplaceEnabled===false)return 'off';
  return ['inline','characters'].includes(s.nameReplaceMode)?s.nameReplaceMode:'characters';
@@ -1339,11 +1351,12 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
  if(qlNameReplaceMode(s)==='off')return none;
  const entries=(s.characters||[]).filter(x=>x&&typeof x==='object'&&String(x.appearance||'').trim()&&String(x.name||'').trim());
  const cardKey=context?.characterId==null?'':String(context.characterId);
+ const cardAvatar=String(context?.characters?.[context?.characterId]?.avatar||'');
  const userName=qlNormName(context?.name1||'');
  const groupOf=e=>{
   if(e.characterKey==='__user__')return 2;
   if(e.characterKey==null||e.characterKey==='')return 1;
-  return String(e.characterKey)===cardKey?0:3;
+  return qlEntryMatchesCard(e,cardKey,cardAvatar)?0:3;
  };
  const index=new Map(),activeUser=qlActiveUserEntry(s,context?.name1||'');
  for(const e of entries){
@@ -3560,6 +3573,7 @@ function qlApplyCustomStyleCss(css){
 const QL_ROSTER_TOKEN='拾帧角色列表';
 function qlRosterText(context=getContext()){
  const s=cfg(),cardKey=context?.characterId==null?'':String(context.characterId);
+ const cardAvatar=String(context?.characters?.[context?.characterId]?.avatar||'');
  const userName=String(context?.name1||'').trim();
  const lines=[];
  for(const e of (s.characters||[])){
@@ -3569,7 +3583,7 @@ function qlRosterText(context=getContext()){
   const isUser=e.characterKey==='__user__';
   if(isUser&&e!==qlActiveUserEntry(s,userName))continue;
   const unbound=e.characterKey==null||e.characterKey==='';
-  if(!isUser&&!unbound&&String(e.characterKey)!==cardKey)continue;
+  if(!isUser&&!unbound&&!qlEntryMatchesCard(e,cardKey,cardAvatar))continue;
   if(isUser&&userName&&!names.some(n=>n.toLowerCase()===userName.toLowerCase()))names.push(userName);
   lines.push(names.length>1?names[0]+'（也可写：'+names.slice(1).join(' / ')+'）':names[0]);
  }
@@ -5111,8 +5125,13 @@ function renderLibrary(){
   const selectedRecords=records.map((p,index)=>({p,index})).filter(({p})=>{
    if(isUserAppearance)return String(p.characterKey??'')==='__user__';
    if(!card)return false;
-   if(String(p.characterKey??'')===key)return true;
-   if(cardAvatar&&String(p.characterAvatar||'')===cardAvatar)return true;
+   const hasKey=p.characterKey!=null&&p.characterKey!=='';
+   const hasAvatar=!!String(p.characterAvatar||'').trim();
+   // 跟 qlEntryMatchesCard 保持同一套优先级（avatar 优先、其次下标），避免角色卡重名
+   // 或酒馆角色卡顺序漂移时，同一条词条在两张卡下都显示——删一边会把共享的同一个对象
+   // 删掉，另一边也跟着消失，就是这么来的。
+   if(hasKey||hasAvatar)return qlEntryMatchesCard(p,key,cardAvatar);
+   // 真正没绑定过角色卡、也没记录 avatar 的老词条，才退回按名字兜底匹配（兼容早期数据）。
    return Boolean(cardName&&String(p.characterName||'')===cardName);
   });
   const userPanel='<div class="ql-character-role-panel"><h4>用户外貌分组</h4><p class="ql-muted">在这个分组中添加多个用户形象；每个条目都有独立名称与外貌提示词，取景区会按条目名称提供选择。</p><button type="button" class="menu_button ql-character-add" data-character-add>＋ 新建用户外貌</button>'+(selectedRecords.map(({p,index})=>'<div class="ql-record ql-library-record">'+(libraryEditMode?'<label class="ql-bulk-check"><input type="checkbox" data-character-select="'+index+'" '+(selectedCharacters.has(index)?'checked':'')+'>选择</label>':'')+''+(p.thumb?'<img class="ql-char-thumb-s" alt="头像" src="'+esc(p.thumb)+'" data-full="'+esc(p.thumbFull||'')+'">':'')+'<div class="ql-character-role-heading"><strong>'+esc(p.name||'未命名用户外貌')+'</strong><small>'+esc(p.appearance?'已填写生图词':'尚未填写生图词')+'</small></div><div class="ql-row"><button class="menu_button" data-character-apply="'+index+'">追加生图词</button><button class="menu_button" data-character-edit="'+index+'">编辑</button><button class="menu_button" data-character-delete="'+index+'">删除词条</button></div></div>').join('')||'<p class="ql-muted">这个分组还没有用户外貌条目，点击「新建用户外貌」添加。</p>')+'</div>';
