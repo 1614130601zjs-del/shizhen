@@ -4573,7 +4573,13 @@ function qlTcBuildQuietPrompt(mode,text,styleValue){
  // 同一个本名后面再出现会被直接整条丢掉（不是保留成普通 tag），如果每一格都重复写一次本名+外貌，
  // 等于后面几格里这个角色的名字全部凭空消失，分镜里就对不上是谁在做动作，而且提示词本身也会被写得
  // 很长，NAI 的 tag 上限根本读不完。所以分镜里提到人物改用占位词 character A / character B 顶替本名，
- // 按角色在第2段出场的先后顺序固定对应，不用额外说明是谁。占位词必须是纯英文——qlReplaceCharacterNames
+ // 占位词紧跟在本名/外貌后面一起写（不是靠"第几个出场"这种隐性约定去对应——实测模型经常不照做，
+ // 占位词写出来了但没说哪个是哪个，读的人也看不出 A/B 对应谁），这样谁是谁直接写在文字里，不用猜。
+ // 另外要区分"词库里登记过外貌的角色"和"没登记过的原创角色"：前者只写本名+权重，外貌交给插件注入，
+ // 模型自己写外貌反而会跟插件注入的重复打架；后者不能用"本名:权重"这种格式（那是触发词库匹配用的，
+ // 查不到就留着一串没用的文字），要直接写外貌 tag。不然会出现"明明登记过外貌却被模型重复写一遍"
+ // 或者"没登记过的原创角色被当成词库角色写成 XXX:1.2"这种错位——这两个都是实际跑出来的真实案例。
+ // 占位词必须是纯英文——qlReplaceCharacterNames
  // 对任何「含中文、没有空格、没匹配上词库」的裸 tag 都会当成"疑似角色名"弹窗/删除（hasCjk 那段判断），
  // 不止「中文:权重」这种写法会触发；用中文代称（角色A/甲/乙之类）或者裸写中文场景词，都会被当缺词条
  // 处理掉，分镜里这个词就彻底消失了。纯英文占位词不含中文字符，不会走到这段判断，能原样留在提示词里。
@@ -4587,12 +4593,15 @@ function qlTcBuildQuietPrompt(mode,text,styleValue){
   '【'+panelCount+' 格分镜画面提示词怎么写】',
   '只有一条 image###…### 口令，但里面要按下面的顺序分四段写（逗号分隔，不要换行，不要写成多条 image###）：',
   '第1段：分镜排版共用标签，比如 comic, '+panelCount+'koma（写一次就行）。',
-  '第2段：出场角色的本名+外貌，每个角色只写一次，例：Lucien:1.2, (外貌 tag…)。这个角色接下来不管在几格里出现，本名和外貌都不能再写第二遍——重复写会被插件直接整条丢掉，等于那几格凭空没了这个人，而且提示词会长到 NAI 读不完。',
+  '第2段：出场角色的本名/外貌，每个角色只写一次，并且紧跟着加一个纯英文占位标签 character A / character B / character C……（谁对应谁，就靠这里写在一起，后面 Panel 里看到这个标签直接照认，不用再去猜"第几个出场的是谁"）。这里要先分两种情况：',
+  '　· 如果这个角色在上面「拾帧角色名单资料」里（已经在角色词库登记过外貌）：只写「本名:权重, character A」，不要自己写外貌——插件会按本名自动换上登记的外貌，你写了反而会跟插件注入的外貌重复/打架。例：Qiao:1.2, character A',
+  '　· 如果这个角色不在名单资料里（原创角色，没有登记过外貌）：不要用「本名:权重」这种格式（这是专门触发词库匹配用的，查不到会原样留着变成没用的文字），直接写成「character B, (外貌 tag…)」——占位标签在前，外貌 tag 跟在后面，外貌只在这里写一次。',
+  '不管是哪种角色，这个角色接下来不管在几格里出现，本名/外貌都不能再写第二遍——已登记角色重复写本名会被插件直接整条丢掉，等于那几格凭空没了这个人；原创角色重复写外貌会让提示词长到 NAI 读不完。',
   '第3段（可选）：如果几格共用同一个场景/氛围，写一条所有分镜共用的背景 tag，跟正文一样用英文 Danbooru 风格词，不要写孤立的中文词。',
-  '第4段：按 Panel 1/Panel 2/…依次写每一格的内容，每格只写这一格新增的动作/表情/构图 tag，不要重复描述外观；提到人物时不写本名，改用英文占位词 character A / character B / character C……——固定按第2段里角色出场的先后顺序对应（第一个写外貌的角色永远叫 character A，第二个永远叫 character B，以此类推，不用再额外说明谁是谁）。',
-  '占位词一定要用纯英文 character A / character B，不能用中文占位词（比如“角色A”“甲”“乙”）——插件会把没登记过的中文词当成角色名去查词库，查不到就会弹窗提醒缺词条，甚至直接从提示词里删掉这个词，分镜就白写了。同理，第3段的共用背景/氛围 tag 和每一格里新增的描述也都写英文，不要出现孤立的中文词（人物本名除外）。',
-  '骨架示例（角色名、tag 内容按实际剧情换，结构照抄）：',
-  'comic, '+panelCount+'koma, Lucien:1.2, (black coat, silver hair, red eyes), Qiao:1.2, (short hair, brown eyes), indoor, warm lighting, Panel 1: character A kneeling, character B leaning closer, reaching out, Panel 2: character A side profile, character B looking down, blushing'+(panelCount>2?', Panel 3: …, Panel 4: …':''),
+  '第4段：按 Panel 1/Panel 2/…依次写每一格的内容，每格只写这一格新增的动作/表情/构图 tag，不要重复描述外观；提到人物时不写本名，只写第2段里给这个角色定的占位标签 character A / character B……。',
+  '占位标签必须是纯英文 character A / character B，不能用中文占位词（比如“角色A”“甲”“乙”）——插件会把没登记过的中文词当成角色名去查词库，查不到就会弹窗提醒缺词条，甚至直接从提示词里删掉这个词，分镜就白写了。同理，第3段的共用背景/氛围 tag 和每一格里新增的描述也都写英文，不要出现孤立的中文词（人物本名除外）。',
+  '骨架示例（Qiao 是假设已经在名单资料里的角色，Lucien 是假设没有登记过的原创角色，实际按真实名单判断，tag 内容按剧情换，结构照抄）：',
+  'comic, '+panelCount+'koma, Qiao:1.2, character A, character B, (black coat, silver hair, red eyes), indoor, warm lighting, Panel 1: character A kneeling, character B leaning closer, reaching out, Panel 2: character A side profile, character B looking down, blushing'+(panelCount>2?', Panel 3: …, Panel 4: …':''),
   '先想清楚这 '+panelCount+' 个瞬间分别是什么画面，再照上面的顺序写；如果这段剧情实在不适合拆分镜，就老老实实画一张完整画面，不要为了凑格子硬拆。'
  ]:[];
  return [
@@ -4787,9 +4796,15 @@ function qlTcCharacterCardText(ctx){
  }catch(error){console.warn('[拾帧] 小剧场读取角色卡失败（已忽略）',error);return '';}
 }
 async function qlTcGenerateText(mode,input,ctx,styleValue){
- const quietPrompt=qlTcBuildQuietPrompt(mode,input,styleValue),s=cfg();
+ let quietPrompt=qlTcBuildQuietPrompt(mode,input,styleValue),s=cfg();
  if(s.llmTagMode!=='custom'){
   if(typeof ctx?.generateQuietPrompt!=='function')throw new Error('当前酒馆版本不支持静默生成（generateQuietPrompt）');
+  // 酒馆自己的 generateQuietPrompt 管线会自动带上当前预设/角色卡/世界书，但「拾帧角色名单资料」
+  // 是插件自己算出来的东西，酒馆不知道，之前只有「自定义 API」那条路（下面 custom 分支）手动拼过，
+  // 主 API 这条路一直没给模型——模型根本不知道哪些名字在词库里登记过外貌、哪些没有，写分镜时
+  // 自然分不清该写"本名+权重"还是"本名+外貌"，乔明明登记过外貌还被模型重复写了一遍，路西恩没
+  // 登记过却被当成词库角色写成"Lucien:1.2"，都是因为模型压根不知道名单长什么样。
+  try{const roster=qlRosterText(ctx);if(roster&&!roster.startsWith('（角色词库里暂时'))quietPrompt='【拾帧角色名单资料】\n'+roster+'\n\n'+quietPrompt;}catch(error){console.warn('[拾帧] 小剧场读取角色名单失败（已忽略）',error);}
   // 分镜模式要求模型把每一格的内容都拆开列出来，输出比普通彩蛋长不少；2048 很容易在
   // image###…### 还没写完、甚至聊天室部分还没写就被截断，截断后 image### 缺收尾的 ###，
   // 正则匹配不到，就会报“没有找到 image###…### 画面提示词”——其实不是真没写，是被掐断了。
