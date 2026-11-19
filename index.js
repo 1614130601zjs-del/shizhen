@@ -4611,7 +4611,7 @@ function qlTcBuildQuietPrompt(mode,text,styleValue){
   '占位标签必须是纯英文 character A / character B，不能用中文占位词（比如“角色A”“甲”“乙”）——插件会把没登记过的中文词当成角色名去查词库，查不到就会弹窗提醒缺词条，甚至直接从提示词里删掉这个词，分镜就白写了。同理，第3段的共用背景/氛围 tag 和每一格里新增的描述也都写英文，不要出现孤立的中文词（人物本名除外）。',
   '骨架示例（Qiao 是假设已经在名单资料里的角色，Lucien 是假设没有登记过的原创角色，实际按真实名单判断，tag 内容按剧情换，结构照抄）：',
   'comic, '+panelCount+'koma, Qiao:1.2, character A, character B, (1boy:1.2, black coat, silver hair, red eyes), indoor, warm lighting, Panel 1: character A kneeling, character B leaning closer, reaching out, Panel 2: character A side profile, character B looking down, blushing'+(panelCount>2?', Panel 3: …, Panel 4: …':''),
-  '先想清楚这 '+panelCount+' 个瞬间分别是什么画面，再照上面的顺序写；如果这段剧情实在不适合拆分镜，就老老实实画一张完整画面，不要为了凑格子硬拆。'
+  '用户在「画风」里已经手动选了'+panelCount+'格分镜，这是明确的选择，不是默认值，必须老老实实按上面的结构画满 '+panelCount+' 个 Panel，不能因为觉得"这段剧情就一个画面/不适合分镜"而跳过整个分镜结构、只画一张不分 Panel 的完整画面——那样等于用户选的分镜设置被无视了。先想清楚这 '+panelCount+' 个瞬间分别是什么画面；如果剧情本身只有一个连续动作、想不出'+panelCount+'个明显不同的瞬间，就把这同一个动作拆成不同的阶段/角度/距离（比如：动作前的蓄势、动作进行中的特写、动作结束后的反应、更远或更近的构图），也要凑够'+panelCount+'个 Panel，不能用"不适合分镜"当理由只画一张。'
  ]:[];
  return [
   '【小剧场创作任务】',
