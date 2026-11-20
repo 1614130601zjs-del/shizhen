@@ -53,6 +53,26 @@ function currentCardIdentity() {
     }
 }
 
+function allCharacterIdentities() {
+    try {
+        const context = getContext() || {};
+        const roster = Array.isArray(context.characters) ? context.characters
+            : (Array.isArray(window.characters) ? window.characters : []);
+        const seen = new Set();
+        const list = [];
+        for (const character of roster) {
+            const avatar = String(character?.avatar || '').trim();
+            if (!avatar || seen.has(avatar)) continue;
+            seen.add(avatar);
+            list.push({ key: avatar, name: String(character?.name || avatar).trim() || avatar });
+        }
+        list.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+        return list;
+    } catch {
+        return [];
+    }
+}
+
 function profileDefaults() {
     return { appliedBookNames: [], mode: 'pair', coreBook: '', coreBooks: { pair: '', group: '' }, worldviewBook: '', worldview: '', enabled: false, modeEntryBindings: { pair: {}, group: {} }, worldviewEntryOverrides: {}, entryOverrides: {} };
 }
@@ -559,7 +579,7 @@ export function initWorldbookModeManager({ root, cfg }) {
         <p class="ql-muted">拾帧只管理当前配置的两本世界书：双人/群像二选一的核心世界书，以及世界观特化世界书。其他世界书不会被修改。</p>
         <div class="ql-card" data-wbm-profile-box>
             <strong data-wbm-profile-title>当前角色设置</strong><label for="ql-wbm-edit-target">配置范围</label><select id="ql-wbm-edit-target" data-wbm-edit-target><option value="current">当前角色设置</option><option value="global">通用设置</option></select>
-            <p class="ql-muted">同一角色卡的所有聊天共用一份配置；角色卡身份按头像文件名区分。</p><p class="ql-muted" data-wbm-edit-hint>选择要查看或编辑的配置。</p>
+            <p class="ql-muted">同一角色卡的所有聊天共用一份配置；角色卡身份按头像文件名区分。下拉框里也可以直接选别的角色卡来查看/编辑它绑定的世界书，不用先切过去聊天；默认停留在当前角色卡。</p><p class="ql-muted" data-wbm-edit-hint>选择要查看或编辑的配置。</p>
             <div data-wbm-card-controls>
             <label>当前角色卡配置</label>
             <select data-wbm-profile-mode><option value="inherit">继承通用兜底</option><option value="independent">独立保存</option></select>
@@ -606,6 +626,8 @@ export function initWorldbookModeManager({ root, cfg }) {
     };
     let activeProfileRef = manager;
     let editingProfileRef = manager;
+    // 当前正在"查看/编辑"的角色卡身份——不一定是正打开的那张卡；null 表示正在编辑通用设置。
+    let editingIdentityRef = currentCardIdentity().key ? currentCardIdentity() : null;
     let cachedBooks = [];
     const editTargetSelect = panel.querySelector("[data-wbm-edit-target]");
     const editingProfile = () => editingProfileRef || activeProfileRef || settingsOf(cfg);
@@ -615,37 +637,78 @@ export function initWorldbookModeManager({ root, cfg }) {
     const editHint = panel.querySelector('[data-wbm-edit-hint]');
     const cardControls = panel.querySelector('[data-wbm-card-controls]');
 
-    function paintProfileControls(profile = settingsOf(cfg)) {
-        const identity = currentCardIdentity();
-        const hasCard = Boolean(identity.key);
-        if (profileTitle) profileTitle.textContent = hasCard ? `当前角色卡：${identity.name}` : '当前配置：通用兜底（尚未进入角色卡聊天）';
+    // 下拉框里"当前角色设置 / 通用设置"之外，再列出所有角色卡，选中后不用先切过去聊天
+    // 就能查看/编辑它绑定的世界书；默认（不手动选的话）还是停留在当前角色卡这一项。
+    function populateEditTargetOptions() {
+        if (!editTargetSelect) return;
+        const keep = editTargetSelect.value;
+        const fixed = ['current', 'global'];
+        editTargetSelect.querySelectorAll('option').forEach(option => {
+            if (!fixed.includes(option.value)) option.remove();
+        });
+        const currentKey = currentCardIdentity().key;
+        for (const identity of allCharacterIdentities()) {
+            if (identity.key === currentKey) continue; // 当前这张卡已经有「当前角色设置」那一项，不重复列出。
+            const option = document.createElement('option');
+            option.value = 'char:' + identity.key;
+            option.textContent = identity.name;
+            editTargetSelect.appendChild(option);
+        }
+        if ([...editTargetSelect.options].some(option => option.value === keep)) editTargetSelect.value = keep;
+    }
+
+    function paintProfileControls() {
+        const identity = editingIdentityRef;
+        const hasCard = Boolean(identity?.key);
+        const isActiveCard = hasCard && identity.key === currentCardIdentity().key;
+        if (profileTitle) profileTitle.textContent = !hasCard
+            ? '当前配置：通用兜底'
+            : isActiveCard ? `当前角色卡：${identity.name}` : `正在查看角色卡：${identity.name}（未打开，修改仅保存，不会立即生效）`;
+        const rootSettings = cfg().worldbookModeManager;
+        const inherited = !hasCard || editingProfileRef === rootSettings.defaultProfile;
         if (profileModeSelect) {
             profileModeSelect.disabled = !hasCard;
-            profileModeSelect.value = profile._profileMode || 'inherit';
+            profileModeSelect.value = inherited ? 'inherit' : 'independent';
         }
-        if (profileReset) profileReset.disabled = !hasCard || profile._profileMode !== 'independent';
+        if (profileReset) profileReset.disabled = !hasCard || inherited;
         if (editTargetSelect) {
             const currentOption = editTargetSelect.querySelector('option[value="current"]');
-            if (currentOption) currentOption.disabled = !hasCard;
-            if (!hasCard) editTargetSelect.value = 'global';
+            if (currentOption) currentOption.disabled = !currentCardIdentity().key;
         }
     }
 
     async function selectEditingTarget(target) {
-        const identity = currentCardIdentity();
         const rootSettings = cfg().worldbookModeManager;
-        if (target === 'global' || !identity.key) {
-            if (editTargetSelect) editTargetSelect.value = 'global';
-            editingProfileRef = rootSettings.defaultProfile;
+        let identity = null;
+        if (target === 'global') {
+            identity = null;
+        } else if (target === 'current') {
+            const current = currentCardIdentity();
+            identity = current.key ? current : null;
+            if (!identity) target = 'global';
+        } else if (target.startsWith('char:')) {
+            const avatar = target.slice('char:'.length);
+            identity = allCharacterIdentities().find(item => item.key === avatar) || { key: avatar, name: avatar };
         }
-        else {
+        editingIdentityRef = identity;
+        if (editTargetSelect) editTargetSelect.value = identity ? target : 'global';
+        if (!identity) {
+            editingProfileRef = rootSettings.defaultProfile;
+        } else {
             const stored = rootSettings.cardProfiles?.[identity.key];
             editingProfileRef = stored?.profileType === 'independent' ? stored : rootSettings.defaultProfile;
         }
-        const isCurrentTarget = target === 'current' && Boolean(identity.key);
-        if (cardControls) cardControls.hidden = !isCurrentTarget;
-        const inherited = isCurrentTarget && editingProfileRef === rootSettings.defaultProfile;
-        if (editHint) editHint.textContent = inherited ? '当前角色卡正在继承通用设置；在这里修改会同步影响所有继承通用设置的角色卡。可切换为独立保存后单独编辑。' : target === 'global' ? '正在编辑通用设置，不会改动角色卡的独立配置。' : '正在编辑当前角色卡的独立设置。';
+        if (cardControls) cardControls.hidden = !identity;
+        const inherited = Boolean(identity) && editingProfileRef === rootSettings.defaultProfile;
+        const isActiveCard = Boolean(identity) && identity.key === currentCardIdentity().key;
+        if (editHint) editHint.textContent = !identity
+            ? '正在编辑通用设置，不会改动角色卡的独立配置。'
+            : inherited
+                ? `「${identity.name}」正在继承通用设置；在这里修改会同步影响所有继承通用设置的角色卡。可切换为独立保存后单独编辑。`
+                : isActiveCard
+                    ? `正在编辑当前角色卡「${identity.name}」的独立设置。`
+                    : `正在编辑角色卡「${identity.name}」的独立设置——这张卡现在没有打开，修改会保存下来，下次切换到它的聊天时才会真正生效。`;
+        paintProfileControls();
         const m = editingProfile(); enabled.checked = m.enabled; mode.value = m.mode;
         if (coreBookLabel) coreBookLabel.textContent = (m.mode === 'pair' ? '双人' : '群像') + '核心世界书';
         renderBookSelectors(panel, cfg, cachedBooks, editingProfile); await refreshAssignedUi();
@@ -668,8 +731,15 @@ export function initWorldbookModeManager({ root, cfg }) {
     async function enterCurrentProfile() {
         const next = settingsOf(cfg);
         activeProfileRef = next;
-        if (editTargetSelect?.value !== 'global') editingProfileRef = next;
-        paintProfileControls(next);
+        // 只有"正在看当前角色设置"这一项的时候，切聊天才跟着把编辑目标带过去；
+        // 如果用户手动选了「通用设置」或某张别的角色卡在看，不要打断他，保持原地。
+        if (!editTargetSelect || editTargetSelect.value === 'current') {
+            editingProfileRef = next;
+            const identity = currentCardIdentity();
+            editingIdentityRef = identity.key ? identity : null;
+        }
+        populateEditTargetOptions();
+        paintProfileControls();
         enabled.checked = editingProfile().enabled;
         mode.value = editingProfile().mode;
         if (coreBookLabel) coreBookLabel.textContent = (editingProfile().mode === 'pair' ? '双人' : '群像') + '核心世界书';
@@ -686,10 +756,14 @@ export function initWorldbookModeManager({ root, cfg }) {
     }
 
     async function changeCardProfileMode(nextMode) {
-        const identity = currentCardIdentity();
-        if (!identity.key) throw new Error('请先进入一张角色卡的聊天，再设置角色卡独立配置。');
-        await leaveActiveProfile();
+        // 操作对象是下拉框里"正在查看"的那张卡，不一定是当前打开聊天的那张——
+        // 只有两者是同一张卡时，才需要真的卸载/重新挂载世界书；查看的是别的卡时，
+        // 只改它自己保存的 cardProfiles 记录，不碰当前正在生效的世界书状态。
+        const identity = editingIdentityRef;
+        if (!identity?.key) throw new Error('请先选择一张角色卡，再设置角色卡独立配置。');
+        const isActiveCard = identity.key === currentCardIdentity().key;
         const rootSettings = cfg().worldbookModeManager;
+        if (isActiveCard) await leaveActiveProfile();
         if (nextMode === 'independent') {
             const existing = rootSettings.cardProfiles[identity.key];
             if (!existing || existing.profileType !== 'independent') {
@@ -701,7 +775,8 @@ export function initWorldbookModeManager({ root, cfg }) {
             delete rootSettings.cardProfiles[identity.key];
         }
         saveSettingsDebounced();
-        await enterCurrentProfile();
+        if (isActiveCard) await enterCurrentProfile();
+        else await selectEditingTarget(editTargetSelect?.value || ('char:' + identity.key));
     }
 
     profileModeSelect?.addEventListener('change', () => {
@@ -736,7 +811,8 @@ export function initWorldbookModeManager({ root, cfg }) {
                 nextIdentity = currentCardIdentity();
             }
             if ((nextIdentity.key || '*') === previousKey) {
-                paintProfileControls(settingsOf(cfg));
+                populateEditTargetOptions();
+                paintProfileControls();
                 return;
             }
             await leaveActiveProfile();
@@ -749,17 +825,20 @@ export function initWorldbookModeManager({ root, cfg }) {
         if (event_types[name]) eventSource.on(event_types[name], handleCardSwitch);
     }
 
-    // 设置面板可能在角色卡上下文尚未就绪时初始化；用户真正展开面板时重新识别一次。
+    // 设置面板可能在角色卡上下文尚未就绪时初始化；用户真正展开面板时重新识别一次，
+    // 同时刷新下拉框里的角色卡列表（新导入的角色卡这时候也能选到）。
     panel.addEventListener('toggle', () => {
         if (!panel.open) return;
+        populateEditTargetOptions();
         const identity = currentCardIdentity();
-        if ((identity.key || '*') !== (activeProfileRef?._profileKey || '*')) {
+        if ((identity.key || '*') !== (activeProfileRef?._profileKey || '*') && editTargetSelect?.value === 'current') {
             enterCurrentProfile().catch(error => statusText(panel, `载入当前角色卡配置失败：${error?.message || String(error)}`));
         } else {
-            paintProfileControls(settingsOf(cfg));
+            paintProfileControls();
         }
     });
-    paintProfileControls(manager);
+    populateEditTargetOptions();
+    paintProfileControls();
     selectEditingTarget(editTargetSelect?.value || (currentCardIdentity().key ? 'current' : 'global')).catch(error => statusText(panel, error?.message || String(error)));
 
     async function updateAssignment(key, value) {
