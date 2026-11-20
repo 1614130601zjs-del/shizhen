@@ -18,14 +18,39 @@ const SCHEMA_VERSION = 4;
 
 function currentCardIdentity() {
     try {
-        const context = getContext();
-        const id = context?.characterId;
-        if (id == null || Number(id) < 0) return { key: '', name: '通用兜底' };
-        const character = context?.characters?.[Number(id)] || window.characters?.[Number(id)];
+        const context = getContext() || {};
+        // 群聊不归属于某一张单独角色卡，必须继续使用通用兜底。
+        if (context.groupId != null && String(context.groupId).trim() !== '') {
+            return { key: '', name: '群聊（通用兜底）' };
+        }
+
+        // 不同酒馆版本/初始化时机暴露当前角色索引的位置可能不同，按可靠性依次兜底。
+        const rawId = context.characterId ?? window.this_chid ?? globalThis.this_chid;
+        let id = Number(rawId);
+        let character = Number.isInteger(id) && id >= 0
+            ? (context.characters?.[id] || window.characters?.[id] || null)
+            : null;
+
+        // 部分上下文会直接提供当前角色对象。
+        character ||= context.character || context.currentCharacter || null;
+
+        // 索引暂不可用时，只有在角色名唯一匹配时才回退，避免误绑定到群聊/错误角色。
+        if (!character) {
+            const currentName = String(context.name2 || context.characterName || '').trim();
+            const roster = Array.isArray(context.characters) ? context.characters
+                : (Array.isArray(window.characters) ? window.characters : []);
+            if (currentName) {
+                const matches = roster.filter(item => String(item?.name || '').trim() === currentName);
+                if (matches.length === 1) character = matches[0];
+            }
+        }
+
         const avatar = String(character?.avatar || '').trim();
-        if (!avatar) return { key: '', name: String(character?.name || context?.name2 || '当前角色卡') };
-        return { key: avatar, name: String(character?.name || context?.name2 || avatar) };
-    } catch { return { key: '', name: '通用兜底' }; }
+        if (!avatar) return { key: '', name: String(character?.name || context.name2 || '通用兜底') };
+        return { key: avatar, name: String(character?.name || context.name2 || avatar) };
+    } catch {
+        return { key: '', name: '通用兜底' };
+    }
 }
 
 function profileDefaults() {
@@ -570,8 +595,13 @@ export function initWorldbookModeManager({ root, cfg }) {
     if (event_types.CHARACTER_SELECTED) {
         eventSource.on(event_types.CHARACTER_SELECTED, async () => {
             try {
+                // CHARACTER_SELECTED 可能早于酒馆上下文更新；等一帧再读取当前角色身份。
+                await new Promise(resolve => requestAnimationFrame(resolve));
                 const nextIdentity = currentCardIdentity();
-                if ((nextIdentity.key || '*') === (activeProfileRef?._profileKey || '*')) return;
+                if ((nextIdentity.key || '*') === (activeProfileRef?._profileKey || '*')) {
+                    paintProfileControls(settingsOf(cfg));
+                    return;
+                }
                 await leaveActiveProfile();
                 await enterCurrentProfile();
             } catch (error) {
@@ -579,6 +609,17 @@ export function initWorldbookModeManager({ root, cfg }) {
             }
         });
     }
+
+    // 设置面板可能在角色卡上下文尚未就绪时初始化；用户真正展开面板时重新识别一次。
+    panel.addEventListener('toggle', () => {
+        if (!panel.open) return;
+        const identity = currentCardIdentity();
+        if ((identity.key || '*') !== (activeProfileRef?._profileKey || '*')) {
+            enterCurrentProfile().catch(error => statusText(panel, `载入当前角色卡配置失败：${error?.message || String(error)}`));
+        } else {
+            paintProfileControls(settingsOf(cfg));
+        }
+    });
     paintProfileControls(manager);
 
     async function updateAssignment(key, value) {
