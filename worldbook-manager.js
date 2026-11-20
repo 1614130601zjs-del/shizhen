@@ -54,7 +54,7 @@ function currentCardIdentity() {
 }
 
 function profileDefaults() {
-    return { mode: 'pair', coreBook: '', coreBooks: { pair: '', group: '' }, worldviewBook: '', worldview: '', enabled: false, modeEntryBindings: { pair: {}, group: {} }, worldviewEntryOverrides: {}, entryOverrides: {} };
+    return { appliedBookNames: [], mode: 'pair', coreBook: '', coreBooks: { pair: '', group: '' }, worldviewBook: '', worldview: '', enabled: false, modeEntryBindings: { pair: {}, group: {} }, worldviewEntryOverrides: {}, entryOverrides: {} };
 }
 const WORLDVIEW_PREFIX = '世界观｜';
 
@@ -110,6 +110,7 @@ function settingsOf(cfg) {
     if (typeof profile.enabled !== 'boolean') profile.enabled = false;
     if (!profile.worldviewEntryOverrides || typeof profile.worldviewEntryOverrides !== 'object') profile.worldviewEntryOverrides = {};
     if (!profile.entryOverrides || typeof profile.entryOverrides !== 'object') profile.entryOverrides = {};
+    if (!Array.isArray(profile.appliedBookNames)) profile.appliedBookNames = [];
     if (!profile.modeEntryBindings || typeof profile.modeEntryBindings !== 'object') profile.modeEntryBindings = { pair: {}, group: {} };
     for (const mode of ['pair', 'group']) if (!profile.modeEntryBindings[mode] || typeof profile.modeEntryBindings[mode] !== 'object') profile.modeEntryBindings[mode] = {};
     Object.defineProperties(profile, {
@@ -318,10 +319,12 @@ async function syncWorldviewEntry(manager, report = () => {}) {
 async function restoreAll(cfg, report = () => {}) {
     const manager = settingsOf(cfg);
     const names = new Set([
+        ...(manager.appliedBookNames || []),
         ...Object.keys(manager.originalGlobalStates),
         ...Object.keys(manager.originalEntryStates),
     ]);
     for (const name of names) await restoreBook(manager, name);
+    manager.appliedBookNames = [];
     saveSettingsDebounced();
     report('已恢复拾帧接管前的全局挂载状态与世界观条目状态。');
 }
@@ -345,14 +348,21 @@ async function applyMode(cfg, report = () => {}) {
     }
     for (const name of assignments) {
         if (!available.has(name)) throw new Error(`指定的世界书「${name}」不存在，请刷新列表`);
-        rememberGlobalState(manager, name);
     }
+    // 先卸载上一模式独占的书，并恢复其接管前的全局状态与条目状态。
+    const previouslyApplied = new Set(manager.appliedBookNames || []);
+    for (const oldName of previouslyApplied) {
+        if (!assignments.includes(oldName)) await restoreBook(manager, oldName);
+    }
+    for (const name of assignments) rememberGlobalState(manager, name);
     await rememberEntryStates(manager, worldview);
     for (const name of assignments) {
         await setGlobalBook(name, true);
         if (!isGlobalOn(name)) throw new Error(`世界书「${name}」全局挂载状态同步失败`);
     }
     await applyModeEntryBindings(manager, manager.mode);
+    await applyProfileEntryOverrides(manager);
+    manager.appliedBookNames = [...assignments];
     saveSettingsDebounced();
     report(`已挂载「${manager.mode === 'pair' ? '双人' : '群像'}」核心世界书与世界观特化世界书。`);
 }
@@ -627,6 +637,7 @@ export function initWorldbookModeManager({ root, cfg }) {
             ...Object.keys(activeProfileRef.originalEntryStates || {}),
         ]);
         for (const name of names) await restoreBook(activeProfileRef, name, false);
+        activeProfileRef.appliedBookNames = [];
         saveSettingsDebounced();
     }
 
