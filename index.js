@@ -6965,10 +6965,16 @@ jQuery(()=>{
   })),350);
  });
  for(const name of ['GENERATION_STOPPED','CHAT_CHANGED']){const en=event_types[name];if(en)eventSource.on(en,()=>qlSetGenerationActive(false));}
- for(const name of ['MESSAGE_SWIPED','CHAT_CHANGED','MESSAGE_EDITED']){
+ for(const name of ['MESSAGE_SWIPED','CHAT_CHANGED']){
   const eventName=event_types[name];
   if(eventName)eventSource.on(eventName,scheduleScan);
  }
+ // MESSAGE_EDITED 单独处理：手动把内容粘贴进消息编辑框再保存（比如 API 出问题时，先在别处把
+ // image###/eggroom### 这段内容缓存好，再粘贴回这条消息里）也会触发这个事件，但酒馆把粘贴的长文本
+ // 重新渲染进 .mes_text 可能比下面这个单次 120ms 扫描慢，容易扫空、之后就没有任何重试，只能手动再点一次
+ // 编辑铅笔（强制触发一次新的 DOM 变动）才会被 MutationObserver 兜底捕捉到。改成和生成结束后一样走
+ // scheduleInlineScan() 的多次重扫 + 最长 60 秒轮询，不再只扫一次就放弃。
+ if(event_types.MESSAGE_EDITED)eventSource.on(event_types.MESSAGE_EDITED,()=>{scheduleScan();scheduleInlineScan();});
  if(event_types.CHAT_CHANGED)eventSource.on(event_types.CHAT_CHANGED,()=>{autoTasks.clear();renderBindings();renderLibrary();});
  // 取景框是独立生图区：切换角色卡/聊天时不清空它的提示词、角色外貌或当前配置。
  if(event_types.CHARACTER_SELECTED)eventSource.on(event_types.CHARACTER_SELECTED,()=>{renderBindings();renderLibrary();renderViewfinderRoles();syncViewfinderAlbumTargets();});
