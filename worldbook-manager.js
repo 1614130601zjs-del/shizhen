@@ -272,7 +272,8 @@ async function applyModeEntryBindings(manager, mode) {
     await rememberEntryStates(manager, name);
     if (!manager.modeEntryBindings || typeof manager.modeEntryBindings !== 'object') manager.modeEntryBindings = { pair: {}, group: {} };
     if (!manager.modeEntryBindings[mode] || typeof manager.modeEntryBindings[mode] !== 'object') manager.modeEntryBindings[mode] = {};
-    const bindings = manager.modeEntryBindings[mode];
+    if (!manager.modeEntryBindings[mode][name] || typeof manager.modeEntryBindings[mode][name] !== 'object') manager.modeEntryBindings[mode][name] = {};
+    const bindings = manager.modeEntryBindings[mode][name];
     let changed = false;
     for (const [uid, entry] of Object.entries(data.entries || {})) {
         // 第一次绑定时沿用该条目当前的启用状态，之后由当前角色卡独立保存选择。
@@ -432,7 +433,8 @@ async function renderEntryEditor(host, cfg, getProfile) {
             const data = await fetchBook(item.name);
             const entries = Object.entries(data.entries).sort((a, b) => Number(a[1]?.order ?? 100) - Number(b[1]?.order ?? 100));
             if (item.mode === 'pair' || item.mode === 'group') {
-                const bindings = manager.modeEntryBindings[item.mode];
+                if (!manager.modeEntryBindings[item.mode][item.name] || typeof manager.modeEntryBindings[item.mode][item.name] !== 'object') manager.modeEntryBindings[item.mode][item.name] = {};
+                const bindings = manager.modeEntryBindings[item.mode][item.name];
                 for (const [uid, entry] of entries) {
                     if (typeof bindings[uid] !== 'boolean') bindings[uid] = !Boolean(entry?.disable);
                 }
@@ -444,7 +446,7 @@ async function renderEntryEditor(host, cfg, getProfile) {
                     const isWorldviewEntry = String(entry?.comment || '').startsWith(WORLDVIEW_PREFIX);
                     const worldviewTag = isWorldviewEntry ? ' <span class="ql-muted">（世界观）</span>' : '';
                     let isEnabled;
-                    if (item.mode === 'pair' || item.mode === 'group') isEnabled = manager.modeEntryBindings[item.mode][uid];
+                    if (item.mode === 'pair' || item.mode === 'group') isEnabled = manager.modeEntryBindings[item.mode][item.name][uid];
                     else {
                         const override = manager.worldviewEntryOverrides?.[item.name]?.[uid];
                         const legacy = manager.entryOverrides?.[item.name]?.[uid];
@@ -468,7 +470,8 @@ async function renderEntryEditor(host, cfg, getProfile) {
                     if (bindingMode === 'pair' || bindingMode === 'group') {
                         if (!profile.modeEntryBindings || typeof profile.modeEntryBindings !== 'object') profile.modeEntryBindings = { pair: {}, group: {} };
                         if (!profile.modeEntryBindings[bindingMode] || typeof profile.modeEntryBindings[bindingMode] !== 'object') profile.modeEntryBindings[bindingMode] = {};
-                        profile.modeEntryBindings[bindingMode][uid] = toggle.checked;
+                        if (!profile.modeEntryBindings[bindingMode][name] || typeof profile.modeEntryBindings[bindingMode][name] !== 'object') profile.modeEntryBindings[bindingMode][name] = {};
+                        profile.modeEntryBindings[bindingMode][name][uid] = toggle.checked;
                         saveSettingsDebounced();
                         if (isActive && profile.enabled && profile.mode === bindingMode) await applyModeEntryBindings(profile, bindingMode);
                         statusText(host, isActive && profile.enabled && profile.mode === bindingMode
