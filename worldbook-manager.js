@@ -54,7 +54,7 @@ function currentCardIdentity() {
 }
 
 function profileDefaults() {
-    return { mode: 'pair', coreBooks: { pair: '', group: '' }, worldviewBook: '', worldview: '', enabled: false, worldviewEntryOverrides: {}, entryOverrides: {} };
+    return { mode: 'pair', coreBooks: { pair: '', group: '' }, worldviewBook: '', worldview: '', enabled: false, modeEntryBindings: { pair: {}, group: {} }, worldviewEntryOverrides: {}, entryOverrides: {} };
 }
 const WORLDVIEW_PREFIX = '世界观｜';
 
@@ -106,6 +106,8 @@ function settingsOf(cfg) {
     if (typeof profile.enabled !== 'boolean') profile.enabled = false;
     if (!profile.worldviewEntryOverrides || typeof profile.worldviewEntryOverrides !== 'object') profile.worldviewEntryOverrides = {};
     if (!profile.entryOverrides || typeof profile.entryOverrides !== 'object') profile.entryOverrides = {};
+    if (!profile.modeEntryBindings || typeof profile.modeEntryBindings !== 'object') profile.modeEntryBindings = { pair: {}, group: {} };
+    for (const mode of ['pair', 'group']) if (!profile.modeEntryBindings[mode] || typeof profile.modeEntryBindings[mode] !== 'object') profile.modeEntryBindings[mode] = {};
     Object.defineProperties(profile, {
         originalGlobalStates: { value: manager.originalGlobalStates, writable: true, configurable: true },
         originalEntryStates: { value: manager.originalEntryStates, writable: true, configurable: true },
@@ -263,6 +265,28 @@ async function applyProfileEntryOverrides(manager) {
     }
 }
 
+async function applyModeEntryBindings(manager, mode) {
+    const name = manager.coreBooks?.[mode];
+    if (!name) return;
+    const data = await fetchBook(name);
+    await rememberEntryStates(manager, name);
+    if (!manager.modeEntryBindings || typeof manager.modeEntryBindings !== 'object') manager.modeEntryBindings = { pair: {}, group: {} };
+    if (!manager.modeEntryBindings[mode] || typeof manager.modeEntryBindings[mode] !== 'object') manager.modeEntryBindings[mode] = {};
+    const bindings = manager.modeEntryBindings[mode];
+    let changed = false;
+    for (const [uid, entry] of Object.entries(data.entries || {})) {
+        // 第一次绑定时沿用该条目当前的启用状态，之后由当前角色卡独立保存选择。
+        if (typeof bindings[uid] !== 'boolean') bindings[uid] = !Boolean(entry?.disable);
+        const shouldDisable = !bindings[uid];
+        if (Boolean(entry?.disable) !== shouldDisable) {
+            entry.disable = shouldDisable;
+            changed = true;
+        }
+    }
+    if (changed) await saveWorldInfo(name, data, true);
+    saveSettingsDebounced();
+}
+
 async function syncWorldviewEntry(manager, report = () => {}) {
     if (!manager.worldviewBook || !manager.worldview) return;
     const data = await fetchBook(manager.worldviewBook);
@@ -330,6 +354,7 @@ async function applyMode(cfg, report = () => {}) {
         await setGlobalBook(name, desired);
         if (isGlobalOn(name) !== desired) throw new Error(`世界书「${name}」全局挂载状态同步失败`);
     }
+    await applyModeEntryBindings(manager, manager.mode);
     saveSettingsDebounced();
     report(`已挂载「${manager.mode === 'pair' ? '双人' : '群像'}」核心世界书${worldview ? '，世界观特化书保持挂载' : ''}。`);
 }
@@ -385,62 +410,86 @@ async function renderWorldviewChoices(host, cfg, getProfile) {
 
 async function renderEntryEditor(host, cfg, getProfile) {
     const manager = getProfile ? getProfile() : settingsOf(cfg);
-    // 编辑目标可能是当前未激活的通用/角色配置；它不会经过 settingsOf()，因此在此补齐条目覆盖存储。
     if (!manager.entryOverrides || typeof manager.entryOverrides !== 'object') manager.entryOverrides = {};
     if (!manager.worldviewEntryOverrides || typeof manager.worldviewEntryOverrides !== 'object') manager.worldviewEntryOverrides = {};
+    if (!manager.modeEntryBindings || typeof manager.modeEntryBindings !== 'object') manager.modeEntryBindings = { pair: {}, group: {} };
+    for (const mode of ['pair', 'group']) if (!manager.modeEntryBindings[mode] || typeof manager.modeEntryBindings[mode] !== 'object') manager.modeEntryBindings[mode] = {};
     const target = host.querySelector('[data-wbm-entry-editor]');
     if (!target) return;
-    const names = selectedBookNames(manager);
-    if (!names.length) {
-        target.innerHTML = '<p class="ql-muted">先指定双人、群像或世界观特化世界书，再编辑具体条目。</p>';
+    const assigned = [
+        { mode: 'pair', label: '双人模式条目绑定', name: manager.coreBooks?.pair },
+        { mode: 'group', label: '群像模式条目绑定', name: manager.coreBooks?.group },
+        { mode: 'worldview', label: '世界观特化条目', name: manager.worldviewBook },
+    ].filter(item => item.name);
+    if (!assigned.length) {
+        target.innerHTML = '<p class="ql-muted">先指定双人、群像和世界观特化世界书，再为当前角色卡绑定具体条目。</p>';
         return;
     }
-    target.innerHTML = '<p class="ql-muted">正在读取已授权世界书的条目…</p>';
+    target.innerHTML = '<p class="ql-muted">正在读取当前配置的条目…</p>';
     try {
         const chunks = [];
-        for (const name of names) {
-            const data = await fetchBook(name);
-            const entries = Object.entries(data.entries).sort((a, b) =>
-                Number(a[1]?.order ?? 100) - Number(b[1]?.order ?? 100)
-            );
-            chunks.push(`<details class="ql-card" data-wbm-entry-book="${escapeAttr(name)}">
-                <summary>${escapeHtml(name)} <span class="ql-muted">· ${entries.length} 个条目</span></summary>
+        for (const item of assigned) {
+            const data = await fetchBook(item.name);
+            const entries = Object.entries(data.entries).sort((a, b) => Number(a[1]?.order ?? 100) - Number(b[1]?.order ?? 100));
+            if (item.mode === 'pair' || item.mode === 'group') {
+                const bindings = manager.modeEntryBindings[item.mode];
+                for (const [uid, entry] of entries) {
+                    if (typeof bindings[uid] !== 'boolean') bindings[uid] = !Boolean(entry?.disable);
+                }
+            }
+            chunks.push(`<details class="ql-card" data-wbm-entry-book="${escapeAttr(item.name)}">
+                <summary>${escapeHtml(item.label)} · ${escapeHtml(item.name)} <span class="ql-muted">· ${entries.length} 个条目</span></summary>
                 <div class="ql-wbm-entry-list">${entries.map(([uid, entry]) => {
                     const title = entry?.comment || (Array.isArray(entry?.key) ? entry.key.join('、') : '') || `UID ${uid}`;
-                    const worldviewTag = String(entry?.comment || '').startsWith(WORLDVIEW_PREFIX) ? ' <span class="ql-muted">（世界观）</span>' : '';
-                    const worldviewOverride = manager.worldviewEntryOverrides?.[name]?.[uid];
-                    const entryOverride = manager.entryOverrides?.[name]?.[uid];
-                    const isEnabled = typeof worldviewOverride === 'boolean' ? !worldviewOverride : typeof entryOverride === 'boolean' ? !entryOverride : !entry?.disable;
-                    return `<label class="ql-check"><input type="checkbox" data-wbm-entry-toggle data-wbm-entry-book-name="${escapeAttr(name)}" data-wbm-entry-uid="${escapeAttr(uid)}" ${isEnabled ? 'checked' : ''}> ${escapeHtml(title)}${worldviewTag}</label>`;
+                    const isWorldviewEntry = String(entry?.comment || '').startsWith(WORLDVIEW_PREFIX);
+                    const worldviewTag = isWorldviewEntry ? ' <span class="ql-muted">（世界观）</span>' : '';
+                    let isEnabled;
+                    if (item.mode === 'pair' || item.mode === 'group') isEnabled = manager.modeEntryBindings[item.mode][uid];
+                    else {
+                        const override = manager.worldviewEntryOverrides?.[item.name]?.[uid];
+                        const legacy = manager.entryOverrides?.[item.name]?.[uid];
+                        isEnabled = typeof override === 'boolean' ? !override : typeof legacy === 'boolean' ? !legacy : !entry?.disable;
+                    }
+                    return `<label class="ql-check"><input type="checkbox" data-wbm-entry-toggle data-wbm-entry-mode="${item.mode}" data-wbm-entry-book-name="${escapeAttr(item.name)}" data-wbm-entry-uid="${escapeAttr(uid)}" ${isEnabled ? 'checked' : ''}> ${escapeHtml(title)}${worldviewTag}</label>`;
                 }).join('')}</div>
             </details>`);
         }
         target.innerHTML = chunks.join('');
+        saveSettingsDebounced();
         target.querySelectorAll('[data-wbm-entry-toggle]').forEach(toggle => {
             toggle.addEventListener('change', async () => {
                 toggle.disabled = true;
                 try {
                     const name = toggle.dataset.wbmEntryBookName;
                     const uid = toggle.dataset.wbmEntryUid;
-                    const manager = getProfile ? getProfile() : settingsOf(cfg);
-                    const isActive = manager === activeProfileRef;
-                    if (isActive) await rememberEntryStates(manager, name);
+                    const bindingMode = toggle.dataset.wbmEntryMode;
+                    const profile = getProfile ? getProfile() : settingsOf(cfg);
+                    const isActive = profile === activeProfileRef;
+                    if (bindingMode === 'pair' || bindingMode === 'group') {
+                        if (!profile.modeEntryBindings || typeof profile.modeEntryBindings !== 'object') profile.modeEntryBindings = { pair: {}, group: {} };
+                        if (!profile.modeEntryBindings[bindingMode] || typeof profile.modeEntryBindings[bindingMode] !== 'object') profile.modeEntryBindings[bindingMode] = {};
+                        profile.modeEntryBindings[bindingMode][uid] = toggle.checked;
+                        saveSettingsDebounced();
+                        if (isActive && profile.enabled && profile.mode === bindingMode) await applyModeEntryBindings(profile, bindingMode);
+                        statusText(host, isActive && profile.enabled && profile.mode === bindingMode
+                            ? `已更新当前角色卡的${bindingMode === 'pair' ? '双人' : '群像'}条目绑定：${uid}`
+                            : `已保存当前角色卡的${bindingMode === 'pair' ? '双人' : '群像'}条目绑定；切换到该模式时应用。`);
+                        return;
+                    }
+                    if (isActive) await rememberEntryStates(profile, name);
                     const fresh = await fetchBook(name);
                     const entry = fresh.entries?.[uid];
                     if (!entry) throw new Error('条目已不存在，请刷新条目列表');
                     entry.disable = !toggle.checked;
-                    if (!manager.entryOverrides[name] || typeof manager.entryOverrides[name] !== 'object') manager.entryOverrides[name] = {};
-                    manager.entryOverrides[name][uid] = Boolean(entry.disable);
-                    if (name === manager.worldviewBook && String(entry.comment || '').startsWith(WORLDVIEW_PREFIX)) {
-                        if (!manager.worldviewEntryOverrides[name] || typeof manager.worldviewEntryOverrides[name] !== 'object') {
-                            manager.worldviewEntryOverrides[name] = {};
-                        }
-                        // 显式记录用户手动开关，避免切换世界观或停用管理器时覆盖该选择。
-                        manager.worldviewEntryOverrides[name][uid] = Boolean(entry.disable);
+                    if (!profile.entryOverrides[name] || typeof profile.entryOverrides[name] !== 'object') profile.entryOverrides[name] = {};
+                    profile.entryOverrides[name][uid] = Boolean(entry.disable);
+                    if (name === profile.worldviewBook && String(entry.comment || '').startsWith(WORLDVIEW_PREFIX)) {
+                        if (!profile.worldviewEntryOverrides[name] || typeof profile.worldviewEntryOverrides[name] !== 'object') profile.worldviewEntryOverrides[name] = {};
+                        profile.worldviewEntryOverrides[name][uid] = Boolean(entry.disable);
                     }
                     if (isActive) await saveWorldInfo(name, fresh, true);
                     saveSettingsDebounced();
-                    statusText(host, isActive ? `已更新「${name}」中的条目：${entry.comment || uid}` : `已保存「${name}」中的条目设置；当前配置未生效，切换到该配置后再应用。`);
+                    statusText(host, isActive ? `已更新「${name}」中的条目：${entry.comment || uid}` : `已保存当前角色卡的世界观条目设置；切换到该配置后再应用。`);
                 } catch (error) {
                     toggle.checked = !toggle.checked;
                     statusText(host, error?.message || String(error));
