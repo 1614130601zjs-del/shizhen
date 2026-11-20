@@ -114,9 +114,18 @@ function shouldBeOn(manager, name) {
     return cats.some(id => CATEGORIES.some(x => x.id === id && id !== 'pair' && id !== 'group') && manager.supplements.includes(id));
 }
 
+async function restoreManagedStates(cfg, report = () => {}) {
+    const manager = settingsOf(cfg);
+    for (const [name, original] of Object.entries(manager.originalGlobalStates)) {
+        const actual = await setGlobalBook(name, Boolean(original));
+        if (actual !== Boolean(original)) throw new Error(`世界书「${name}」未能恢复原始状态`);
+    }
+    report('已恢复拾帧接管前的全局世界书状态。');
+}
+
 async function applyMode(cfg, report = () => {}) {
     const manager = settingsOf(cfg);
-    if (!manager.enabled) return;
+    if (!manager.enabled) return restoreManagedStates(cfg, report);
     const names = managedNames(manager);
     for (const name of names) {
         const desired = shouldBeOn(manager, name);
@@ -165,7 +174,11 @@ function renderBookList(host, cfg, books) {
             manager.assignments[name] = [...current];
             if (!current.size) {
                 delete manager.assignments[name];
+                const original = manager.originalGlobalStates[name];
                 delete manager.originalGlobalStates[name];
+                if (typeof original === 'boolean') {
+                    setGlobalBook(name, original).catch(error => statusText(host, error?.message || String(error)));
+                }
             }
             cfg().worldbookModeManager = manager;
             // 分配本身只保存拾帧设置，不立刻更改酒馆状态；用户点击应用后才执行同步。
@@ -263,10 +276,8 @@ export function initWorldbookModeManager({ root, cfg }) {
         const m = settingsOf(cfg);
         m.enabled = enabled.checked;
         saveSettingsDebounced();
-        if (m.enabled) {
-            try { await applyMode(cfg, message => statusText(panel, message)); }
-            catch (error) { statusText(panel, error?.message || String(error)); }
-        }
+        try { await applyMode(cfg, message => statusText(panel, message)); }
+        catch (error) { statusText(panel, error?.message || String(error)); }
     });
     mode.addEventListener('change', () => {
         settingsOf(cfg).mode = mode.value;
