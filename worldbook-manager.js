@@ -221,6 +221,9 @@ async function applyMode(cfg, report = () => {}) {
     if (!pair || !group || !worldview) {
         throw new Error('请分别指定双人、群像和世界观特化三本世界书后再启用管理。');
     }
+    if (!manager.worldview) {
+        throw new Error('请先从世界观特化世界书中选择一个世界观。');
+    }
     const assignments = [pair, group, worldview].filter(Boolean);
     if (new Set(assignments).size !== assignments.length) {
         throw new Error('双人、群像和世界观特化必须指定三本不同的世界书');
