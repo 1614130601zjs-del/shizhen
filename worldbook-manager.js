@@ -13,7 +13,7 @@ import {
 import { eventSource, event_types, getRequestHeaders, saveSettingsDebounced } from '/script.js';
 
 const LOG = '[拾帧·世界书管理]';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const WORLDVIEW_PREFIX = '世界观｜';
 
 const post = async (path, body = {}) => {
@@ -33,17 +33,21 @@ function settingsOf(cfg) {
     }
     const s = root.worldbookModeManager;
     if (s.schemaVersion !== SCHEMA_VERSION) {
-        // 不把旧版“任意分类关联”自动升级成新授权；先记下旧版接管前的全局状态，初始化时恢复。
-        const legacyStates = s.originalGlobalStates && typeof s.originalGlobalStates === 'object'
-            ? { ...s.originalGlobalStates }
-            : {};
-        s.legacyRestoreStates = { ...(s.legacyRestoreStates || {}), ...legacyStates };
-        s.enabled = false;
-        s.coreBooks = { pair: '', group: '' };
-        s.worldviewBook = '';
-        s.worldview = '';
-        s.originalGlobalStates = {};
-        s.originalEntryStates = {};
+        // v1 及更早版本曾允许宽泛接管；升级时先恢复旧版接管前的全局状态。
+        // v2 已采用三本明确授权书籍，升级到 v3 时必须保留用户配置和原始状态快照。
+        const previousVersion = Number(s.schemaVersion) || 0;
+        if (previousVersion < 2) {
+            const legacyStates = s.originalGlobalStates && typeof s.originalGlobalStates === 'object'
+                ? { ...s.originalGlobalStates }
+                : {};
+            s.legacyRestoreStates = { ...(s.legacyRestoreStates || {}), ...legacyStates };
+            s.enabled = false;
+            s.coreBooks = { pair: '', group: '' };
+            s.worldviewBook = '';
+            s.worldview = '';
+            s.originalGlobalStates = {};
+            s.originalEntryStates = {};
+        }
         s.schemaVersion = SCHEMA_VERSION;
         saveSettingsDebounced();
     }
@@ -56,6 +60,7 @@ function settingsOf(cfg) {
     if (typeof s.enabled !== 'boolean') s.enabled = false;
     if (!s.originalGlobalStates || typeof s.originalGlobalStates !== 'object') s.originalGlobalStates = {};
     if (!s.originalEntryStates || typeof s.originalEntryStates !== 'object') s.originalEntryStates = {};
+    if (!s.worldviewEntryOverrides || typeof s.worldviewEntryOverrides !== 'object') s.worldviewEntryOverrides = {};
     return s;
 }
 
@@ -162,18 +167,22 @@ async function restoreBook(manager, name) {
         delete manager.originalGlobalStates[name];
     }
     const saved = manager.originalEntryStates[name];
-    if (saved) {
+    const overrides = manager.worldviewEntryOverrides[name] || {};
+    if (saved || Object.keys(overrides).length) {
         const data = await fetchBook(name);
         let changed = false;
-        for (const [uid, disabled] of Object.entries(saved)) {
-            if (!data.entries[uid]) continue;
-            if (Boolean(data.entries[uid].disable) !== Boolean(disabled)) {
-                data.entries[uid].disable = Boolean(disabled);
+        for (const [uid, entry] of Object.entries(data.entries)) {
+            let desired;
+            if (saved && Object.prototype.hasOwnProperty.call(saved, uid)) desired = Boolean(saved[uid]);
+            if (Object.prototype.hasOwnProperty.call(overrides, uid)) desired = Boolean(overrides[uid]);
+            if (typeof desired !== 'boolean') continue;
+            if (Boolean(entry?.disable) !== desired) {
+                entry.disable = desired;
                 changed = true;
             }
         }
         if (changed) await saveWorldInfo(name, data, true);
-        delete manager.originalEntryStates[name];
+        if (saved) delete manager.originalEntryStates[name];
     }
 }
 
@@ -188,8 +197,13 @@ async function syncWorldviewEntry(manager, report = () => {}) {
     const chosen = matches.find(item => item.name === manager.worldview);
     if (!chosen) throw new Error(`世界观「${manager.worldview}」已不存在，请重新选择`);
     let changed = false;
+    const overrides = manager.worldviewEntryOverrides[manager.worldviewBook] || {};
     for (const item of matches) {
-        const shouldDisable = item.uid !== chosen.uid;
+        // 用户在条目管理中手动设置过的状态优先；自动单选只接管尚无手动覆盖的条目。
+        const hasManualOverride = Object.prototype.hasOwnProperty.call(overrides, item.uid);
+        const shouldDisable = hasManualOverride
+            ? Boolean(overrides[item.uid])
+            : item.uid !== chosen.uid;
         if (Boolean(item.entry.disable) !== shouldDisable) {
             item.entry.disable = shouldDisable;
             changed = true;
@@ -331,6 +345,13 @@ async function renderEntryEditor(host, cfg) {
                     const entry = fresh.entries?.[uid];
                     if (!entry) throw new Error('条目已不存在，请刷新条目列表');
                     entry.disable = !toggle.checked;
+                    if (name === manager.worldviewBook && String(entry.comment || '').startsWith(WORLDVIEW_PREFIX)) {
+                        if (!manager.worldviewEntryOverrides[name] || typeof manager.worldviewEntryOverrides[name] !== 'object') {
+                            manager.worldviewEntryOverrides[name] = {};
+                        }
+                        // 显式记录用户手动开关，避免切换世界观或停用管理器时覆盖该选择。
+                        manager.worldviewEntryOverrides[name][uid] = Boolean(entry.disable);
+                    }
                     await saveWorldInfo(name, fresh, true);
                     saveSettingsDebounced();
                     statusText(host, `已更新「${name}」中的条目：${entry.comment || uid}`);
