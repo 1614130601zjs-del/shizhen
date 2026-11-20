@@ -279,9 +279,14 @@ export function initWorldbookModeManager({ root, cfg }) {
         try { await applyMode(cfg, message => statusText(panel, message)); }
         catch (error) { statusText(panel, error?.message || String(error)); }
     });
-    mode.addEventListener('change', () => {
-        settingsOf(cfg).mode = mode.value;
+    mode.addEventListener('change', async () => {
+        const m = settingsOf(cfg);
+        m.mode = mode.value;
         saveSettingsDebounced();
+        if (m.enabled) {
+            try { await applyMode(cfg, message => statusText(panel, message)); }
+            catch (error) { statusText(panel, error?.message || String(error)); }
+        }
     });
     panel.querySelector('[data-wbm-refresh]').addEventListener('click', async () => {
         const button = panel.querySelector('[data-wbm-refresh]');
