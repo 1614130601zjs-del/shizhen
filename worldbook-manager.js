@@ -416,7 +416,7 @@ async function renderEntryEditor(host, cfg, getProfile) {
         { mode: 'worldview', label: '世界观特化条目', name: manager.worldviewBook },
     ].filter(item => item.name);
     if (!assigned.length) {
-        target.innerHTML = '<p class="ql-muted">先指定双人、群像和世界观特化世界书，再为当前角色卡绑定具体条目。</p>';
+        target.innerHTML = '<p class="ql-muted">先选择双人/群像模式，并指定对应核心世界书与世界观特化世界书。</p>';
         return;
     }
     target.innerHTML = '<p class="ql-muted">正在读取当前配置的条目…</p>';
