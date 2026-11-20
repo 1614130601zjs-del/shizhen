@@ -187,6 +187,24 @@ async function fetchBook(name) {
     return data;
 }
 
+async function saveWorldInfoChecked(name, data) {
+    // SillyTavern's saveWorldInfo updates its client cache and emits WORLDINFO_UPDATED,
+    // but its internal fetch does not reject non-2xx responses. Verify the file on the server.
+    await saveWorldInfo(name, data, true);
+    const matches = persisted => Object.entries(data.entries || {}).every(([uid, entry]) =>
+        persisted.entries?.[uid] && Boolean(persisted.entries[uid].disable) === Boolean(entry?.disable)
+    );
+    let persisted = await fetchBook(name);
+    if (!matches(persisted)) {
+        // Retry through the same documented endpoint, using the manager's checked POST helper.
+        await post('/api/worldinfo/edit', { name, data });
+        persisted = await fetchBook(name);
+    }
+    if (!matches(persisted)) {
+        throw new Error(`世界书「${name}」的条目状态未能写入酒馆，请检查酒馆保存接口或文件权限后重试。`);
+    }
+}
+
 function selectedBookNames(manager) {
     return [...new Set([manager.coreBook, manager.worldviewBook].filter(Boolean))];
 }
@@ -239,7 +257,7 @@ async function restoreBook(manager, name, preserveManualOverrides = true) {
                 changed = true;
             }
         }
-        if (changed) await saveWorldInfo(name, data, true);
+        if (changed) await saveWorldInfoChecked(name, data, true);
         if (saved) delete manager.originalEntryStates[name];
     }
 }
@@ -262,7 +280,7 @@ async function applyProfileEntryOverrides(manager) {
                 changed = true;
             }
         }
-        if (changed) await saveWorldInfo(name, data, true);
+        if (changed) await saveWorldInfoChecked(name, data, true);
     }
 }
 
@@ -285,7 +303,7 @@ async function applyModeEntryBindings(manager, mode) {
             changed = true;
         }
     }
-    if (changed) await saveWorldInfo(name, data, true);
+    if (changed) await saveWorldInfoChecked(name, data, true);
     saveSettingsDebounced();
 }
 
@@ -312,7 +330,7 @@ async function syncWorldviewEntry(manager, report = () => {}) {
             changed = true;
         }
     }
-    if (changed) await saveWorldInfo(manager.worldviewBook, data, true);
+    if (changed) await saveWorldInfoChecked(manager.worldviewBook, data, true);
     report(`已在「${manager.worldviewBook}」中启用世界观：${manager.worldview}`);
 }
 
@@ -501,7 +519,7 @@ async function renderEntryEditor(host, cfg, getProfile, getActiveProfile = () =>
                         if (!profile.worldviewEntryOverrides[name] || typeof profile.worldviewEntryOverrides[name] !== 'object') profile.worldviewEntryOverrides[name] = {};
                         profile.worldviewEntryOverrides[name][uid] = Boolean(entry.disable);
                     }
-                    if (isActive) await saveWorldInfo(name, fresh, true);
+                    if (isActive) await saveWorldInfoChecked(name, fresh, true);
                     saveSettingsDebounced();
                     statusText(host, isActive ? `已更新「${name}」中的条目：${entry.comment || uid}` : `已保存当前角色卡的世界观条目设置；切换到该配置后再应用。`);
                 } catch (error) {
