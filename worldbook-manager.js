@@ -70,7 +70,7 @@ function settingsOf(cfg) {
     if (!manager.legacyRestoreStates || typeof manager.legacyRestoreStates !== 'object') manager.legacyRestoreStates = {};
     const identity = currentCardIdentity();
     const stored = identity.key ? manager.cardProfiles[identity.key] : null;
-    const profile = stored?.mode === 'independent' ? stored : manager.defaultProfile;
+    const profile = stored?.profileType === 'independent' ? stored : manager.defaultProfile;
     if (!['pair', 'group'].includes(profile.mode)) profile.mode = 'pair';
     if (!profile.coreBooks || typeof profile.coreBooks !== 'object') profile.coreBooks = { pair: '', group: '' };
     if (typeof profile.coreBooks.pair !== 'string') profile.coreBooks.pair = '';
@@ -84,9 +84,9 @@ function settingsOf(cfg) {
         originalGlobalStates: { value: manager.originalGlobalStates, writable: true, configurable: true },
         originalEntryStates: { value: manager.originalEntryStates, writable: true, configurable: true },
         legacyRestoreStates: { value: manager.legacyRestoreStates, writable: true, configurable: true },
-        _profileKey: { value: stored?.mode === 'independent' ? identity.key : '*', writable: true, configurable: true },
+        _profileKey: { value: stored?.profileType === 'independent' ? identity.key : '*', writable: true, configurable: true },
         _profileName: { value: identity.name, writable: true, configurable: true },
-        _profileMode: { value: stored?.mode === 'independent' ? 'independent' : 'inherit', writable: true, configurable: true },
+        _profileMode: { value: stored?.profileType === 'independent' ? 'independent' : 'inherit', writable: true, configurable: true },
     });
     return profile;
 }
@@ -542,9 +542,9 @@ export function initWorldbookModeManager({ root, cfg }) {
         const rootSettings = cfg().worldbookModeManager;
         if (nextMode === 'independent') {
             const existing = rootSettings.cardProfiles[identity.key];
-            if (!existing || existing.mode !== 'independent') {
+            if (!existing || existing.profileType !== 'independent') {
                 const copy = JSON.parse(JSON.stringify(rootSettings.defaultProfile || profileDefaults()));
-                copy.mode = 'independent';
+                copy.profileType = 'independent';
                 rootSettings.cardProfiles[identity.key] = copy;
             }
         } else {
