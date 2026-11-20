@@ -54,7 +54,7 @@ function currentCardIdentity() {
 }
 
 function profileDefaults() {
-    return { mode: 'pair', coreBooks: { pair: '', group: '' }, worldviewBook: '', worldview: '', enabled: false, modeEntryBindings: { pair: {}, group: {} }, worldviewEntryOverrides: {}, entryOverrides: {} };
+    return { mode: 'pair', coreBook: '', coreBooks: { pair: '', group: '' }, worldviewBook: '', worldview: '', enabled: false, modeEntryBindings: { pair: {}, group: {} }, worldviewEntryOverrides: {}, entryOverrides: {} };
 }
 const WORLDVIEW_PREFIX = '世界观｜';
 
@@ -101,6 +101,7 @@ function settingsOf(cfg) {
     if (!profile.coreBooks || typeof profile.coreBooks !== 'object') profile.coreBooks = { pair: '', group: '' };
     if (typeof profile.coreBooks.pair !== 'string') profile.coreBooks.pair = '';
     if (typeof profile.coreBooks.group !== 'string') profile.coreBooks.group = '';
+    if (typeof profile.coreBook !== 'string') profile.coreBook = profile.coreBooks[profile.mode] || '';
     if (typeof profile.worldviewBook !== 'string') profile.worldviewBook = '';
     if (typeof profile.worldview !== 'string') profile.worldview = '';
     if (typeof profile.enabled !== 'boolean') profile.enabled = false;
@@ -183,11 +184,7 @@ async function fetchBook(name) {
 }
 
 function selectedBookNames(manager) {
-    return [...new Set([
-        manager.coreBooks.pair,
-        manager.coreBooks.group,
-        manager.worldviewBook,
-    ].filter(Boolean))];
+    return [...new Set([manager.coreBook, manager.worldviewBook].filter(Boolean))];
 }
 
 function worldviewEntries(data) {
@@ -266,7 +263,7 @@ async function applyProfileEntryOverrides(manager) {
 }
 
 async function applyModeEntryBindings(manager, mode) {
-    const name = manager.coreBooks?.[mode];
+    const name = manager.coreBook;
     if (!name) return;
     const data = await fetchBook(name);
     await rememberEntryStates(manager, name);
@@ -331,33 +328,30 @@ async function applyMode(cfg, report = () => {}) {
     if (!manager.enabled) return restoreAll(cfg, report);
     const books = await fetchBooks();
     const available = new Set(books.map(book => book.name));
-    const pair = manager.coreBooks.pair;
-    const group = manager.coreBooks.group;
+    const core = manager.coreBook;
     const worldview = manager.worldviewBook;
-    if (!pair || !group || !worldview) {
-        throw new Error('请分别指定双人、群像和世界观特化三本世界书后再启用管理。');
+    if (!core || !worldview) {
+        throw new Error('请指定当前模式的核心世界书和世界观特化世界书后再启用管理。');
     }
     if (!manager.worldview) {
         throw new Error('请先从世界观特化世界书中选择一个世界观。');
     }
-    const assignments = [pair, group, worldview].filter(Boolean);
+    const assignments = [core, worldview];
     if (new Set(assignments).size !== assignments.length) {
-        throw new Error('双人、群像和世界观特化必须指定三本不同的世界书');
+        throw new Error('当前模式核心世界书与世界观特化世界书不能重复');
     }
     for (const name of assignments) {
         if (!available.has(name)) throw new Error(`指定的世界书「${name}」不存在，请刷新列表`);
         rememberGlobalState(manager, name);
     }
-    if (worldview) await rememberEntryStates(manager, worldview);
-    const activeCore = manager.mode === 'pair' ? pair : group;
+    await rememberEntryStates(manager, worldview);
     for (const name of assignments) {
-        const desired = name === activeCore || name === worldview;
-        await setGlobalBook(name, desired);
-        if (isGlobalOn(name) !== desired) throw new Error(`世界书「${name}」全局挂载状态同步失败`);
+        await setGlobalBook(name, true);
+        if (!isGlobalOn(name)) throw new Error(`世界书「${name}」全局挂载状态同步失败`);
     }
     await applyModeEntryBindings(manager, manager.mode);
     saveSettingsDebounced();
-    report(`已挂载「${manager.mode === 'pair' ? '双人' : '群像'}」核心世界书${worldview ? '，世界观特化书保持挂载' : ''}。`);
+    report(`已挂载「${manager.mode === 'pair' ? '双人' : '群像'}」核心世界书与世界观特化世界书。`);
 }
 
 function statusText(host, text) {
@@ -418,8 +412,7 @@ async function renderEntryEditor(host, cfg, getProfile) {
     const target = host.querySelector('[data-wbm-entry-editor]');
     if (!target) return;
     const assigned = [
-        { mode: 'pair', label: '双人模式条目绑定', name: manager.coreBooks?.pair },
-        { mode: 'group', label: '群像模式条目绑定', name: manager.coreBooks?.group },
+        { mode: manager.mode, label: manager.mode === 'pair' ? '双人核心条目' : '群像核心条目', name: manager.coreBook },
         { mode: 'worldview', label: '世界观特化条目', name: manager.worldviewBook },
     ].filter(item => item.name);
     if (!assigned.length) {
@@ -508,15 +501,13 @@ async function renderEntryEditor(host, cfg, getProfile) {
 
 function renderBookSelectors(host, cfg, books, getProfile) {
     const manager = getProfile ? getProfile() : settingsOf(cfg);
-    fillSelect(host.querySelector('[data-wbm-pair-book]'), books, manager.coreBooks.pair, '选择双人世界书…');
-    fillSelect(host.querySelector('[data-wbm-group-book]'), books, manager.coreBooks.group, '选择群像世界书…');
+    fillSelect(host.querySelector('[data-wbm-core-book]'), books, manager.coreBook, '选择当前模式核心世界书…');
     fillSelect(host.querySelector('[data-wbm-worldview-book]'), books, manager.worldviewBook, '选择世界观特化世界书…');
-    const selected = [manager.coreBooks.pair, manager.coreBooks.group, manager.worldviewBook].filter(Boolean);
-    const duplicate = new Set(selected).size !== selected.length;
+    const duplicate = Boolean(manager.coreBook && manager.coreBook === manager.worldviewBook);
     const hint = host.querySelector('[data-wbm-assignment-hint]');
     if (hint) hint.textContent = duplicate
-        ? '三种用途必须指定不同的世界书，请调整重复选择。'
-        : '只有这里指定的三本世界书属于拾帧管理范围，列表中的其他世界书不会被修改。';
+        ? '当前模式核心世界书与世界观特化世界书不能重复。'
+        : '当前配置只管理两本书：所选模式的核心世界书 + 世界观特化世界书。';
 }
 
 export function initWorldbookModeManager({ root, cfg }) {
@@ -529,7 +520,7 @@ export function initWorldbookModeManager({ root, cfg }) {
     panel.dataset.wbmRoot = '1';
     panel.innerHTML = `
         <summary>模式管理 · 世界书联动</summary>
-        <p class="ql-muted">拾帧只管理你在下方明确指定的三本世界书。其他酒馆世界书及角色卡/聊天绑定不会被修改。</p>
+        <p class="ql-muted">拾帧只管理当前配置的两本世界书：双人/群像二选一的核心世界书，以及世界观特化世界书。其他世界书不会被修改。</p>
         <div class="ql-card" data-wbm-profile-box>
             <strong data-wbm-profile-title>当前角色设置</strong><label for="ql-wbm-edit-target">配置范围</label><select id="ql-wbm-edit-target" data-wbm-edit-target><option value="current">当前角色设置</option><option value="global">通用设置</option></select>
             <p class="ql-muted">同一角色卡的所有聊天共用一份配置；角色卡身份按头像文件名区分。</p><p class="ql-muted" data-wbm-edit-hint>选择要查看或编辑的配置。</p>
@@ -543,13 +534,11 @@ export function initWorldbookModeManager({ root, cfg }) {
         <label for="ql-wbm-mode">核心构图模式</label>
         <select id="ql-wbm-mode" data-wbm-mode><option value="pair">双人</option><option value="group">群像</option></select>
         <div class="ql-wbm-assignment">
-            <label>双人核心世界书</label>
-            <select data-wbm-pair-book><option value="">先刷新世界书列表…</option></select>
-            <label>群像核心世界书</label>
-            <select data-wbm-group-book><option value="">先刷新世界书列表…</option></select>
+            <label data-wbm-core-book-label>双人核心世界书</label>
+            <select data-wbm-core-book><option value="">先刷新世界书列表…</option></select>
             <label>世界观特化世界书（一书多世界观）</label>
             <select data-wbm-worldview-book><option value="">先刷新世界书列表…</option></select>
-            <p class="ql-muted" data-wbm-assignment-hint>请选择三本不同的世界书。</p>
+            <p class="ql-muted" data-wbm-assignment-hint>请选择两本不同的世界书。</p>
         </div>
         <label>当前世界观（从特化世界书的条目名称读取）</label>
         <select data-wbm-worldview disabled><option value="">先指定世界观特化世界书</option></select>
@@ -568,8 +557,8 @@ export function initWorldbookModeManager({ root, cfg }) {
     const manager = settingsOf(cfg);
     const enabled = panel.querySelector('[data-wbm-enabled]');
     const mode = panel.querySelector('[data-wbm-mode]');
-    const pairSelect = panel.querySelector('[data-wbm-pair-book]');
-    const groupSelect = panel.querySelector('[data-wbm-group-book]');
+    const coreBookSelect = panel.querySelector('[data-wbm-core-book]');
+    const coreBookLabel = panel.querySelector('[data-wbm-core-book-label]');
     const worldviewBookSelect = panel.querySelector('[data-wbm-worldview-book]');
     const worldviewSelect = panel.querySelector('[data-wbm-worldview]');
     enabled.checked = manager.enabled;
@@ -622,6 +611,7 @@ export function initWorldbookModeManager({ root, cfg }) {
         const inherited = isCurrentTarget && editingProfileRef === rootSettings.defaultProfile;
         if (editHint) editHint.textContent = inherited ? '当前角色卡正在继承通用设置；在这里修改会同步影响所有继承通用设置的角色卡。可切换为独立保存后单独编辑。' : target === 'global' ? '正在编辑通用设置，不会改动角色卡的独立配置。' : '正在编辑当前角色卡的独立设置。';
         const m = editingProfile(); enabled.checked = m.enabled; mode.value = m.mode;
+        if (coreBookLabel) coreBookLabel.textContent = (m.mode === 'pair' ? '双人' : '群像') + '核心世界书';
         renderBookSelectors(panel, cfg, cachedBooks, editingProfile); await refreshAssignedUi();
         const apply = panel.querySelector('[data-wbm-apply]'); if (apply) apply.disabled = editingProfileRef !== activeProfileRef;
     }
@@ -644,6 +634,7 @@ export function initWorldbookModeManager({ root, cfg }) {
         paintProfileControls(next);
         enabled.checked = editingProfile().enabled;
         mode.value = editingProfile().mode;
+        if (coreBookLabel) coreBookLabel.textContent = (editingProfile().mode === 'pair' ? '双人' : '群像') + '核心世界书';
         renderBookSelectors(panel, cfg, cachedBooks, editingProfile);
         await refreshAssignedUi();
         for (const name of selectedBookNames(next)) await rememberEntryStates(next, name);
@@ -721,16 +712,15 @@ export function initWorldbookModeManager({ root, cfg }) {
         const isActive = m === activeProfileRef;
         const before = new Set(selectedBookNames(m));
         const previousWorldviewBook = m.worldviewBook;
-        const previousValue = key === 'pair' || key === 'group' ? m.coreBooks[key] : m.worldviewBook;
-        if (key === 'pair' || key === 'group') m.coreBooks[key] = value;
+        const previousValue = key === 'core' ? m.coreBook : m.worldviewBook;
+        if (key === 'core') m.coreBook = value;
         else m.worldviewBook = value;
-        const rawAssignments = [m.coreBooks.pair, m.coreBooks.group, m.worldviewBook].filter(Boolean);
-        const duplicate = new Set(rawAssignments).size !== rawAssignments.length;
+        const duplicate = Boolean(m.coreBook && m.coreBook === m.worldviewBook);
         if (duplicate) {
-            if (key === 'pair' || key === 'group') m.coreBooks[key] = previousValue;
+            if (key === 'core') m.coreBook = previousValue;
             else m.worldviewBook = previousValue;
             renderBookSelectors(panel, cfg, cachedBooks, editingProfile);
-            statusText(panel, '双人、群像和世界观特化必须指定三本不同的世界书。');
+            statusText(panel, '当前模式核心世界书与世界观特化世界书不能重复。');
             return;
         }
         const after = new Set(selectedBookNames(m));
@@ -759,7 +749,7 @@ export function initWorldbookModeManager({ root, cfg }) {
             cachedBooks = await fetchBooks();
             renderBookSelectors(panel, cfg, cachedBooks, editingProfile);
             await refreshAssignedUi();
-            statusText(panel, `已读取 ${cachedBooks.length} 本世界书。只有上方指定的三本会由拾帧管理。`);
+            statusText(panel, `已读取 ${cachedBooks.length} 本世界书。当前配置只会管理所选模式核心书与世界观特化书。`);
         } catch (error) {
             statusText(panel, error?.message || String(error));
         } finally {
@@ -767,8 +757,7 @@ export function initWorldbookModeManager({ root, cfg }) {
         }
     });
 
-    pairSelect.addEventListener('change', () => updateAssignment('pair', pairSelect.value).catch(error => statusText(panel, error?.message || String(error))));
-    groupSelect.addEventListener('change', () => updateAssignment('group', groupSelect.value).catch(error => statusText(panel, error?.message || String(error))));
+    coreBookSelect.addEventListener('change', () => updateAssignment('core', coreBookSelect.value).catch(error => statusText(panel, error?.message || String(error))));
     worldviewBookSelect.addEventListener('change', () => updateAssignment('worldview', worldviewBookSelect.value).catch(error => statusText(panel, error?.message || String(error))));
 
     worldviewSelect.addEventListener('change', async () => {
@@ -806,7 +795,10 @@ export function initWorldbookModeManager({ root, cfg }) {
     mode.addEventListener('change', async () => {
         const m = editingProfile();
         m.mode = mode.value;
+        if (coreBookLabel) coreBookLabel.textContent = (m.mode === 'pair' ? '双人' : '群像') + '核心世界书';
         saveSettingsDebounced();
+        renderBookSelectors(panel, cfg, cachedBooks, editingProfile);
+        await refreshAssignedUi();
         if (m.enabled && m === activeProfileRef) {
             try { await applyMode(cfg, message => statusText(panel, message)); }
             catch (error) { statusText(panel, error?.message || String(error)); }
@@ -828,8 +820,8 @@ export function initWorldbookModeManager({ root, cfg }) {
     });
 
     // 初始化时只读取已分配的书籍，并恢复当前配置明确保存的条目状态。
-    if (manager.coreBooks.pair || manager.coreBooks.group || manager.worldviewBook) {
-        statusText(panel, '已载入上次保存的授权范围。点击刷新列表以检查世界书是否仍存在。');
+    if (manager.coreBook || manager.worldviewBook) {
+        statusText(panel, '已载入上次保存的两本世界书配置。点击刷新列表以检查世界书是否仍存在。');
     }
     if (manager.legacyRestoreStates && Object.keys(manager.legacyRestoreStates).length) {
         (async () => {
