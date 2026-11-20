@@ -33,7 +33,11 @@ function settingsOf(cfg) {
     }
     const s = root.worldbookModeManager;
     if (s.schemaVersion !== SCHEMA_VERSION) {
-        // 不把旧版“任意分类关联”自动升级成新授权，避免意外接管旧世界书。
+        // 不把旧版“任意分类关联”自动升级成新授权；先记下旧版接管前的全局状态，初始化时恢复。
+        const legacyStates = s.originalGlobalStates && typeof s.originalGlobalStates === 'object'
+            ? { ...s.originalGlobalStates }
+            : {};
+        s.legacyRestoreStates = { ...(s.legacyRestoreStates || {}), ...legacyStates };
         s.enabled = false;
         s.coreBooks = { pair: '', group: '' };
         s.worldviewBook = '';
@@ -41,6 +45,7 @@ function settingsOf(cfg) {
         s.originalGlobalStates = {};
         s.originalEntryStates = {};
         s.schemaVersion = SCHEMA_VERSION;
+        saveSettingsDebounced();
     }
     if (!['pair', 'group'].includes(s.mode)) s.mode = 'pair';
     if (!s.coreBooks || typeof s.coreBooks !== 'object') s.coreBooks = { pair: '', group: '' };
@@ -213,6 +218,9 @@ async function applyMode(cfg, report = () => {}) {
     const pair = manager.coreBooks.pair;
     const group = manager.coreBooks.group;
     const worldview = manager.worldviewBook;
+    if (!pair || !group || !worldview) {
+        throw new Error('请分别指定双人、群像和世界观特化三本世界书后再启用管理。');
+    }
     const assignments = [pair, group, worldview].filter(Boolean);
     if (new Set(assignments).size !== assignments.length) {
         throw new Error('双人、群像和世界观特化必须指定三本不同的世界书');
@@ -513,5 +521,16 @@ export function initWorldbookModeManager({ root, cfg }) {
     // 初始化时只显示当前保存的选择；不自动扫描或修改酒馆世界书。
     if (manager.coreBooks.pair || manager.coreBooks.group || manager.worldviewBook) {
         statusText(panel, '已载入上次保存的授权范围。点击刷新列表以检查世界书是否仍存在。');
+    }
+    if (manager.legacyRestoreStates && Object.keys(manager.legacyRestoreStates).length) {
+        (async () => {
+            const available = new Set((await fetchBooks()).map(book => book.name));
+            for (const [name, original] of Object.entries(manager.legacyRestoreStates)) {
+                if (available.has(name)) await setGlobalBook(name, Boolean(original));
+            }
+            manager.legacyRestoreStates = {};
+            saveSettingsDebounced();
+            statusText(panel, '已退出旧版宽泛管理，并恢复旧版接管前的全局世界书状态。请重新指定三本授权世界书。');
+        })().catch(error => statusText(panel, `旧版世界书状态恢复失败：${error?.message || String(error)}`));
     }
 }
