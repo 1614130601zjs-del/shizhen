@@ -360,8 +360,9 @@ async function applyMode(cfg, report = () => {}) {
         await setGlobalBook(name, true);
         if (!isGlobalOn(name)) throw new Error(`世界书「${name}」全局挂载状态同步失败`);
     }
-    await applyModeEntryBindings(manager, manager.mode);
+    // 先恢复当前配置保存的世界观书手动状态，再让当前模式核心绑定拥有最终优先级。
     await applyProfileEntryOverrides(manager);
+    await applyModeEntryBindings(manager, manager.mode);
     manager.appliedBookNames = [...assignments];
     saveSettingsDebounced();
     report(`已挂载「${manager.mode === 'pair' ? '双人' : '群像'}」核心世界书与世界观特化世界书。`);
@@ -633,6 +634,7 @@ export function initWorldbookModeManager({ root, cfg }) {
     async function leaveActiveProfile() {
         if (!activeProfileRef) return;
         const names = new Set([
+            ...(activeProfileRef.appliedBookNames || []),
             ...Object.keys(activeProfileRef.originalGlobalStates || {}),
             ...Object.keys(activeProfileRef.originalEntryStates || {}),
         ]);
