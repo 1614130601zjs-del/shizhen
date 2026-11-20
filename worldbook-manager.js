@@ -404,23 +404,35 @@ export function initWorldbookModeManager({ root, cfg }) {
     async function updateAssignment(key, value) {
         const m = settingsOf(cfg);
         const before = new Set(selectedBookNames(m));
+        const previousWorldviewBook = m.worldviewBook;
+        const previousValue = key === 'pair' || key === 'group' ? m.coreBooks[key] : m.worldviewBook;
         if (key === 'pair' || key === 'group') m.coreBooks[key] = value;
         else m.worldviewBook = value;
+        const rawAssignments = [m.coreBooks.pair, m.coreBooks.group, m.worldviewBook].filter(Boolean);
+        const duplicate = new Set(rawAssignments).size !== rawAssignments.length;
+        if (duplicate) {
+            if (key === 'pair' || key === 'group') m.coreBooks[key] = previousValue;
+            else m.worldviewBook = previousValue;
+            renderBookSelectors(panel, cfg, cachedBooks);
+            statusText(panel, '双人、群像和世界观特化必须指定三本不同的世界书。');
+            return;
+        }
         const after = new Set(selectedBookNames(m));
         for (const oldName of before) {
             if (!after.has(oldName)) await restoreBook(m, oldName);
         }
-        if (m.worldviewBook && m.worldviewBook !== manager.worldviewBook) m.worldview = '';
+        if (m.worldviewBook !== previousWorldviewBook) m.worldview = '';
         if (m.enabled) {
             for (const name of after) rememberGlobalState(m, name);
             if (m.worldviewBook) await rememberEntryStates(m, m.worldviewBook);
         }
         saveSettingsDebounced();
-        const duplicate = [...after].length !== selectedBookNames(m).length;
-        if (duplicate) statusText(panel, '双人、群像和世界观特化必须是三本不同的世界书。');
         renderBookSelectors(panel, cfg, cachedBooks);
         await refreshAssignedUi();
-        if (m.enabled && !duplicate) await applyMode(cfg, message => statusText(panel, message));
+        if (m.enabled) {
+            if (m.worldviewBook && m.worldview) await syncWorldviewEntry(m, message => statusText(panel, message));
+            await applyMode(cfg, message => statusText(panel, message));
+        }
     }
 
     let cachedBooks = [];
@@ -467,8 +479,12 @@ export function initWorldbookModeManager({ root, cfg }) {
             if (m.worldviewBook) await rememberEntryStates(m, m.worldviewBook);
         }
         saveSettingsDebounced();
-        try { await applyMode(cfg, message => statusText(panel, message)); }
-        catch (error) { statusText(panel, error?.message || String(error)); }
+        try {
+            if (m.enabled && m.worldviewBook && m.worldview) {
+                await syncWorldviewEntry(m, message => statusText(panel, message));
+            }
+            await applyMode(cfg, message => statusText(panel, message));
+        } catch (error) { statusText(panel, error?.message || String(error)); }
     });
 
     mode.addEventListener('change', async () => {
