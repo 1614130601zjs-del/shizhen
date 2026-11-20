@@ -187,14 +187,16 @@ async function rememberEntryStates(manager, name) {
     );
 }
 
-async function restoreBook(manager, name) {
+async function restoreBook(manager, name, preserveManualOverrides = true) {
     if (!name) return;
     if (Object.prototype.hasOwnProperty.call(manager.originalGlobalStates, name)) {
         await setGlobalBook(name, Boolean(manager.originalGlobalStates[name]));
         delete manager.originalGlobalStates[name];
     }
     const saved = manager.originalEntryStates[name];
-    const overrides = { ...(manager.entryOverrides[name] || {}), ...(manager.worldviewEntryOverrides[name] || {}) };
+    const overrides = preserveManualOverrides
+        ? { ...(manager.entryOverrides[name] || {}), ...(manager.worldviewEntryOverrides[name] || {}) }
+        : {};
     if (saved || Object.keys(overrides).length) {
         const data = await fetchBook(name);
         let changed = false;
@@ -513,7 +515,7 @@ export function initWorldbookModeManager({ root, cfg }) {
             ...Object.keys(activeProfileRef.originalGlobalStates || {}),
             ...Object.keys(activeProfileRef.originalEntryStates || {}),
         ]);
-        for (const name of names) await restoreBook(activeProfileRef, name);
+        for (const name of names) await restoreBook(activeProfileRef, name, false);
         saveSettingsDebounced();
     }
 
@@ -686,7 +688,7 @@ export function initWorldbookModeManager({ root, cfg }) {
         }
     });
 
-    // 初始化时只显示当前保存的选择；不自动扫描或修改酒馆世界书。
+    // 初始化时只读取已分配的书籍，并恢复当前配置明确保存的条目状态。
     if (manager.coreBooks.pair || manager.coreBooks.group || manager.worldviewBook) {
         statusText(panel, '已载入上次保存的授权范围。点击刷新列表以检查世界书是否仍存在。');
     }
@@ -701,4 +703,6 @@ export function initWorldbookModeManager({ root, cfg }) {
             statusText(panel, '已退出旧版宽泛管理，并恢复旧版接管前的全局世界书状态。请重新指定三本授权世界书。');
         })().catch(error => statusText(panel, `旧版世界书状态恢复失败：${error?.message || String(error)}`));
     }
+    // 页面载入时按当前角色卡恢复其条目覆盖；只作用于已明确分配的三本书。
+    enterCurrentProfile().catch(error => statusText(panel, `载入当前角色卡配置失败：${error?.message || String(error)}`));
 }
