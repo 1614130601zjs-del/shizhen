@@ -385,6 +385,9 @@ async function renderWorldviewChoices(host, cfg, getProfile) {
 
 async function renderEntryEditor(host, cfg, getProfile) {
     const manager = getProfile ? getProfile() : settingsOf(cfg);
+    // 编辑目标可能是当前未激活的通用/角色配置；它不会经过 settingsOf()，因此在此补齐条目覆盖存储。
+    if (!manager.entryOverrides || typeof manager.entryOverrides !== 'object') manager.entryOverrides = {};
+    if (!manager.worldviewEntryOverrides || typeof manager.worldviewEntryOverrides !== 'object') manager.worldviewEntryOverrides = {};
     const target = host.querySelector('[data-wbm-entry-editor]');
     if (!target) return;
     const names = selectedBookNames(manager);
