@@ -405,7 +405,10 @@ async function renderEntryEditor(host, cfg, getProfile) {
                 <div class="ql-wbm-entry-list">${entries.map(([uid, entry]) => {
                     const title = entry?.comment || (Array.isArray(entry?.key) ? entry.key.join('、') : '') || `UID ${uid}`;
                     const worldviewTag = String(entry?.comment || '').startsWith(WORLDVIEW_PREFIX) ? ' <span class="ql-muted">（世界观）</span>' : '';
-                    return `<label class="ql-check"><input type="checkbox" data-wbm-entry-toggle data-wbm-entry-book-name="${escapeAttr(name)}" data-wbm-entry-uid="${escapeAttr(uid)}" ${entry?.disable ? '' : 'checked'}> ${escapeHtml(title)}${worldviewTag}</label>`;
+                    const worldviewOverride = manager.worldviewEntryOverrides?.[name]?.[uid];
+                    const entryOverride = manager.entryOverrides?.[name]?.[uid];
+                    const isEnabled = typeof worldviewOverride === 'boolean' ? !worldviewOverride : typeof entryOverride === 'boolean' ? !entryOverride : !entry?.disable;
+                    return `<label class="ql-check"><input type="checkbox" data-wbm-entry-toggle data-wbm-entry-book-name="${escapeAttr(name)}" data-wbm-entry-uid="${escapeAttr(uid)}" ${isEnabled ? 'checked' : ''}> ${escapeHtml(title)}${worldviewTag}</label>`;
                 }).join('')}</div>
             </details>`);
         }
@@ -434,7 +437,7 @@ async function renderEntryEditor(host, cfg, getProfile) {
                     }
                     if (isActive) await saveWorldInfo(name, fresh, true);
                     saveSettingsDebounced();
-                    statusText(host, `已更新「${name}」中的条目：${entry.comment || uid}`);
+                    statusText(host, isActive ? `已更新「${name}」中的条目：${entry.comment || uid}` : `已保存「${name}」中的条目设置；当前配置未生效，切换到该配置后再应用。`);
                 } catch (error) {
                     toggle.checked = !toggle.checked;
                     statusText(host, error?.message || String(error));
