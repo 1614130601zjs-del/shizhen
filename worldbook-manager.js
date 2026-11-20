@@ -416,8 +416,9 @@ async function renderEntryEditor(host, cfg, getProfile) {
                 try {
                     const name = toggle.dataset.wbmEntryBookName;
                     const uid = toggle.dataset.wbmEntryUid;
-                    const manager = settingsOf(cfg);
-                    await rememberEntryStates(manager, name);
+                    const manager = getProfile ? getProfile() : settingsOf(cfg);
+                    const isActive = manager === activeProfileRef;
+                    if (isActive) await rememberEntryStates(manager, name);
                     const fresh = await fetchBook(name);
                     const entry = fresh.entries?.[uid];
                     if (!entry) throw new Error('条目已不存在，请刷新条目列表');
@@ -431,7 +432,7 @@ async function renderEntryEditor(host, cfg, getProfile) {
                         // 显式记录用户手动开关，避免切换世界观或停用管理器时覆盖该选择。
                         manager.worldviewEntryOverrides[name][uid] = Boolean(entry.disable);
                     }
-                    await saveWorldInfo(name, fresh, true);
+                    if (isActive) await saveWorldInfo(name, fresh, true);
                     saveSettingsDebounced();
                     statusText(host, `已更新「${name}」中的条目：${entry.comment || uid}`);
                 } catch (error) {
