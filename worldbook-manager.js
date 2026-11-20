@@ -351,8 +351,12 @@ async function applyMode(cfg, report = () => {}) {
     }
     // 先卸载上一模式独占的书，并恢复其接管前的全局状态与条目状态。
     const previouslyApplied = new Set(manager.appliedBookNames || []);
-    for (const oldName of previouslyApplied) {
-        if (!assignments.includes(oldName)) await restoreBook(manager, oldName);
+    // 兼容旧版：旧版本可能已经挂载过另一模式核心书，但没有 appliedBookNames 记录。
+    const knownModeBooks = new Set(Object.values(manager.coreBooks || {}).filter(Boolean));
+    for (const oldName of new Set([...previouslyApplied, ...knownModeBooks])) {
+        if (!assignments.includes(oldName) && (previouslyApplied.has(oldName) || Object.prototype.hasOwnProperty.call(manager.originalGlobalStates, oldName))) {
+            await restoreBook(manager, oldName);
+        }
     }
     for (const name of assignments) rememberGlobalState(manager, name);
     await rememberEntryStates(manager, worldview);
