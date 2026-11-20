@@ -52,9 +52,28 @@ function settingsOf(cfg) {
 const isGlobalOn = name => Array.isArray(selected_world_info) && selected_world_info.includes(name);
 
 async function refreshGlobalList() {
-    if (!Array.isArray(world_names) || world_names.length === 0) {
-        await updateWorldInfoList();
-    }
+    const $ = window.jQuery;
+    const $wi = $ ? $('#world_info') : null;
+    const hasOptions = Boolean($wi?.length && $wi.find('option[value!=""]').length > 0);
+    const hasNames = Array.isArray(world_names) && world_names.length > 0;
+    if (hasOptions && hasNames) return;
+    await updateWorldInfoList();
+}
+
+function syncNativeWorldInfoSelect(targetName) {
+    const $ = window.jQuery;
+    if (!$) return false;
+    const $wi = $('#world_info');
+    if (!$wi.length || !Array.isArray(world_names) || world_names.length === 0) return false;
+    let targetFound = false;
+    $wi.find('option').each(function () {
+        const optionName = String($(this).text() || '');
+        $(this).prop('selected', selected_world_info.includes(optionName));
+        if (optionName === targetName) targetFound = true;
+    });
+    if (!targetFound) return false;
+    $wi.trigger('change');
+    return true;
 }
 
 async function setGlobalBook(name, on) {
@@ -71,14 +90,17 @@ async function setGlobalBook(name, on) {
         }
     }
 
-    // 与酒馆的全局世界书设置结构同步后再存盘；不触碰角色卡/聊天绑定。
+    // 优先借用酒馆原生多选框 change 通道；找不到对应选项时才走显式设置回写。
+    const usedNativeChannel = syncNativeWorldInfoSelect(name);
     if (!world_info || typeof world_info !== 'object') throw new Error('当前酒馆未提供 world_info 状态对象');
     world_info.globalSelect = [...selected_world_info];
     saveSettingsDebounced();
-    try {
-        await eventSource.emit(event_types.WORLDINFO_SETTINGS_UPDATED);
-    } catch (error) {
-        console.warn(LOG, '世界书状态事件通知失败', error);
+    if (!usedNativeChannel) {
+        try {
+            await eventSource.emit(event_types.WORLDINFO_SETTINGS_UPDATED);
+        } catch (error) {
+            console.warn(LOG, '世界书状态事件通知失败', error);
+        }
     }
     return isGlobalOn(name);
 }
