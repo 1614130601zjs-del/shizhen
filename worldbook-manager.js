@@ -772,7 +772,7 @@ export function initWorldbookModeManager({ root, cfg }) {
                 rememberGlobalState(m, m.worldviewBook);
                 await syncWorldviewEntry(m, message => statusText(panel, message));
             }
-            await renderEntryEditor(panel, cfg, editingProfile);
+            await renderEntryEditor(panel, cfg, editingProfile, () => activeProfileRef);
         } catch (error) {
             statusText(panel, error?.message || String(error));
         }
