@@ -85,7 +85,7 @@ function settingsOf(cfg) {
     }
     if (!manager.defaultProfile || typeof manager.defaultProfile !== 'object') {
         const legacy = profileDefaults();
-        for (const key of ['mode', 'coreBooks', 'worldviewBook', 'worldview', 'enabled', 'worldviewEntryOverrides']) {
+        for (const key of ['mode', 'coreBook', 'coreBooks', 'worldviewBook', 'worldview', 'enabled', 'worldviewEntryOverrides']) {
             if (manager[key] !== undefined) legacy[key] = manager[key];
         }
         manager.defaultProfile = legacy;
@@ -831,9 +831,9 @@ export function initWorldbookModeManager({ root, cfg }) {
             }
             manager.legacyRestoreStates = {};
             saveSettingsDebounced();
-            statusText(panel, '已退出旧版宽泛管理，并恢复旧版接管前的全局世界书状态。请重新指定三本授权世界书。');
+            statusText(panel, '已退出旧版宽泛管理，并恢复旧版接管前的全局世界书状态。请重新指定当前模式核心世界书与世界观特化世界书。');
         })().catch(error => statusText(panel, `旧版世界书状态恢复失败：${error?.message || String(error)}`));
     }
-    // 页面载入时按当前角色卡恢复其条目覆盖；只作用于已明确分配的三本书。
+    // 页面载入时按当前角色卡恢复其条目覆盖；只作用于当前配置明确指定的两本书。
     enterCurrentProfile().catch(error => statusText(panel, `载入当前角色卡配置失败：${error?.message || String(error)}`));
 }
