@@ -10,10 +10,26 @@ import {
     updateWorldInfoList,
     saveWorldInfo,
 } from '/scripts/world-info.js';
-import { eventSource, event_types, getRequestHeaders, saveSettingsDebounced } from '/script.js';
+import { eventSource, event_types, getContext, getRequestHeaders, saveSettingsDebounced } from '/script.js';
 
 const LOG = '[拾帧·世界书管理]';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
+
+function currentCardIdentity() {
+    try {
+        const context = getContext();
+        const id = context?.characterId;
+        if (id == null || Number(id) < 0) return { key: '', name: '通用兜底' };
+        const character = context?.characters?.[Number(id)] || window.characters?.[Number(id)];
+        const avatar = String(character?.avatar || '').trim();
+        if (!avatar) return { key: '', name: String(character?.name || context?.name2 || '当前角色卡') };
+        return { key: avatar, name: String(character?.name || context?.name2 || avatar) };
+    } catch { return { key: '', name: '通用兜底' }; }
+}
+
+function profileDefaults() {
+    return { mode: 'pair', coreBooks: { pair: '', group: '' }, worldviewBook: '', worldview: '', enabled: false, worldviewEntryOverrides: {} };
+}
 const WORLDVIEW_PREFIX = '世界观｜';
 
 const post = async (path, body = {}) => {
@@ -28,40 +44,50 @@ const post = async (path, body = {}) => {
 
 function settingsOf(cfg) {
     const root = cfg();
-    if (!root.worldbookModeManager || typeof root.worldbookModeManager !== 'object') {
-        root.worldbookModeManager = {};
-    }
-    const s = root.worldbookModeManager;
-    if (s.schemaVersion !== SCHEMA_VERSION) {
-        // v1 及更早版本曾允许宽泛接管；升级时先恢复旧版接管前的全局状态。
-        // v2 已采用三本明确授权书籍，升级到 v3 时必须保留用户配置和原始状态快照。
-        const previousVersion = Number(s.schemaVersion) || 0;
+    if (!root.worldbookModeManager || typeof root.worldbookModeManager !== 'object') root.worldbookModeManager = {};
+    const manager = root.worldbookModeManager;
+    if (manager.schemaVersion !== SCHEMA_VERSION) {
+        const previousVersion = Number(manager.schemaVersion) || 0;
         if (previousVersion < 2) {
-            const legacyStates = s.originalGlobalStates && typeof s.originalGlobalStates === 'object'
-                ? { ...s.originalGlobalStates }
-                : {};
-            s.legacyRestoreStates = { ...(s.legacyRestoreStates || {}), ...legacyStates };
-            s.enabled = false;
-            s.coreBooks = { pair: '', group: '' };
-            s.worldviewBook = '';
-            s.worldview = '';
-            s.originalGlobalStates = {};
-            s.originalEntryStates = {};
+            const legacyStates = manager.originalGlobalStates && typeof manager.originalGlobalStates === 'object' ? { ...manager.originalGlobalStates } : {};
+            manager.legacyRestoreStates = { ...(manager.legacyRestoreStates || {}), ...legacyStates };
+            manager.enabled = false; manager.coreBooks = { pair: '', group: '' }; manager.worldviewBook = ''; manager.worldview = '';
+            manager.originalGlobalStates = {}; manager.originalEntryStates = {};
         }
-        s.schemaVersion = SCHEMA_VERSION;
+        manager.schemaVersion = SCHEMA_VERSION;
         saveSettingsDebounced();
     }
-    if (!['pair', 'group'].includes(s.mode)) s.mode = 'pair';
-    if (!s.coreBooks || typeof s.coreBooks !== 'object') s.coreBooks = { pair: '', group: '' };
-    if (typeof s.coreBooks.pair !== 'string') s.coreBooks.pair = '';
-    if (typeof s.coreBooks.group !== 'string') s.coreBooks.group = '';
-    if (typeof s.worldviewBook !== 'string') s.worldviewBook = '';
-    if (typeof s.worldview !== 'string') s.worldview = '';
-    if (typeof s.enabled !== 'boolean') s.enabled = false;
-    if (!s.originalGlobalStates || typeof s.originalGlobalStates !== 'object') s.originalGlobalStates = {};
-    if (!s.originalEntryStates || typeof s.originalEntryStates !== 'object') s.originalEntryStates = {};
-    if (!s.worldviewEntryOverrides || typeof s.worldviewEntryOverrides !== 'object') s.worldviewEntryOverrides = {};
-    return s;
+    if (!manager.defaultProfile || typeof manager.defaultProfile !== 'object') {
+        const legacy = profileDefaults();
+        for (const key of ['mode', 'coreBooks', 'worldviewBook', 'worldview', 'enabled', 'worldviewEntryOverrides']) {
+            if (manager[key] !== undefined) legacy[key] = manager[key];
+        }
+        manager.defaultProfile = legacy;
+    }
+    if (!manager.cardProfiles || typeof manager.cardProfiles !== 'object') manager.cardProfiles = {};
+    if (!manager.originalGlobalStates || typeof manager.originalGlobalStates !== 'object') manager.originalGlobalStates = {};
+    if (!manager.originalEntryStates || typeof manager.originalEntryStates !== 'object') manager.originalEntryStates = {};
+    if (!manager.legacyRestoreStates || typeof manager.legacyRestoreStates !== 'object') manager.legacyRestoreStates = {};
+    const identity = currentCardIdentity();
+    const stored = identity.key ? manager.cardProfiles[identity.key] : null;
+    const profile = stored?.mode === 'independent' ? stored : manager.defaultProfile;
+    if (!['pair', 'group'].includes(profile.mode)) profile.mode = 'pair';
+    if (!profile.coreBooks || typeof profile.coreBooks !== 'object') profile.coreBooks = { pair: '', group: '' };
+    if (typeof profile.coreBooks.pair !== 'string') profile.coreBooks.pair = '';
+    if (typeof profile.coreBooks.group !== 'string') profile.coreBooks.group = '';
+    if (typeof profile.worldviewBook !== 'string') profile.worldviewBook = '';
+    if (typeof profile.worldview !== 'string') profile.worldview = '';
+    if (typeof profile.enabled !== 'boolean') profile.enabled = false;
+    if (!profile.worldviewEntryOverrides || typeof profile.worldviewEntryOverrides !== 'object') profile.worldviewEntryOverrides = {};
+    Object.defineProperties(profile, {
+        originalGlobalStates: { value: manager.originalGlobalStates, writable: true, configurable: true },
+        originalEntryStates: { value: manager.originalEntryStates, writable: true, configurable: true },
+        legacyRestoreStates: { value: manager.legacyRestoreStates, writable: true, configurable: true },
+        _profileKey: { value: stored?.mode === 'independent' ? identity.key : '*', writable: true, configurable: true },
+        _profileName: { value: identity.name, writable: true, configurable: true },
+        _profileMode: { value: stored?.mode === 'independent' ? 'independent' : 'inherit', writable: true, configurable: true },
+    });
+    return profile;
 }
 
 const isGlobalOn = name => Array.isArray(selected_world_info) && selected_world_info.includes(name);
@@ -391,7 +417,14 @@ export function initWorldbookModeManager({ root, cfg }) {
     panel.dataset.wbmRoot = '1';
     panel.innerHTML = `
         <summary>模式管理 · 世界书联动</summary>
-        <p class="ql-muted">拾帧只管理你在下方明确指定的三本世界书：双人、群像、世界观特化。其他酒馆世界书不会被扫描接管、挂载或修改；角色卡/聊天绑定也不会被修改。</p>
+        <p class="ql-muted">拾帧只管理你在下方明确指定的三本世界书。其他酒馆世界书及角色卡/聊天绑定不会被修改。</p>
+        <div class="ql-card" data-wbm-profile-box>
+            <strong data-wbm-profile-title>当前配置：通用兜底</strong>
+            <p class="ql-muted">同一角色卡的所有聊天共用一份配置；角色卡身份按头像文件名区分。</p>
+            <label>当前角色卡配置</label>
+            <select data-wbm-profile-mode><option value="inherit">继承通用兜底</option><option value="independent">独立保存</option></select>
+            <button type="button" class="menu_button" data-wbm-profile-reset>恢复通用设置</button>
+        </div>
         <label class="ql-check"><input type="checkbox" data-wbm-enabled> 启用拾帧世界书管理</label>
         <label for="ql-wbm-mode">核心构图模式</label>
         <select id="ql-wbm-mode" data-wbm-mode><option value="pair">双人</option><option value="group">群像</option></select>
@@ -432,6 +465,91 @@ export function initWorldbookModeManager({ root, cfg }) {
         await renderWorldviewChoices(panel, cfg);
         await renderEntryEditor(panel, cfg);
     };
+    let activeProfileRef = manager;
+    let cachedBooks = [];
+    const profileModeSelect = panel.querySelector('[data-wbm-profile-mode]');
+    const profileTitle = panel.querySelector('[data-wbm-profile-title]');
+    const profileReset = panel.querySelector('[data-wbm-profile-reset]');
+
+    function paintProfileControls(profile = settingsOf(cfg)) {
+        const identity = currentCardIdentity();
+        const hasCard = Boolean(identity.key);
+        if (profileTitle) profileTitle.textContent = hasCard ? `当前角色卡：${identity.name}` : '当前配置：通用兜底（尚未进入角色卡聊天）';
+        if (profileModeSelect) {
+            profileModeSelect.disabled = !hasCard;
+            profileModeSelect.value = profile._profileMode || 'inherit';
+        }
+        if (profileReset) profileReset.disabled = !hasCard || profile._profileMode !== 'independent';
+    }
+
+    async function leaveActiveProfile() {
+        if (!activeProfileRef) return;
+        const names = new Set([
+            ...Object.keys(activeProfileRef.originalGlobalStates || {}),
+            ...Object.keys(activeProfileRef.originalEntryStates || {}),
+        ]);
+        for (const name of names) await restoreBook(activeProfileRef, name);
+        saveSettingsDebounced();
+    }
+
+    async function enterCurrentProfile() {
+        const next = settingsOf(cfg);
+        activeProfileRef = next;
+        paintProfileControls(next);
+        enabled.checked = next.enabled;
+        mode.value = next.mode;
+        renderBookSelectors(panel, cfg, cachedBooks);
+        await refreshAssignedUi();
+        if (next.enabled) {
+            if (next.worldviewBook && next.worldview) await syncWorldviewEntry(next, message => statusText(panel, message));
+            await applyMode(cfg, message => statusText(panel, message));
+        } else {
+            statusText(panel, '已切换配置；当前角色卡使用' + (next._profileMode === 'independent' ? '独立配置。' : '通用兜底设置。'));
+        }
+    }
+
+    async function changeCardProfileMode(nextMode) {
+        const identity = currentCardIdentity();
+        if (!identity.key) throw new Error('请先进入一张角色卡的聊天，再设置角色卡独立配置。');
+        await leaveActiveProfile();
+        const rootSettings = cfg().worldbookModeManager;
+        if (nextMode === 'independent') {
+            const existing = rootSettings.cardProfiles[identity.key];
+            if (!existing || existing.mode !== 'independent') {
+                const copy = JSON.parse(JSON.stringify(rootSettings.defaultProfile || profileDefaults()));
+                copy.mode = 'independent';
+                rootSettings.cardProfiles[identity.key] = copy;
+            }
+        } else {
+            delete rootSettings.cardProfiles[identity.key];
+        }
+        saveSettingsDebounced();
+        await enterCurrentProfile();
+    }
+
+    profileModeSelect?.addEventListener('change', () => {
+        changeCardProfileMode(profileModeSelect.value).catch(error => {
+            paintProfileControls();
+            statusText(panel, error?.message || String(error));
+        });
+    });
+    profileReset?.addEventListener('click', () => {
+        changeCardProfileMode('inherit').catch(error => statusText(panel, error?.message || String(error)));
+    });
+
+    if (event_types.CHARACTER_SELECTED) {
+        eventSource.on(event_types.CHARACTER_SELECTED, async () => {
+            try {
+                const nextIdentity = currentCardIdentity();
+                if ((nextIdentity.key || '*') === (activeProfileRef?._profileKey || '*')) return;
+                await leaveActiveProfile();
+                await enterCurrentProfile();
+            } catch (error) {
+                statusText(panel, `切换角色卡配置失败：${error?.message || String(error)}`);
+            }
+        });
+    }
+    paintProfileControls(manager);
 
     async function updateAssignment(key, value) {
         const m = settingsOf(cfg);
