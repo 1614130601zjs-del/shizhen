@@ -79,6 +79,7 @@ function settingsOf(cfg) {
     if (typeof profile.worldview !== 'string') profile.worldview = '';
     if (typeof profile.enabled !== 'boolean') profile.enabled = false;
     if (!profile.worldviewEntryOverrides || typeof profile.worldviewEntryOverrides !== 'object') profile.worldviewEntryOverrides = {};
+    if (!profile.entryOverrides || typeof profile.entryOverrides !== 'object') profile.entryOverrides = {};
     Object.defineProperties(profile, {
         originalGlobalStates: { value: manager.originalGlobalStates, writable: true, configurable: true },
         originalEntryStates: { value: manager.originalEntryStates, writable: true, configurable: true },
@@ -193,7 +194,7 @@ async function restoreBook(manager, name) {
         delete manager.originalGlobalStates[name];
     }
     const saved = manager.originalEntryStates[name];
-    const overrides = manager.worldviewEntryOverrides[name] || {};
+    const overrides = { ...(manager.entryOverrides[name] || {}), ...(manager.worldviewEntryOverrides[name] || {}) };
     if (saved || Object.keys(overrides).length) {
         const data = await fetchBook(name);
         let changed = false;
@@ -209,6 +210,25 @@ async function restoreBook(manager, name) {
         }
         if (changed) await saveWorldInfo(name, data, true);
         if (saved) delete manager.originalEntryStates[name];
+    }
+}
+
+async function applyProfileEntryOverrides(manager) {
+    const overridesByBook = manager.entryOverrides || {};
+    for (const [name, overrides] of Object.entries(overridesByBook)) {
+        if (!selectedBookNames(manager).includes(name) || !overrides || typeof overrides !== 'object') continue;
+        await rememberEntryStates(manager, name);
+        const data = await fetchBook(name);
+        let changed = false;
+        for (const [uid, disabled] of Object.entries(overrides)) {
+            const entry = data.entries?.[uid];
+            if (!entry) continue;
+            if (Boolean(entry.disable) !== Boolean(disabled)) {
+                entry.disable = Boolean(disabled);
+                changed = true;
+            }
+        }
+        if (changed) await saveWorldInfo(name, data, true);
     }
 }
 
@@ -366,11 +386,13 @@ async function renderEntryEditor(host, cfg) {
                     const name = toggle.dataset.wbmEntryBookName;
                     const uid = toggle.dataset.wbmEntryUid;
                     const manager = settingsOf(cfg);
-                    if (name === manager.worldviewBook) await rememberEntryStates(manager, name);
+                    await rememberEntryStates(manager, name);
                     const fresh = await fetchBook(name);
                     const entry = fresh.entries?.[uid];
                     if (!entry) throw new Error('条目已不存在，请刷新条目列表');
                     entry.disable = !toggle.checked;
+                    if (!manager.entryOverrides[name] || typeof manager.entryOverrides[name] !== 'object') manager.entryOverrides[name] = {};
+                    manager.entryOverrides[name][uid] = Boolean(entry.disable);
                     if (name === manager.worldviewBook && String(entry.comment || '').startsWith(WORLDVIEW_PREFIX)) {
                         if (!manager.worldviewEntryOverrides[name] || typeof manager.worldviewEntryOverrides[name] !== 'object') {
                             manager.worldviewEntryOverrides[name] = {};
@@ -500,6 +522,8 @@ export function initWorldbookModeManager({ root, cfg }) {
         mode.value = next.mode;
         renderBookSelectors(panel, cfg, cachedBooks);
         await refreshAssignedUi();
+        for (const name of selectedBookNames(next)) await rememberEntryStates(next, name);
+        await applyProfileEntryOverrides(next);
         if (next.enabled) {
             if (next.worldviewBook && next.worldview) await syncWorldviewEntry(next, message => statusText(panel, message));
             await applyMode(cfg, message => statusText(panel, message));
