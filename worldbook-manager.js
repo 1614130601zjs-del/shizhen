@@ -116,7 +116,9 @@ function shouldBeOn(manager, name) {
 
 async function restoreManagedStates(cfg, report = () => {}) {
     const manager = settingsOf(cfg);
+    const available = new Set((await fetchBooks()).map(book => book.name));
     for (const [name, original] of Object.entries(manager.originalGlobalStates)) {
+        if (!available.has(name)) continue;
         const actual = await setGlobalBook(name, Boolean(original));
         if (actual !== Boolean(original)) throw new Error(`世界书「${name}」未能恢复原始状态`);
     }
@@ -126,8 +128,10 @@ async function restoreManagedStates(cfg, report = () => {}) {
 async function applyMode(cfg, report = () => {}) {
     const manager = settingsOf(cfg);
     if (!manager.enabled) return restoreManagedStates(cfg, report);
+    const available = new Set((await fetchBooks()).map(book => book.name));
     const names = managedNames(manager);
     for (const name of names) {
+        if (!available.has(name)) throw new Error(`关联的世界书「${name}」已不存在，请刷新并移除失效关联`);
         const desired = shouldBeOn(manager, name);
         const actual = await setGlobalBook(name, desired);
         if (actual !== desired) throw new Error(`世界书「${name}」状态同步失败`);
@@ -310,6 +314,7 @@ export function initWorldbookModeManager({ root, cfg }) {
         const button = panel.querySelector('[data-wbm-apply]');
         button.disabled = true;
         try {
+            if (!settingsOf(cfg).enabled) throw new Error('请先开启「启用模式管理」');
             await applyMode(cfg, message => statusText(panel, message));
         } catch (error) {
             statusText(panel, error?.message || String(error));
