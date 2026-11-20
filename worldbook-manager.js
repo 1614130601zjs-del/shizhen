@@ -263,13 +263,17 @@ export function initWorldbookModeManager({ root, cfg }) {
     mode.value = manager.mode;
     panel.querySelectorAll('[data-wbm-supplement]').forEach(input => {
         input.checked = manager.supplements.includes(input.dataset.wbmSupplement);
-        input.addEventListener('change', () => {
+        input.addEventListener('change', async () => {
             const m = settingsOf(cfg);
             const set = new Set(m.supplements);
             if (input.checked) set.add(input.dataset.wbmSupplement);
             else set.delete(input.dataset.wbmSupplement);
             m.supplements = [...set];
             saveSettingsDebounced();
+            if (m.enabled) {
+                try { await applyMode(cfg, message => statusText(panel, message)); }
+                catch (error) { statusText(panel, error?.message || String(error)); }
+            }
         });
     });
     enabled.addEventListener('change', async () => {
