@@ -717,10 +717,20 @@ export function initWorldbookModeManager({ root, cfg }) {
     if (event_types.CHARACTER_SELECTED) {
         eventSource.on(event_types.CHARACTER_SELECTED, async () => {
             try {
-                // CHARACTER_SELECTED 可能早于酒馆上下文更新；等一帧再读取当前角色身份。
-                await new Promise(resolve => requestAnimationFrame(resolve));
-                const nextIdentity = currentCardIdentity();
-                if ((nextIdentity.key || '*') === (activeProfileRef?._profileKey || '*')) {
+                // CHARACTER_SELECTED 在部分酒馆版本中先于角色上下文更新。
+                // 不只等待一帧：持续检查当前身份，给酒馆最多约 20 帧完成切换。
+                const previousKey = activeProfileRef?._profileKey || '*';
+                let nextIdentity = currentCardIdentity();
+                for (let attempt = 0; attempt < 20 && (nextIdentity.key || '*') === previousKey; attempt++) {
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                    nextIdentity = currentCardIdentity();
+                }
+                if ((nextIdentity.key || '*') === previousKey) {
+                    // 后台标签页可能节流 RAF，再给上下文一次短暂更新机会。
+                    await new Promise(resolve => setTimeout(resolve, 120));
+                    nextIdentity = currentCardIdentity();
+                }
+                if ((nextIdentity.key || '*') === previousKey) {
                     paintProfileControls(settingsOf(cfg));
                     return;
                 }
