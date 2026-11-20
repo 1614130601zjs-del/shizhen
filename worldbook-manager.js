@@ -657,6 +657,12 @@ export function initWorldbookModeManager({ root, cfg }) {
         if ([...editTargetSelect.options].some(option => option.value === keep)) editTargetSelect.value = keep;
     }
 
+    // 标题、独立/继承下拉、恢复按钮、提示文字——只要是反映"当前正在看哪张卡"这件事的
+    // 控件，必须全部在同一个函数里、用同一次 currentCardIdentity() 结果算出来，不能分散在
+    // 两个函数里各算各的：之前 editHint 单独放在 selectEditingTarget 里算，只有手动切换下拉框
+    // 才会更新；切聊天触发 enterCurrentProfile 时只重画了标题，没有重新算 editHint，实测就看到
+    // 标题显示"当前角色卡：碎影江湖"，提示文字却还留着切换前「陈觉斐」那次算出来的旧文字——
+    // 不是真的配置冲突，是两处文字各自过期不同步。现在统一收进这一个函数里，谁调用都保持一致。
     function paintProfileControls() {
         const identity = editingIdentityRef;
         const hasCard = Boolean(identity?.key);
@@ -675,6 +681,14 @@ export function initWorldbookModeManager({ root, cfg }) {
             const currentOption = editTargetSelect.querySelector('option[value="current"]');
             if (currentOption) currentOption.disabled = !currentCardIdentity().key;
         }
+        if (cardControls) cardControls.hidden = !hasCard;
+        if (editHint) editHint.textContent = !hasCard
+            ? '正在编辑通用设置，不会改动角色卡的独立配置。'
+            : inherited
+                ? `「${identity.name}」正在继承通用设置；在这里修改会同步影响所有继承通用设置的角色卡。可切换为独立保存后单独编辑。`
+                : isActiveCard
+                    ? `正在编辑当前角色卡「${identity.name}」的独立设置。`
+                    : `正在编辑角色卡「${identity.name}」的独立设置——这张卡现在没有打开，修改会保存下来，下次切换到它的聊天时才会真正生效。`;
     }
 
     async function selectEditingTarget(target) {
@@ -698,16 +712,6 @@ export function initWorldbookModeManager({ root, cfg }) {
             const stored = rootSettings.cardProfiles?.[identity.key];
             editingProfileRef = stored?.profileType === 'independent' ? stored : rootSettings.defaultProfile;
         }
-        if (cardControls) cardControls.hidden = !identity;
-        const inherited = Boolean(identity) && editingProfileRef === rootSettings.defaultProfile;
-        const isActiveCard = Boolean(identity) && identity.key === currentCardIdentity().key;
-        if (editHint) editHint.textContent = !identity
-            ? '正在编辑通用设置，不会改动角色卡的独立配置。'
-            : inherited
-                ? `「${identity.name}」正在继承通用设置；在这里修改会同步影响所有继承通用设置的角色卡。可切换为独立保存后单独编辑。`
-                : isActiveCard
-                    ? `正在编辑当前角色卡「${identity.name}」的独立设置。`
-                    : `正在编辑角色卡「${identity.name}」的独立设置——这张卡现在没有打开，修改会保存下来，下次切换到它的聊天时才会真正生效。`;
         paintProfileControls();
         const m = editingProfile(); enabled.checked = m.enabled; mode.value = m.mode;
         if (coreBookLabel) coreBookLabel.textContent = (m.mode === 'pair' ? '双人' : '群像') + '核心世界书';
