@@ -187,7 +187,7 @@ function renderBookList(host, cfg, books) {
     }).join('') || '<p class="ql-muted">酒馆中暂时没有可用的世界书。</p>';
 
     list.querySelectorAll('[data-wbm-category]').forEach(input => {
-        input.addEventListener('change', () => {
+        input.addEventListener('change', async () => {
             const name = decodeURIComponent(input.dataset.wbmBook || '');
             const manager = settingsOf(cfg);
             const current = new Set(assignedCategories(manager, name));
@@ -203,12 +203,16 @@ function renderBookList(host, cfg, books) {
                 const original = manager.originalGlobalStates[name];
                 delete manager.originalGlobalStates[name];
                 if (typeof original === 'boolean') {
-                    setGlobalBook(name, original).catch(error => statusText(host, error?.message || String(error)));
+                    try { await setGlobalBook(name, original); }
+                    catch (error) { statusText(host, error?.message || String(error)); }
                 }
             }
             cfg().worldbookModeManager = manager;
-            // 分配本身只保存拾帧设置，不立刻更改酒馆状态；用户点击应用后才执行同步。
             saveSettingsDebounced();
+            if (manager.enabled && current.size) {
+                try { await applyMode(cfg, message => statusText(host, message)); }
+                catch (error) { statusText(host, error?.message || String(error)); }
+            }
         });
     });
 
