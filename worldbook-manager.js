@@ -28,7 +28,7 @@ function currentCardIdentity() {
 }
 
 function profileDefaults() {
-    return { mode: 'pair', coreBooks: { pair: '', group: '' }, worldviewBook: '', worldview: '', enabled: false, worldviewEntryOverrides: {} };
+    return { mode: 'pair', coreBooks: { pair: '', group: '' }, worldviewBook: '', worldview: '', enabled: false, worldviewEntryOverrides: {}, entryOverrides: {} };
 }
 const WORLDVIEW_PREFIX = '世界观｜';
 
