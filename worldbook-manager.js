@@ -10,7 +10,8 @@ import {
     updateWorldInfoList,
     saveWorldInfo,
 } from '/scripts/world-info.js';
-import { eventSource, event_types, getContext, getRequestHeaders, saveSettingsDebounced } from '/script.js';
+import { getContext } from '/scripts/extensions.js';
+import { eventSource, event_types, getRequestHeaders, saveSettingsDebounced } from '/script.js';
 
 const LOG = '[拾帧·世界书管理]';
 const SCHEMA_VERSION = 4;
