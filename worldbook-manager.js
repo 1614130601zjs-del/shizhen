@@ -214,9 +214,12 @@ async function restoreBook(manager, name) {
 }
 
 async function applyProfileEntryOverrides(manager) {
-    const overridesByBook = manager.entryOverrides || {};
-    for (const [name, overrides] of Object.entries(overridesByBook)) {
-        if (!selectedBookNames(manager).includes(name) || !overrides || typeof overrides !== 'object') continue;
+    for (const name of selectedBookNames(manager)) {
+        const overrides = {
+            ...(manager.entryOverrides?.[name] || {}),
+            ...(manager.worldviewEntryOverrides?.[name] || {}),
+        };
+        if (!Object.keys(overrides).length) continue;
         await rememberEntryStates(manager, name);
         const data = await fetchBook(name);
         let changed = false;
