@@ -714,32 +714,39 @@ export function initWorldbookModeManager({ root, cfg }) {
         changeCardProfileMode('inherit').catch(error => statusText(panel, error?.message || String(error)));
     });
 
-    if (event_types.CHARACTER_SELECTED) {
-        eventSource.on(event_types.CHARACTER_SELECTED, async () => {
-            try {
-                // CHARACTER_SELECTED 在部分酒馆版本中先于角色上下文更新。
-                // 不只等待一帧：持续检查当前身份，给酒馆最多约 20 帧完成切换。
-                const previousKey = activeProfileRef?._profileKey || '*';
-                let nextIdentity = currentCardIdentity();
-                for (let attempt = 0; attempt < 20 && (nextIdentity.key || '*') === previousKey; attempt++) {
-                    await new Promise(resolve => requestAnimationFrame(resolve));
-                    nextIdentity = currentCardIdentity();
-                }
-                if ((nextIdentity.key || '*') === previousKey) {
-                    // 后台标签页可能节流 RAF，再给上下文一次短暂更新机会。
-                    await new Promise(resolve => setTimeout(resolve, 120));
-                    nextIdentity = currentCardIdentity();
-                }
-                if ((nextIdentity.key || '*') === previousKey) {
-                    paintProfileControls(settingsOf(cfg));
-                    return;
-                }
-                await leaveActiveProfile();
-                await enterCurrentProfile();
-            } catch (error) {
-                statusText(panel, `切换角色卡配置失败：${error?.message || String(error)}`);
+    // 只监听 CHARACTER_SELECTED 不够：那是"在角色列表里点了一个角色"才会发的事件，
+    // 直接打开某张角色卡已有的聊天（比如从聊天列表里选、或者酒馆启动时恢复上次聊天）
+    // 不一定会触发它。本插件自己另一处同样需要"切换角色卡就刷新"的地方（index.js 的
+    // 词条库/取景区角色列表）是 CHARACTER_SELECTED 和 CHAT_CHANGED 两个事件一起挂的，
+    // 这里只挂了前者，就是"切换角色卡聊天后界面还显示上一张卡"的根因——不是时序 race，
+    // 是这条切换路径压根没有事件触发重新识别。两个事件共用同一套"等上下文刷新完"的重试逻辑。
+    async function handleCardSwitch() {
+        try {
+            // CHARACTER_SELECTED / CHAT_CHANGED 在部分酒馆版本中先于角色上下文更新。
+            // 不只等待一帧：持续检查当前身份，给酒馆最多约 20 帧完成切换。
+            const previousKey = activeProfileRef?._profileKey || '*';
+            let nextIdentity = currentCardIdentity();
+            for (let attempt = 0; attempt < 20 && (nextIdentity.key || '*') === previousKey; attempt++) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                nextIdentity = currentCardIdentity();
             }
-        });
+            if ((nextIdentity.key || '*') === previousKey) {
+                // 后台标签页可能节流 RAF，再给上下文一次短暂更新机会。
+                await new Promise(resolve => setTimeout(resolve, 120));
+                nextIdentity = currentCardIdentity();
+            }
+            if ((nextIdentity.key || '*') === previousKey) {
+                paintProfileControls(settingsOf(cfg));
+                return;
+            }
+            await leaveActiveProfile();
+            await enterCurrentProfile();
+        } catch (error) {
+            statusText(panel, `切换角色卡配置失败：${error?.message || String(error)}`);
+        }
+    }
+    for (const name of ['CHARACTER_SELECTED', 'CHAT_CHANGED']) {
+        if (event_types[name]) eventSource.on(event_types[name], handleCardSwitch);
     }
 
     // 设置面板可能在角色卡上下文尚未就绪时初始化；用户真正展开面板时重新识别一次。
