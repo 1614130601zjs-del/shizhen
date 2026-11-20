@@ -353,8 +353,8 @@ function escapeHtml(value) {
 }
 function escapeAttr(value) { return escapeHtml(value); }
 
-async function renderWorldviewChoices(host, cfg) {
-    const manager = settingsOf(cfg);
+async function renderWorldviewChoices(host, cfg, getProfile) {
+    const manager = getProfile ? getProfile() : settingsOf(cfg);
     const select = host.querySelector('[data-wbm-worldview]');
     if (!select) return;
     if (!manager.worldviewBook) {
@@ -383,8 +383,8 @@ async function renderWorldviewChoices(host, cfg) {
     }
 }
 
-async function renderEntryEditor(host, cfg) {
-    const manager = settingsOf(cfg);
+async function renderEntryEditor(host, cfg, getProfile) {
+    const manager = getProfile ? getProfile() : settingsOf(cfg);
     const target = host.querySelector('[data-wbm-entry-editor]');
     if (!target) return;
     const names = selectedBookNames(manager);
@@ -447,8 +447,8 @@ async function renderEntryEditor(host, cfg) {
     }
 }
 
-function renderBookSelectors(host, cfg, books) {
-    const manager = settingsOf(cfg);
+function renderBookSelectors(host, cfg, books, getProfile) {
+    const manager = getProfile ? getProfile() : settingsOf(cfg);
     fillSelect(host.querySelector('[data-wbm-pair-book]'), books, manager.coreBooks.pair, '选择双人世界书…');
     fillSelect(host.querySelector('[data-wbm-group-book]'), books, manager.coreBooks.group, '选择群像世界书…');
     fillSelect(host.querySelector('[data-wbm-worldview-book]'), books, manager.worldviewBook, '选择世界观特化世界书…');
@@ -472,8 +472,8 @@ export function initWorldbookModeManager({ root, cfg }) {
         <summary>模式管理 · 世界书联动</summary>
         <p class="ql-muted">拾帧只管理你在下方明确指定的三本世界书。其他酒馆世界书及角色卡/聊天绑定不会被修改。</p>
         <div class="ql-card" data-wbm-profile-box>
-            <strong data-wbm-profile-title>当前配置：通用兜底</strong>
-            <p class="ql-muted">同一角色卡的所有聊天共用一份配置；角色卡身份按头像文件名区分。</p>
+            <strong data-wbm-profile-title>当前角色设置</strong><label for="ql-wbm-edit-target">配置范围</label><select id="ql-wbm-edit-target" data-wbm-edit-target><option value="current">当前角色设置</option><option value="global">通用设置</option></select>
+            <p class="ql-muted">同一角色卡的所有聊天共用一份配置；角色卡身份按头像文件名区分。</p><p class="ql-muted" data-wbm-edit-hint>选择要查看或编辑的配置。</p>
             <label>当前角色卡配置</label>
             <select data-wbm-profile-mode><option value="inherit">继承通用兜底</option><option value="independent">独立保存</option></select>
             <button type="button" class="menu_button" data-wbm-profile-reset>恢复通用设置</button>
@@ -515,14 +515,18 @@ export function initWorldbookModeManager({ root, cfg }) {
     mode.value = manager.mode;
 
     const refreshAssignedUi = async () => {
-        await renderWorldviewChoices(panel, cfg);
-        await renderEntryEditor(panel, cfg);
+        await renderWorldviewChoices(panel, cfg, editingProfile);
+        await renderEntryEditor(panel, cfg, editingProfile);
     };
     let activeProfileRef = manager;
+    let editingProfileRef = manager;
     let cachedBooks = [];
+    const editTargetSelect = panel.querySelector("[data-wbm-edit-target]");
+    const editingProfile = () => editingProfileRef || activeProfileRef || settingsOf(cfg);
     const profileModeSelect = panel.querySelector('[data-wbm-profile-mode]');
     const profileTitle = panel.querySelector('[data-wbm-profile-title]');
     const profileReset = panel.querySelector('[data-wbm-profile-reset]');
+    const editHint = panel.querySelector('[data-wbm-edit-hint]');
 
     function paintProfileControls(profile = settingsOf(cfg)) {
         const identity = currentCardIdentity();
@@ -534,6 +538,22 @@ export function initWorldbookModeManager({ root, cfg }) {
         }
         if (profileReset) profileReset.disabled = !hasCard || profile._profileMode !== 'independent';
     }
+
+    async function selectEditingTarget(target) {
+        const identity = currentCardIdentity();
+        const rootSettings = cfg().worldbookModeManager;
+        if (target === 'global' || !identity.key) editingProfileRef = rootSettings.defaultProfile;
+        else {
+            const stored = rootSettings.cardProfiles?.[identity.key];
+            editingProfileRef = stored?.profileType === 'independent' ? stored : rootSettings.defaultProfile;
+        }
+        const inherited = target === 'current' && Boolean(identity.key) && editingProfileRef === rootSettings.defaultProfile;
+        if (editHint) editHint.textContent = inherited ? '当前角色卡正在继承通用设置；在这里修改会同步影响所有继承通用设置的角色卡。可切换为独立保存后单独编辑。' : target === 'global' ? '正在编辑通用设置，不会改动角色卡的独立配置。' : '正在编辑当前角色卡的独立设置。';
+        const m = editingProfile(); enabled.checked = m.enabled; mode.value = m.mode;
+        renderBookSelectors(panel, cfg, cachedBooks, editingProfile); await refreshAssignedUi();
+        const apply = panel.querySelector('[data-wbm-apply]'); if (apply) apply.disabled = editingProfileRef !== activeProfileRef;
+    }
+    editTargetSelect?.addEventListener('change', () => selectEditingTarget(editTargetSelect.value).catch(error => statusText(panel, error?.message || String(error))));
 
     async function leaveActiveProfile() {
         if (!activeProfileRef) return;
@@ -548,10 +568,11 @@ export function initWorldbookModeManager({ root, cfg }) {
     async function enterCurrentProfile() {
         const next = settingsOf(cfg);
         activeProfileRef = next;
+        if (editTargetSelect?.value !== 'global') editingProfileRef = next;
         paintProfileControls(next);
         enabled.checked = next.enabled;
         mode.value = next.mode;
-        renderBookSelectors(panel, cfg, cachedBooks);
+        renderBookSelectors(panel, cfg, cachedBooks, editingProfile);
         await refreshAssignedUi();
         for (const name of selectedBookNames(next)) await rememberEntryStates(next, name);
         await applyProfileEntryOverrides(next);
@@ -621,9 +642,11 @@ export function initWorldbookModeManager({ root, cfg }) {
         }
     });
     paintProfileControls(manager);
+    selectEditingTarget(editTargetSelect?.value || (currentCardIdentity().key ? 'current' : 'global')).catch(error => statusText(panel, error?.message || String(error)));
 
     async function updateAssignment(key, value) {
-        const m = settingsOf(cfg);
+        const m = editingProfile();
+        const isActive = m === activeProfileRef;
         const before = new Set(selectedBookNames(m));
         const previousWorldviewBook = m.worldviewBook;
         const previousValue = key === 'pair' || key === 'group' ? m.coreBooks[key] : m.worldviewBook;
@@ -639,18 +662,18 @@ export function initWorldbookModeManager({ root, cfg }) {
             return;
         }
         const after = new Set(selectedBookNames(m));
-        for (const oldName of before) {
+        if (isActive) for (const oldName of before) {
             if (!after.has(oldName)) await restoreBook(m, oldName);
         }
         if (m.worldviewBook !== previousWorldviewBook) m.worldview = '';
-        if (m.enabled) {
+        if (m.enabled && isActive) {
             for (const name of after) rememberGlobalState(m, name);
             if (m.worldviewBook) await rememberEntryStates(m, m.worldviewBook);
         }
         saveSettingsDebounced();
         renderBookSelectors(panel, cfg, cachedBooks);
         await refreshAssignedUi();
-        if (m.enabled) {
+        if (m.enabled && isActive) {
             if (m.worldviewBook && m.worldview) await syncWorldviewEntry(m, message => statusText(panel, message));
             await applyMode(cfg, message => statusText(panel, message));
         }
@@ -677,11 +700,11 @@ export function initWorldbookModeManager({ root, cfg }) {
     worldviewBookSelect.addEventListener('change', () => updateAssignment('worldview', worldviewBookSelect.value).catch(error => statusText(panel, error?.message || String(error))));
 
     worldviewSelect.addEventListener('change', async () => {
-        const m = settingsOf(cfg);
+        const m = editingProfile();
         m.worldview = worldviewSelect.value;
         saveSettingsDebounced();
         try {
-            if (m.enabled) {
+            if (m.enabled && m === activeProfileRef) {
                 rememberGlobalState(m, m.worldviewBook);
                 await syncWorldviewEntry(m, message => statusText(panel, message));
             }
@@ -692,26 +715,27 @@ export function initWorldbookModeManager({ root, cfg }) {
     });
 
     enabled.addEventListener('change', async () => {
-        const m = settingsOf(cfg);
+        const m = editingProfile();
+        const isActive = m === activeProfileRef;
         m.enabled = enabled.checked;
-        if (m.enabled) {
+        if (m.enabled && isActive) {
             for (const name of selectedBookNames(m)) rememberGlobalState(m, name);
             if (m.worldviewBook) await rememberEntryStates(m, m.worldviewBook);
         }
         saveSettingsDebounced();
         try {
-            if (m.enabled && m.worldviewBook && m.worldview) {
-                await syncWorldviewEntry(m, message => statusText(panel, message));
+            if (isActive) {
+                if (m.enabled && m.worldviewBook && m.worldview) await syncWorldviewEntry(m, message => statusText(panel, message));
+                await applyMode(cfg, message => statusText(panel, message));
             }
-            await applyMode(cfg, message => statusText(panel, message));
         } catch (error) { statusText(panel, error?.message || String(error)); }
     });
 
     mode.addEventListener('change', async () => {
-        const m = settingsOf(cfg);
+        const m = editingProfile();
         m.mode = mode.value;
         saveSettingsDebounced();
-        if (m.enabled) {
+        if (m.enabled && m === activeProfileRef) {
             try { await applyMode(cfg, message => statusText(panel, message)); }
             catch (error) { statusText(panel, error?.message || String(error)); }
         }
@@ -721,7 +745,8 @@ export function initWorldbookModeManager({ root, cfg }) {
         const button = panel.querySelector('[data-wbm-apply]');
         button.disabled = true;
         try {
-            if (!settingsOf(cfg).enabled) throw new Error('请先开启「启用拾帧世界书管理」');
+            if (editingProfile() !== activeProfileRef) throw new Error('当前编辑的是未生效配置；请切换到当前角色设置后再应用。');
+            if (!activeProfileRef.enabled) throw new Error('请先开启「启用拾帧世界书管理」');
             await applyMode(cfg, message => statusText(panel, message));
         } catch (error) {
             statusText(panel, error?.message || String(error));
