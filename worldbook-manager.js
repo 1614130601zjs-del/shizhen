@@ -585,7 +585,6 @@ export function initWorldbookModeManager({ root, cfg }) {
         }
     }
 
-    let cachedBooks = [];
     panel.querySelector('[data-wbm-refresh]').addEventListener('click', async () => {
         const button = panel.querySelector('[data-wbm-refresh]');
         button.disabled = true;
