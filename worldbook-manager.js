@@ -570,8 +570,8 @@ export function initWorldbookModeManager({ root, cfg }) {
         activeProfileRef = next;
         if (editTargetSelect?.value !== 'global') editingProfileRef = next;
         paintProfileControls(next);
-        enabled.checked = next.enabled;
-        mode.value = next.mode;
+        enabled.checked = editingProfile().enabled;
+        mode.value = editingProfile().mode;
         renderBookSelectors(panel, cfg, cachedBooks, editingProfile);
         await refreshAssignedUi();
         for (const name of selectedBookNames(next)) await rememberEntryStates(next, name);
@@ -657,7 +657,7 @@ export function initWorldbookModeManager({ root, cfg }) {
         if (duplicate) {
             if (key === 'pair' || key === 'group') m.coreBooks[key] = previousValue;
             else m.worldviewBook = previousValue;
-            renderBookSelectors(panel, cfg, cachedBooks);
+            renderBookSelectors(panel, cfg, cachedBooks, editingProfile);
             statusText(panel, '双人、群像和世界观特化必须指定三本不同的世界书。');
             return;
         }
@@ -671,7 +671,7 @@ export function initWorldbookModeManager({ root, cfg }) {
             if (m.worldviewBook) await rememberEntryStates(m, m.worldviewBook);
         }
         saveSettingsDebounced();
-        renderBookSelectors(panel, cfg, cachedBooks);
+        renderBookSelectors(panel, cfg, cachedBooks, editingProfile);
         await refreshAssignedUi();
         if (m.enabled && isActive) {
             if (m.worldviewBook && m.worldview) await syncWorldviewEntry(m, message => statusText(panel, message));
@@ -685,7 +685,7 @@ export function initWorldbookModeManager({ root, cfg }) {
         statusText(panel, '正在读取酒馆世界书列表…');
         try {
             cachedBooks = await fetchBooks();
-            renderBookSelectors(panel, cfg, cachedBooks);
+            renderBookSelectors(panel, cfg, cachedBooks, editingProfile);
             await refreshAssignedUi();
             statusText(panel, `已读取 ${cachedBooks.length} 本世界书。只有上方指定的三本会由拾帧管理。`);
         } catch (error) {
@@ -708,7 +708,7 @@ export function initWorldbookModeManager({ root, cfg }) {
                 rememberGlobalState(m, m.worldviewBook);
                 await syncWorldviewEntry(m, message => statusText(panel, message));
             }
-            await renderEntryEditor(panel, cfg);
+            await renderEntryEditor(panel, cfg, editingProfile);
         } catch (error) {
             statusText(panel, error?.message || String(error));
         }
