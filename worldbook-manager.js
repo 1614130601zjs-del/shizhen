@@ -101,7 +101,10 @@ function settingsOf(cfg) {
     if (!profile.coreBooks || typeof profile.coreBooks !== 'object') profile.coreBooks = { pair: '', group: '' };
     if (typeof profile.coreBooks.pair !== 'string') profile.coreBooks.pair = '';
     if (typeof profile.coreBooks.group !== 'string') profile.coreBooks.group = '';
-    if (typeof profile.coreBook !== 'string') profile.coreBook = profile.coreBooks[profile.mode] || '';
+    if (typeof profile.coreBook !== 'string') profile.coreBook = '';
+    // 双人/群像分别保存核心书；切换模式时恢复对应选择，而不是只改界面标签。
+    if (!profile.coreBooks[profile.mode] && profile.coreBook) profile.coreBooks[profile.mode] = profile.coreBook;
+    profile.coreBook = profile.coreBooks[profile.mode] || '';
     if (typeof profile.worldviewBook !== 'string') profile.worldviewBook = '';
     if (typeof profile.worldview !== 'string') profile.worldview = '';
     if (typeof profile.enabled !== 'boolean') profile.enabled = false;
@@ -403,7 +406,7 @@ async function renderWorldviewChoices(host, cfg, getProfile) {
     }
 }
 
-async function renderEntryEditor(host, cfg, getProfile) {
+async function renderEntryEditor(host, cfg, getProfile, getActiveProfile = () => null) {
     const manager = getProfile ? getProfile() : settingsOf(cfg);
     if (!manager.entryOverrides || typeof manager.entryOverrides !== 'object') manager.entryOverrides = {};
     if (!manager.worldviewEntryOverrides || typeof manager.worldviewEntryOverrides !== 'object') manager.worldviewEntryOverrides = {};
@@ -459,7 +462,7 @@ async function renderEntryEditor(host, cfg, getProfile) {
                     const uid = toggle.dataset.wbmEntryUid;
                     const bindingMode = toggle.dataset.wbmEntryMode;
                     const profile = getProfile ? getProfile() : settingsOf(cfg);
-                    const isActive = profile === activeProfileRef;
+                    const isActive = profile === (getActiveProfile?.() || null);
                     if (bindingMode === 'pair' || bindingMode === 'group') {
                         if (!profile.modeEntryBindings || typeof profile.modeEntryBindings !== 'object') profile.modeEntryBindings = { pair: {}, group: {} };
                         if (!profile.modeEntryBindings[bindingMode] || typeof profile.modeEntryBindings[bindingMode] !== 'object') profile.modeEntryBindings[bindingMode] = {};
@@ -566,7 +569,7 @@ export function initWorldbookModeManager({ root, cfg }) {
 
     const refreshAssignedUi = async () => {
         await renderWorldviewChoices(panel, cfg, editingProfile);
-        await renderEntryEditor(panel, cfg, editingProfile);
+        await renderEntryEditor(panel, cfg, editingProfile, () => activeProfileRef);
     };
     let activeProfileRef = manager;
     let editingProfileRef = manager;
@@ -713,7 +716,7 @@ export function initWorldbookModeManager({ root, cfg }) {
         const before = new Set(selectedBookNames(m));
         const previousWorldviewBook = m.worldviewBook;
         const previousValue = key === 'core' ? m.coreBook : m.worldviewBook;
-        if (key === 'core') m.coreBook = value;
+        if (key === 'core') { m.coreBook = value; if (!m.coreBooks || typeof m.coreBooks !== 'object') m.coreBooks = { pair: '', group: '' }; m.coreBooks[m.mode] = value; }
         else m.worldviewBook = value;
         const duplicate = Boolean(m.coreBook && m.coreBook === m.worldviewBook);
         if (duplicate) {
@@ -794,7 +797,10 @@ export function initWorldbookModeManager({ root, cfg }) {
 
     mode.addEventListener('change', async () => {
         const m = editingProfile();
+        if (!m.coreBooks || typeof m.coreBooks !== 'object') m.coreBooks = { pair: '', group: '' };
+        m.coreBooks[m.mode] = m.coreBook || '';
         m.mode = mode.value;
+        m.coreBook = m.coreBooks[m.mode] || '';
         if (coreBookLabel) coreBookLabel.textContent = (m.mode === 'pair' ? '双人' : '群像') + '核心世界书';
         saveSettingsDebounced();
         renderBookSelectors(panel, cfg, cachedBooks, editingProfile);
