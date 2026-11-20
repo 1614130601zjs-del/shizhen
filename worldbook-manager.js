@@ -1,5 +1,6 @@
 /**
- * 拾帧模式管理：唯一允许修改酒馆真实世界书全局开关与条目启用状态的模块。
+ * 拾帧世界书管理器 v2
+ * 唯一允许修改酒馆真实全局世界书挂载状态与条目 disable 状态的模块。
  * 其他功能不得导入本模块，也不得调用这里的写入方法。
  */
 import {
@@ -11,14 +12,9 @@ import {
 } from '/scripts/world-info.js';
 import { eventSource, event_types, getRequestHeaders, saveSettingsDebounced } from '/script.js';
 
-const LOG = '[拾帧·模式管理]';
-const CATEGORIES = [
-    { id: 'pair', label: '双人' },
-    { id: 'group', label: '群像' },
-    { id: 'ancient', label: '古风' },
-    { id: 'cyberpunk', label: '赛博朋克' },
-    { id: 'republic', label: '民国' },
-];
+const LOG = '[拾帧·世界书管理]';
+const SCHEMA_VERSION = 2;
+const WORLDVIEW_PREFIX = '世界观｜';
 
 const post = async (path, body = {}) => {
     const response = await fetch(path, {
@@ -33,19 +29,28 @@ const post = async (path, body = {}) => {
 function settingsOf(cfg) {
     const root = cfg();
     if (!root.worldbookModeManager || typeof root.worldbookModeManager !== 'object') {
-        root.worldbookModeManager = {
-            enabled: false,
-            mode: 'pair',
-            supplements: [],
-            assignments: {},
-            originalGlobalStates: {},
-        };
+        root.worldbookModeManager = {};
     }
     const s = root.worldbookModeManager;
+    if (s.schemaVersion !== SCHEMA_VERSION) {
+        // 不把旧版“任意分类关联”自动升级成新授权，避免意外接管旧世界书。
+        s.enabled = false;
+        s.coreBooks = { pair: '', group: '' };
+        s.worldviewBook = '';
+        s.worldview = '';
+        s.originalGlobalStates = {};
+        s.originalEntryStates = {};
+        s.schemaVersion = SCHEMA_VERSION;
+    }
     if (!['pair', 'group'].includes(s.mode)) s.mode = 'pair';
-    if (!Array.isArray(s.supplements)) s.supplements = [];
-    if (!s.assignments || typeof s.assignments !== 'object' || Array.isArray(s.assignments)) s.assignments = {};
-    if (!s.originalGlobalStates || typeof s.originalGlobalStates !== 'object' || Array.isArray(s.originalGlobalStates)) s.originalGlobalStates = {};
+    if (!s.coreBooks || typeof s.coreBooks !== 'object') s.coreBooks = { pair: '', group: '' };
+    if (typeof s.coreBooks.pair !== 'string') s.coreBooks.pair = '';
+    if (typeof s.coreBooks.group !== 'string') s.coreBooks.group = '';
+    if (typeof s.worldviewBook !== 'string') s.worldviewBook = '';
+    if (typeof s.worldview !== 'string') s.worldview = '';
+    if (typeof s.enabled !== 'boolean') s.enabled = false;
+    if (!s.originalGlobalStates || typeof s.originalGlobalStates !== 'object') s.originalGlobalStates = {};
+    if (!s.originalEntryStates || typeof s.originalEntryStates !== 'object') s.originalEntryStates = {};
     return s;
 }
 
@@ -56,32 +61,27 @@ async function refreshGlobalList() {
     const $wi = $ ? $('#world_info') : null;
     const hasOptions = Boolean($wi?.length && $wi.find('option[value!=""]').length > 0);
     const hasNames = Array.isArray(world_names) && world_names.length > 0;
-    if (hasOptions && hasNames) return;
-    await updateWorldInfoList();
+    if (!hasOptions || !hasNames) await updateWorldInfoList();
 }
 
-function syncNativeWorldInfoSelect(targetName) {
+function syncNativeWorldInfoSelect() {
     const $ = window.jQuery;
     if (!$) return false;
     const $wi = $('#world_info');
     if (!$wi.length || !Array.isArray(world_names) || world_names.length === 0) return false;
-    let targetFound = false;
     $wi.find('option').each(function () {
         const optionName = String($(this).text() || '');
         $(this).prop('selected', selected_world_info.includes(optionName));
-        if (optionName === targetName) targetFound = true;
     });
-    if (!targetFound) return false;
     $wi.trigger('change');
     return true;
 }
 
 async function setGlobalBook(name, on) {
-    if (!name) throw new Error('世界书名称为空');
+    if (!name) return;
     await refreshGlobalList();
     const before = isGlobalOn(name);
-    if (before === Boolean(on)) return before;
-
+    if (before === Boolean(on)) return;
     if (on) {
         if (!selected_world_info.includes(name)) selected_world_info.push(name);
     } else {
@@ -89,20 +89,14 @@ async function setGlobalBook(name, on) {
             if (selected_world_info[i] === name) selected_world_info.splice(i, 1);
         }
     }
-
-    // 优先借用酒馆原生多选框 change 通道；找不到对应选项时才走显式设置回写。
-    const usedNativeChannel = syncNativeWorldInfoSelect(name);
+    const usedNativeChannel = syncNativeWorldInfoSelect();
     if (!world_info || typeof world_info !== 'object') throw new Error('当前酒馆未提供 world_info 状态对象');
     world_info.globalSelect = [...selected_world_info];
     saveSettingsDebounced();
     if (!usedNativeChannel) {
-        try {
-            await eventSource.emit(event_types.WORLDINFO_SETTINGS_UPDATED);
-        } catch (error) {
-            console.warn(LOG, '世界书状态事件通知失败', error);
-        }
+        try { await eventSource.emit(event_types.WORLDINFO_SETTINGS_UPDATED); }
+        catch (error) { console.warn(LOG, '世界书状态事件通知失败', error); }
     }
-    return isGlobalOn(name);
 }
 
 async function fetchBooks() {
@@ -117,48 +111,125 @@ async function fetchBooks() {
 
 async function fetchBook(name) {
     const data = await post('/api/worldinfo/get', { name });
-    if (!data || !data.entries || typeof data.entries !== 'object') throw new Error(`世界书「${name}」没有可识别的条目数据`);
+    if (!data || !data.entries || typeof data.entries !== 'object') {
+        throw new Error(`世界书「${name}」没有可识别的条目数据`);
+    }
     return data;
 }
 
-function assignedCategories(manager, name) {
-    const value = manager.assignments[name];
-    return Array.isArray(value) ? value : [];
+function selectedBookNames(manager) {
+    return [...new Set([
+        manager.coreBooks.pair,
+        manager.coreBooks.group,
+        manager.worldviewBook,
+    ].filter(Boolean))];
 }
 
-function managedNames(manager) {
-    return Object.keys(manager.assignments).filter(name => assignedCategories(manager, name).length > 0);
+function worldviewEntries(data) {
+    return Object.entries(data.entries || {})
+        .filter(([, entry]) => String(entry?.comment || '').startsWith(WORLDVIEW_PREFIX))
+        .map(([uid, entry]) => ({
+            uid,
+            name: String(entry.comment).slice(WORLDVIEW_PREFIX.length).trim(),
+            entry,
+        }))
+        .filter(item => item.name);
 }
 
-function shouldBeOn(manager, name) {
-    const cats = assignedCategories(manager, name);
-    if (cats.includes(manager.mode)) return true;
-    return cats.some(id => CATEGORIES.some(x => x.id === id && id !== 'pair' && id !== 'group') && manager.supplements.includes(id));
-}
-
-async function restoreManagedStates(cfg, report = () => {}) {
-    const manager = settingsOf(cfg);
-    const available = new Set((await fetchBooks()).map(book => book.name));
-    for (const [name, original] of Object.entries(manager.originalGlobalStates)) {
-        if (!available.has(name)) continue;
-        const actual = await setGlobalBook(name, Boolean(original));
-        if (actual !== Boolean(original)) throw new Error(`世界书「${name}」未能恢复原始状态`);
+function rememberGlobalState(manager, name) {
+    if (name && typeof manager.originalGlobalStates[name] !== 'boolean') {
+        manager.originalGlobalStates[name] = isGlobalOn(name);
     }
-    report('已恢复拾帧接管前的全局世界书状态。');
+}
+
+async function rememberEntryStates(manager, name) {
+    if (!name || manager.originalEntryStates[name]) return;
+    const data = await fetchBook(name);
+    manager.originalEntryStates[name] = Object.fromEntries(
+        Object.entries(data.entries).map(([uid, entry]) => [uid, Boolean(entry?.disable)])
+    );
+}
+
+async function restoreBook(manager, name) {
+    if (!name) return;
+    if (Object.prototype.hasOwnProperty.call(manager.originalGlobalStates, name)) {
+        await setGlobalBook(name, Boolean(manager.originalGlobalStates[name]));
+        delete manager.originalGlobalStates[name];
+    }
+    const saved = manager.originalEntryStates[name];
+    if (saved) {
+        const data = await fetchBook(name);
+        let changed = false;
+        for (const [uid, disabled] of Object.entries(saved)) {
+            if (!data.entries[uid]) continue;
+            if (Boolean(data.entries[uid].disable) !== Boolean(disabled)) {
+                data.entries[uid].disable = Boolean(disabled);
+                changed = true;
+            }
+        }
+        if (changed) await saveWorldInfo(name, data, true);
+        delete manager.originalEntryStates[name];
+    }
+}
+
+async function syncWorldviewEntry(manager, report = () => {}) {
+    if (!manager.worldviewBook || !manager.worldview) return;
+    const data = await fetchBook(manager.worldviewBook);
+    await rememberEntryStates(manager, manager.worldviewBook);
+    const matches = worldviewEntries(data);
+    if (!matches.length) {
+        throw new Error(`「${manager.worldviewBook}」中没有 comment 以“${WORLDVIEW_PREFIX}”开头的世界观条目`);
+    }
+    const chosen = matches.find(item => item.name === manager.worldview);
+    if (!chosen) throw new Error(`世界观「${manager.worldview}」已不存在，请重新选择`);
+    let changed = false;
+    for (const item of matches) {
+        const shouldDisable = item.uid !== chosen.uid;
+        if (Boolean(item.entry.disable) !== shouldDisable) {
+            item.entry.disable = shouldDisable;
+            changed = true;
+        }
+    }
+    if (changed) await saveWorldInfo(manager.worldviewBook, data, true);
+    report(`已在「${manager.worldviewBook}」中启用世界观：${manager.worldview}`);
+}
+
+async function restoreAll(cfg, report = () => {}) {
+    const manager = settingsOf(cfg);
+    const names = new Set([
+        ...Object.keys(manager.originalGlobalStates),
+        ...Object.keys(manager.originalEntryStates),
+    ]);
+    for (const name of names) await restoreBook(manager, name);
+    saveSettingsDebounced();
+    report('已恢复拾帧接管前的全局挂载状态与世界观条目状态。');
 }
 
 async function applyMode(cfg, report = () => {}) {
     const manager = settingsOf(cfg);
-    if (!manager.enabled) return restoreManagedStates(cfg, report);
-    const available = new Set((await fetchBooks()).map(book => book.name));
-    const names = managedNames(manager);
-    for (const name of names) {
-        if (!available.has(name)) throw new Error(`关联的世界书「${name}」已不存在，请刷新并移除失效关联`);
-        const desired = shouldBeOn(manager, name);
-        const actual = await setGlobalBook(name, desired);
-        if (actual !== desired) throw new Error(`世界书「${name}」状态同步失败`);
+    if (!manager.enabled) return restoreAll(cfg, report);
+    const books = await fetchBooks();
+    const available = new Set(books.map(book => book.name));
+    const pair = manager.coreBooks.pair;
+    const group = manager.coreBooks.group;
+    const worldview = manager.worldviewBook;
+    const assignments = [pair, group, worldview].filter(Boolean);
+    if (new Set(assignments).size !== assignments.length) {
+        throw new Error('双人、群像和世界观特化必须指定三本不同的世界书');
     }
-    report('已按当前模式同步拾帧管理的全局世界书。');
+    for (const name of assignments) {
+        if (!available.has(name)) throw new Error(`指定的世界书「${name}」不存在，请刷新列表`);
+        rememberGlobalState(manager, name);
+    }
+    if (worldview) await rememberEntryStates(manager, worldview);
+    const activeCore = manager.mode === 'pair' ? pair : group;
+    for (const name of assignments) {
+        const desired = name === activeCore || name === worldview;
+        await setGlobalBook(name, desired);
+        if (isGlobalOn(name) !== desired) throw new Error(`世界书「${name}」全局挂载状态同步失败`);
+    }
+    saveSettingsDebounced();
+    report(`已挂载「${manager.mode === 'pair' ? '双人' : '群像'}」核心世界书${worldview ? '，世界观特化书保持挂载' : ''}。`);
 }
 
 function statusText(host, text) {
@@ -166,175 +237,240 @@ function statusText(host, text) {
     if (el) el.textContent = text;
 }
 
-function renderBookList(host, cfg, books) {
+function fillSelect(select, books, selected, placeholder) {
+    if (!select) return;
+    select.innerHTML = [
+        `<option value="">${placeholder}</option>`,
+        ...books.map(book => `<option value="${escapeAttr(book.name)}">${escapeHtml(book.title)}</option>`),
+    ].join('');
+    select.value = selected || '';
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function escapeAttr(value) { return escapeHtml(value); }
+
+async function renderWorldviewChoices(host, cfg) {
     const manager = settingsOf(cfg);
-    const list = host.querySelector('[data-wbm-books]');
-    if (!list) return;
-    const search = host.querySelector('[data-wbm-search]');
-    const searchButton = host.querySelector('[data-wbm-search-button]');
-    const searchStatus = host.querySelector('[data-wbm-search-status]');
-    const applySearch = () => {
-        const query = String(search?.value || '').trim().toLocaleLowerCase();
-        let shown = 0;
-        list.querySelectorAll('[data-wbm-book-card]').forEach(card => {
-            const matched = !query || String(card.dataset.wbmSearchText || '').toLocaleLowerCase().includes(query);
-            card.hidden = !matched;
-            if (matched) shown++;
-        });
-        if (searchStatus) searchStatus.textContent = query ? `找到 ${shown} 本匹配的世界书（共 ${books.length} 本）` : `共 ${books.length} 本世界书`;
-    };
-    list.innerHTML = books.map(book => {
-        const cats = assignedCategories(manager, book.name);
-        const active = isGlobalOn(book.name);
-        const categoryControls = CATEGORIES.map(cat =>
-            `<label class="ql-check"><input type="checkbox" data-wbm-category="${cat.id}" data-wbm-book="${encodeURIComponent(book.name)}" ${cats.includes(cat.id) ? 'checked' : ''}> ${cat.label}</label>`
+    const select = host.querySelector('[data-wbm-worldview]');
+    if (!select) return;
+    if (!manager.worldviewBook) {
+        select.innerHTML = '<option value="">先指定世界观特化世界书</option>';
+        select.disabled = true;
+        return;
+    }
+    try {
+        const data = await fetchBook(manager.worldviewBook);
+        const options = worldviewEntries(data);
+        select.innerHTML = '<option value="">选择世界观…</option>' + options.map(item =>
+            `<option value="${escapeAttr(item.name)}">${escapeHtml(item.name)}</option>`
         ).join('');
-        return `<details class="ql-card ql-wbm-book" data-wbm-book-card="${encodeURIComponent(book.name)}" data-wbm-search-text="${(book.name + ' ' + book.title).replace(/[&<>"']/g, '')}">
-            <summary>${book.title.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-            <span class="ql-muted"> · ${active ? '全局已启用' : '全局未启用'}</span></summary>
-            <p class="ql-muted">勾选该书参与哪些模式。只有勾选归入拾帧管理的世界书，才会被模式切换控制。</p>
-            <div class="ql-wbm-categories">${categoryControls}</div>
-            <div class="ql-row"><button type="button" class="menu_button" data-wbm-entry-load="${encodeURIComponent(book.name)}">查看 / 调整具体条目</button></div>
-            <div data-wbm-entries hidden></div>
-        </details>`;
-    }).join('') || '<p class="ql-muted">酒馆中暂时没有可用的世界书。</p>';
-
-    if (searchButton) searchButton.onclick = applySearch;
-    if (search) search.onkeydown = event => { if (event.key === 'Enter') applySearch(); };
-    applySearch();
-
-    list.querySelectorAll('[data-wbm-category]').forEach(input => {
-        input.addEventListener('change', async () => {
-            const name = decodeURIComponent(input.dataset.wbmBook || '');
-            const manager = settingsOf(cfg);
-            const current = new Set(assignedCategories(manager, name));
-            if (input.checked) current.add(input.dataset.wbmCategory);
-            else current.delete(input.dataset.wbmCategory);
-
-            if (current.size && !(name in manager.originalGlobalStates)) {
-                manager.originalGlobalStates[name] = isGlobalOn(name);
-            }
-            manager.assignments[name] = [...current];
-            if (!current.size) {
-                delete manager.assignments[name];
-                const original = manager.originalGlobalStates[name];
-                delete manager.originalGlobalStates[name];
-                if (typeof original === 'boolean') {
-                    try { await setGlobalBook(name, original); }
-                    catch (error) { statusText(host, error?.message || String(error)); }
-                }
-            }
-            cfg().worldbookModeManager = manager;
+        select.disabled = !options.length;
+        if (options.some(item => item.name === manager.worldview)) select.value = manager.worldview;
+        else {
+            manager.worldview = options[0]?.name || '';
+            select.value = manager.worldview;
             saveSettingsDebounced();
-            if (manager.enabled && current.size) {
-                try { await applyMode(cfg, message => statusText(host, message)); }
-                catch (error) { statusText(host, error?.message || String(error)); }
-            }
-        });
-    });
+        }
+        if (!options.length) statusText(host, `这本书里没有找到以“${WORLDVIEW_PREFIX}”开头的条目。`);
+    } catch (error) {
+        select.innerHTML = '<option value="">读取世界观条目失败</option>';
+        select.disabled = true;
+        statusText(host, error?.message || String(error));
+    }
+}
 
-    list.querySelectorAll('[data-wbm-entry-load]').forEach(button => {
-        button.addEventListener('click', async () => {
-            const name = decodeURIComponent(button.dataset.wbmEntryLoad || '');
-            const card = button.closest('[data-wbm-book-card]');
-            const target = card?.querySelector('[data-wbm-entries]');
-            if (!target) return;
-            if (!target.hidden) { target.hidden = true; return; }
-            target.hidden = false;
-            target.textContent = '正在读取条目…';
-            try {
-                const data = await fetchBook(name);
-                const entries = Object.entries(data.entries).sort((a, b) => Number(a[1]?.order ?? 100) - Number(b[1]?.order ?? 100));
-                target.innerHTML = entries.map(([uid, entry]) => {
-                    const title = String(entry?.comment || (Array.isArray(entry?.key) ? entry.key.join('、') : '') || `UID ${uid}`);
-                    const safe = title.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-                    return `<label class="ql-check"><input type="checkbox" data-wbm-entry-toggle data-wbm-entry-world="${encodeURIComponent(name)}" data-wbm-entry-uid="${encodeURIComponent(uid)}" ${entry?.disable ? '' : 'checked'}> ${safe}</label>`;
-                }).join('') || '<p class="ql-muted">这本世界书没有条目。</p>';
-                target.querySelectorAll('[data-wbm-entry-toggle]').forEach(toggle => {
-                    toggle.addEventListener('change', async () => {
-                        toggle.disabled = true;
-                        try {
-                            const world = decodeURIComponent(toggle.dataset.wbmEntryWorld || '');
-                            const entryUid = decodeURIComponent(toggle.dataset.wbmEntryUid || '');
-                            const fresh = await fetchBook(world);
-                            const entry = fresh.entries?.[entryUid];
-                            if (!entry) throw new Error('条目已不存在，请刷新列表');
-                            entry.disable = !toggle.checked;
-                            await saveWorldInfo(world, fresh, true);
-                            statusText(host, `已更新「${world}」中的条目：${entry.comment || entryUid}`);
-                        } catch (error) {
-                            toggle.checked = !toggle.checked;
-                            statusText(host, error?.message || String(error));
-                        } finally {
-                            toggle.disabled = false;
-                        }
-                    });
-                });
-            } catch (error) {
-                target.textContent = error?.message || String(error);
-            }
+async function renderEntryEditor(host, cfg) {
+    const manager = settingsOf(cfg);
+    const target = host.querySelector('[data-wbm-entry-editor]');
+    if (!target) return;
+    const names = selectedBookNames(manager);
+    if (!names.length) {
+        target.innerHTML = '<p class="ql-muted">先指定双人、群像或世界观特化世界书，再编辑具体条目。</p>';
+        return;
+    }
+    target.innerHTML = '<p class="ql-muted">正在读取已授权世界书的条目…</p>';
+    try {
+        const chunks = [];
+        for (const name of names) {
+            const data = await fetchBook(name);
+            const entries = Object.entries(data.entries).sort((a, b) =>
+                Number(a[1]?.order ?? 100) - Number(b[1]?.order ?? 100)
+            );
+            chunks.push(`<details class="ql-card" data-wbm-entry-book="${escapeAttr(name)}">
+                <summary>${escapeHtml(name)} <span class="ql-muted">· ${entries.length} 个条目</span></summary>
+                <div class="ql-wbm-entry-list">${entries.map(([uid, entry]) => {
+                    const title = entry?.comment || (Array.isArray(entry?.key) ? entry.key.join('、') : '') || `UID ${uid}`;
+                    const worldviewTag = String(entry?.comment || '').startsWith(WORLDVIEW_PREFIX) ? ' <span class="ql-muted">（世界观）</span>' : '';
+                    return `<label class="ql-check"><input type="checkbox" data-wbm-entry-toggle data-wbm-entry-book-name="${escapeAttr(name)}" data-wbm-entry-uid="${escapeAttr(uid)}" ${entry?.disable ? '' : 'checked'}> ${escapeHtml(title)}${worldviewTag}</label>`;
+                }).join('')}</div>
+            </details>`);
+        }
+        target.innerHTML = chunks.join('');
+        target.querySelectorAll('[data-wbm-entry-toggle]').forEach(toggle => {
+            toggle.addEventListener('change', async () => {
+                toggle.disabled = true;
+                try {
+                    const name = toggle.dataset.wbmEntryBookName;
+                    const uid = toggle.dataset.wbmEntryUid;
+                    const manager = settingsOf(cfg);
+                    if (name === manager.worldviewBook) await rememberEntryStates(manager, name);
+                    const fresh = await fetchBook(name);
+                    const entry = fresh.entries?.[uid];
+                    if (!entry) throw new Error('条目已不存在，请刷新条目列表');
+                    entry.disable = !toggle.checked;
+                    await saveWorldInfo(name, fresh, true);
+                    saveSettingsDebounced();
+                    statusText(host, `已更新「${name}」中的条目：${entry.comment || uid}`);
+                } catch (error) {
+                    toggle.checked = !toggle.checked;
+                    statusText(host, error?.message || String(error));
+                } finally {
+                    toggle.disabled = false;
+                }
+            });
         });
-    });
+    } catch (error) {
+        target.textContent = error?.message || String(error);
+    }
+}
+
+function renderBookSelectors(host, cfg, books) {
+    const manager = settingsOf(cfg);
+    fillSelect(host.querySelector('[data-wbm-pair-book]'), books, manager.coreBooks.pair, '选择双人世界书…');
+    fillSelect(host.querySelector('[data-wbm-group-book]'), books, manager.coreBooks.group, '选择群像世界书…');
+    fillSelect(host.querySelector('[data-wbm-worldview-book]'), books, manager.worldviewBook, '选择世界观特化世界书…');
+    const selected = [manager.coreBooks.pair, manager.coreBooks.group, manager.worldviewBook].filter(Boolean);
+    const duplicate = new Set(selected).size !== selected.length;
+    const hint = host.querySelector('[data-wbm-assignment-hint]');
+    if (hint) hint.textContent = duplicate
+        ? '三种用途必须指定不同的世界书，请调整重复选择。'
+        : '只有这里指定的三本世界书属于拾帧管理范围，列表中的其他世界书不会被修改。';
 }
 
 export function initWorldbookModeManager({ root, cfg }) {
     const settingsPage = root?.querySelector('[data-page-panel="settings"]');
     if (!settingsPage || settingsPage.querySelector('[data-wbm-root]')) return;
+
     const panel = document.createElement('details');
     panel.className = 'ql-card';
     panel.open = false;
     panel.dataset.wbmRoot = '1';
     panel.innerHTML = `
         <summary>模式管理 · 世界书联动</summary>
-        <p class="ql-muted">只管理你在这里明确关联的酒馆全局世界书。不会修改角色卡绑定、聊天绑定，也不会影响小剧场、提示词或其他拾帧功能的开关。</p>
-        <label class="ql-check"><input type="checkbox" data-wbm-enabled> 启用模式管理</label>
-        <label for="ql-wbm-mode">构图大模式</label>
+        <p class="ql-muted">拾帧只管理你在下方明确指定的三本世界书：双人、群像、世界观特化。其他酒馆世界书不会被扫描接管、挂载或修改；角色卡/聊天绑定也不会被修改。</p>
+        <label class="ql-check"><input type="checkbox" data-wbm-enabled> 启用拾帧世界书管理</label>
+        <label for="ql-wbm-mode">核心构图模式</label>
         <select id="ql-wbm-mode" data-wbm-mode><option value="pair">双人</option><option value="group">群像</option></select>
-        <p class="ql-muted">风格补充包（可叠加）</p>
-        <div class="ql-wbm-supplements">
-            <label class="ql-check"><input type="checkbox" data-wbm-supplement="ancient"> 古风</label>
-            <label class="ql-check"><input type="checkbox" data-wbm-supplement="cyberpunk"> 赛博朋克</label>
-            <label class="ql-check"><input type="checkbox" data-wbm-supplement="republic"> 民国</label>
+        <div class="ql-wbm-assignment">
+            <label>双人核心世界书</label>
+            <select data-wbm-pair-book><option value="">先刷新世界书列表…</option></select>
+            <label>群像核心世界书</label>
+            <select data-wbm-group-book><option value="">先刷新世界书列表…</option></select>
+            <label>世界观特化世界书（一书多世界观）</label>
+            <select data-wbm-worldview-book><option value="">先刷新世界书列表…</option></select>
+            <p class="ql-muted" data-wbm-assignment-hint>请选择三本不同的世界书。</p>
         </div>
-        <div class="ql-row"><button type="button" class="menu_button" data-wbm-refresh>刷新酒馆世界书</button><button type="button" class="menu_button ql-primary" data-wbm-apply>应用当前模式</button></div>
-        <p class="ql-muted" data-wbm-status role="status">尚未读取世界书。</p>
-        <p class="ql-muted">世界书关联（可一书多用）：</p>
+        <label>当前世界观（从特化世界书的条目名称读取）</label>
+        <select data-wbm-worldview disabled><option value="">先指定世界观特化世界书</option></select>
         <div class="ql-row">
-            <input type="search" data-wbm-search placeholder="输入世界书名称搜索…" aria-label="搜索世界书">
-            <button type="button" class="menu_button" data-wbm-search-button>搜索</button>
+            <button type="button" class="menu_button" data-wbm-refresh>刷新酒馆世界书</button>
+            <button type="button" class="menu_button ql-primary" data-wbm-apply>应用当前模式</button>
         </div>
-        <p class="ql-muted" data-wbm-search-status></p>
-        <div data-wbm-books><p class="ql-muted">点击「刷新酒馆世界书」读取列表。</p></div>
+        <p class="ql-muted" data-wbm-status role="status">请先刷新列表并指定管理范围。</p>
+        <details class="ql-card">
+            <summary>条目管理 · 仅显示已指定的世界书</summary>
+            <div data-wbm-entry-editor><p class="ql-muted">尚未指定世界书。</p></div>
+        </details>
     `;
     settingsPage.prepend(panel);
 
     const manager = settingsOf(cfg);
     const enabled = panel.querySelector('[data-wbm-enabled]');
     const mode = panel.querySelector('[data-wbm-mode]');
+    const pairSelect = panel.querySelector('[data-wbm-pair-book]');
+    const groupSelect = panel.querySelector('[data-wbm-group-book]');
+    const worldviewBookSelect = panel.querySelector('[data-wbm-worldview-book]');
+    const worldviewSelect = panel.querySelector('[data-wbm-worldview]');
     enabled.checked = manager.enabled;
     mode.value = manager.mode;
-    panel.querySelectorAll('[data-wbm-supplement]').forEach(input => {
-        input.checked = manager.supplements.includes(input.dataset.wbmSupplement);
-        input.addEventListener('change', async () => {
-            const m = settingsOf(cfg);
-            const set = new Set(m.supplements);
-            if (input.checked) set.add(input.dataset.wbmSupplement);
-            else set.delete(input.dataset.wbmSupplement);
-            m.supplements = [...set];
-            saveSettingsDebounced();
-            if (m.enabled) {
-                try { await applyMode(cfg, message => statusText(panel, message)); }
-                catch (error) { statusText(panel, error?.message || String(error)); }
-            }
-        });
+
+    const refreshAssignedUi = async () => {
+        await renderWorldviewChoices(panel, cfg);
+        await renderEntryEditor(panel, cfg);
+    };
+
+    async function updateAssignment(key, value) {
+        const m = settingsOf(cfg);
+        const before = new Set(selectedBookNames(m));
+        if (key === 'pair' || key === 'group') m.coreBooks[key] = value;
+        else m.worldviewBook = value;
+        const after = new Set(selectedBookNames(m));
+        for (const oldName of before) {
+            if (!after.has(oldName)) await restoreBook(m, oldName);
+        }
+        if (m.worldviewBook && m.worldviewBook !== manager.worldviewBook) m.worldview = '';
+        if (m.enabled) {
+            for (const name of after) rememberGlobalState(m, name);
+            if (m.worldviewBook) await rememberEntryStates(m, m.worldviewBook);
+        }
+        saveSettingsDebounced();
+        const duplicate = [...after].length !== selectedBookNames(m).length;
+        if (duplicate) statusText(panel, '双人、群像和世界观特化必须是三本不同的世界书。');
+        renderBookSelectors(panel, cfg, cachedBooks);
+        await refreshAssignedUi();
+        if (m.enabled && !duplicate) await applyMode(cfg, message => statusText(panel, message));
+    }
+
+    let cachedBooks = [];
+    panel.querySelector('[data-wbm-refresh]').addEventListener('click', async () => {
+        const button = panel.querySelector('[data-wbm-refresh]');
+        button.disabled = true;
+        statusText(panel, '正在读取酒馆世界书列表…');
+        try {
+            cachedBooks = await fetchBooks();
+            renderBookSelectors(panel, cfg, cachedBooks);
+            await refreshAssignedUi();
+            statusText(panel, `已读取 ${cachedBooks.length} 本世界书。只有上方指定的三本会由拾帧管理。`);
+        } catch (error) {
+            statusText(panel, error?.message || String(error));
+        } finally {
+            button.disabled = false;
+        }
     });
+
+    pairSelect.addEventListener('change', () => updateAssignment('pair', pairSelect.value).catch(error => statusText(panel, error?.message || String(error))));
+    groupSelect.addEventListener('change', () => updateAssignment('group', groupSelect.value).catch(error => statusText(panel, error?.message || String(error))));
+    worldviewBookSelect.addEventListener('change', () => updateAssignment('worldview', worldviewBookSelect.value).catch(error => statusText(panel, error?.message || String(error))));
+
+    worldviewSelect.addEventListener('change', async () => {
+        const m = settingsOf(cfg);
+        m.worldview = worldviewSelect.value;
+        saveSettingsDebounced();
+        try {
+            if (m.enabled) {
+                rememberGlobalState(m, m.worldviewBook);
+                await syncWorldviewEntry(m, message => statusText(panel, message));
+            }
+            await renderEntryEditor(panel, cfg);
+        } catch (error) {
+            statusText(panel, error?.message || String(error));
+        }
+    });
+
     enabled.addEventListener('change', async () => {
         const m = settingsOf(cfg);
         m.enabled = enabled.checked;
+        if (m.enabled) {
+            for (const name of selectedBookNames(m)) rememberGlobalState(m, name);
+            if (m.worldviewBook) await rememberEntryStates(m, m.worldviewBook);
+        }
         saveSettingsDebounced();
         try { await applyMode(cfg, message => statusText(panel, message)); }
         catch (error) { statusText(panel, error?.message || String(error)); }
     });
+
     mode.addEventListener('change', async () => {
         const m = settingsOf(cfg);
         m.mode = mode.value;
@@ -344,25 +480,12 @@ export function initWorldbookModeManager({ root, cfg }) {
             catch (error) { statusText(panel, error?.message || String(error)); }
         }
     });
-    panel.querySelector('[data-wbm-refresh]').addEventListener('click', async () => {
-        const button = panel.querySelector('[data-wbm-refresh]');
-        button.disabled = true;
-        statusText(panel, '正在读取酒馆世界书列表…');
-        try {
-            const books = await fetchBooks();
-            renderBookList(panel, cfg, books);
-            statusText(panel, `已读取 ${books.length} 本酒馆世界书。展开书名可调整具体条目。`);
-        } catch (error) {
-            statusText(panel, error?.message || String(error));
-        } finally {
-            button.disabled = false;
-        }
-    });
+
     panel.querySelector('[data-wbm-apply]').addEventListener('click', async () => {
         const button = panel.querySelector('[data-wbm-apply]');
         button.disabled = true;
         try {
-            if (!settingsOf(cfg).enabled) throw new Error('请先开启「启用模式管理」');
+            if (!settingsOf(cfg).enabled) throw new Error('请先开启「启用拾帧世界书管理」');
             await applyMode(cfg, message => statusText(panel, message));
         } catch (error) {
             statusText(panel, error?.message || String(error));
@@ -370,4 +493,9 @@ export function initWorldbookModeManager({ root, cfg }) {
             button.disabled = false;
         }
     });
+
+    // 初始化时只显示当前保存的选择；不自动扫描或修改酒馆世界书。
+    if (manager.coreBooks.pair || manager.coreBooks.group || manager.worldviewBook) {
+        statusText(panel, '已载入上次保存的授权范围。点击刷新列表以检查世界书是否仍存在。');
+    }
 }
