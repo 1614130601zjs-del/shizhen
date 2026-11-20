@@ -170,13 +170,26 @@ function renderBookList(host, cfg, books) {
     const manager = settingsOf(cfg);
     const list = host.querySelector('[data-wbm-books]');
     if (!list) return;
+    const search = host.querySelector('[data-wbm-search]');
+    const searchButton = host.querySelector('[data-wbm-search-button]');
+    const searchStatus = host.querySelector('[data-wbm-search-status]');
+    const applySearch = () => {
+        const query = String(search?.value || '').trim().toLocaleLowerCase();
+        let shown = 0;
+        list.querySelectorAll('[data-wbm-book-card]').forEach(card => {
+            const matched = !query || String(card.dataset.wbmSearchText || '').toLocaleLowerCase().includes(query);
+            card.hidden = !matched;
+            if (matched) shown++;
+        });
+        if (searchStatus) searchStatus.textContent = query ? `找到 ${shown} 本匹配的世界书（共 ${books.length} 本）` : `共 ${books.length} 本世界书`;
+    };
     list.innerHTML = books.map(book => {
         const cats = assignedCategories(manager, book.name);
         const active = isGlobalOn(book.name);
         const categoryControls = CATEGORIES.map(cat =>
             `<label class="ql-check"><input type="checkbox" data-wbm-category="${cat.id}" data-wbm-book="${encodeURIComponent(book.name)}" ${cats.includes(cat.id) ? 'checked' : ''}> ${cat.label}</label>`
         ).join('');
-        return `<details class="ql-card ql-wbm-book" data-wbm-book-card="${encodeURIComponent(book.name)}">
+        return `<details class="ql-card ql-wbm-book" data-wbm-book-card="${encodeURIComponent(book.name)}" data-wbm-search-text="${(book.name + ' ' + book.title).replace(/[&<>"']/g, '')}">
             <summary>${book.title.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
             <span class="ql-muted"> · ${active ? '全局已启用' : '全局未启用'}</span></summary>
             <p class="ql-muted">勾选该书参与哪些模式。只有勾选归入拾帧管理的世界书，才会被模式切换控制。</p>
@@ -185,6 +198,10 @@ function renderBookList(host, cfg, books) {
             <div data-wbm-entries hidden></div>
         </details>`;
     }).join('') || '<p class="ql-muted">酒馆中暂时没有可用的世界书。</p>';
+
+    if (searchButton) searchButton.onclick = applySearch;
+    if (search) search.onkeydown = event => { if (event.key === 'Enter') applySearch(); };
+    applySearch();
 
     list.querySelectorAll('[data-wbm-category]').forEach(input => {
         input.addEventListener('change', async () => {
@@ -282,6 +299,11 @@ export function initWorldbookModeManager({ root, cfg }) {
         <div class="ql-row"><button type="button" class="menu_button" data-wbm-refresh>刷新酒馆世界书</button><button type="button" class="menu_button ql-primary" data-wbm-apply>应用当前模式</button></div>
         <p class="ql-muted" data-wbm-status role="status">尚未读取世界书。</p>
         <p class="ql-muted">世界书关联（可一书多用）：</p>
+        <div class="ql-row">
+            <input type="search" data-wbm-search placeholder="输入世界书名称搜索…" aria-label="搜索世界书">
+            <button type="button" class="menu_button" data-wbm-search-button>搜索</button>
+        </div>
+        <p class="ql-muted" data-wbm-search-status></p>
         <div data-wbm-books><p class="ql-muted">点击「刷新酒馆世界书」读取列表。</p></div>
     `;
     settingsPage.prepend(panel);
