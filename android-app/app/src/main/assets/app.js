@@ -450,7 +450,437 @@ function wireGenerationSelections(){
  });
 }
 
+
+function cfg(){return {...library,...importedSettings};}
+function safeMigrationStringify(value){try{return JSON.stringify(value);}catch{return '';}}
+function qlWithExtraNeg(negative,c){
+ const extra=String((c||cfg()).extraNegative||'').trim();if(!extra)return String(negative||'');
+ const have=new Set(String(negative||'').split(/[,，]/).map(x=>x.trim().toLowerCase()).filter(Boolean));
+ const add=extra.split(/[,，\n]/).map(x=>x.trim()).filter(x=>x&&!have.has(x.toLowerCase()));
+ return [String(negative||'').trim().replace(/[,，]\s*$/,''),...add].filter(Boolean).join(', ');
+}
+let qlCurSignal=null;
+function qlNaiQualitySuffix(model,mode){
+ const m=String(model||''),v5=/^nai-diffusion-5-/.test(m),v45=/^nai-diffusion-4-5-/.test(m),v4=/^nai-diffusion-4-/.test(m),furry=/furry-3$/i.test(m);
+ if(mode==='off')return '';
+ if(v5&&mode==='light')return 'very aesthetic, amazing quality, no text';
+ if(v5)return 'very aesthetic, masterpiece, no text';
+ if(v45&&m.endsWith('-curated'))return 'location, masterpiece, no text, -0.8::feet::, rating:general';
+ if(v45)return 'location, very aesthetic, masterpiece, no text';
+ if(v4&&m.endsWith('-curated'))return 'rating:general, amazing quality, very aesthetic, absurdres';
+ if(v4)return 'no text, best quality, very aesthetic, absurdres';
+ if(furry)return '{best quality}, {amazing quality}';
+ if(/^nai-diffusion-3$/i.test(m))return 'best quality, amazing quality, very aesthetic, absurdres';
+ return '';
+}
+
+function qlNaiAppendQualityTags(prompt,model,mode){
+ // 官网「Add Quality Tags」由服务端在 qualityToggle=true 时自动追加；这里只在 V5 轻量模式（服务端无此档位）手动追加，避免重复注入。
+ const base=String(prompt||'').trim();
+ if(mode!=='light'||!/^nai-diffusion-5-/.test(String(model||'')))return base;
+ const suffix=qlNaiQualitySuffix(model,'light');
+ const present=new Set(base.toLowerCase().split(/[,，]/).map(x=>x.trim()));
+ const missing=suffix.split(/,\s*/).filter(tag=>!present.has(tag.toLowerCase()));
+ return missing.length?[base,missing.join(', ')].filter(Boolean).join(', '):base;
+}
+
+function qlNaiQualityToggle(model,mode){
+ mode=mode||'standard';
+ if(mode==='off')return false;
+ if(mode==='light'&&/^nai-diffusion-5-/.test(String(model||'')))return false;
+ return true;
+}
+
+function vibeModelKey(model){
+ if(model.includes('nai-diffusion-5-curated'))return 'v5curated';
+ if(model.includes('nai-diffusion-5-full'))return 'v5full';
+ if(model.includes('4-5-curated'))return 'v4-5curated';
+ if(model.includes('4-5-full'))return 'v4-5full';
+ if(model.includes('4-curated'))return 'v4curated';
+ if(model.includes('4-full'))return 'v4full';
+ if(model.includes('diffusion-3'))return 'v3';
+ return 'v4-5full';
+}
+
+function extractUsableVibe(raw,model='nai-diffusion-4-5-full'){
+ const seen=new WeakSet();let found='',foundGroup=null;
+ const clean=value=>String(value||'').trim().replace(/^data:(?:application\/octet-stream|image\/[^;]+);base64,/i,'').replace(/\s+/g,'').replace(/-/g,'+').replace(/_/g,'/');
+ const key=vibeModelKey(model),normalizeKey=value=>String(value||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+ const isPayload=value=>{const v=clean(value);return v.length>160&&/^[A-Za-z0-9+/]+={0,2}$/.test(v);};
+ const walk=(value,keyName='',canonical=false)=>{
+  if(found||value==null)return;
+  if(typeof value==='string'){
+   const v=clean(value);
+   if((canonical||/^(?:encoding|encoded|encodedVibe|encoded_vibe|vibeEncoding|vibe_encoding|vibeData|vibe_data|payload|base64|imageBase64|image_base64|referenceImage|reference_image)$/i.test(keyName))&&isPayload(v)){found=v;return;}
+   return;
+  }
+  if(typeof value!=='object'||seen.has(value))return;
+  seen.add(value);
+  if(Array.isArray(value)){for(const item of value)walk(item,keyName,canonical);return;}
+  const isCanonical=value.identifier==='novelai-vibe-transfer';
+  if(isCanonical&&key==='v3'&&typeof value.image==='string'&&isPayload(value.image)){found=clean(value.image);return;}
+  if(value.encodings&&typeof value.encodings==='object'){
+   const encodings=value.encodings;
+   const matchingKey=Object.keys(encodings).find(k=>normalizeKey(k)===normalizeKey(key)||normalizeKey(k).replace(/^v/,'')===normalizeKey(key).replace(/^v/,''));
+   let group=matchingKey?encodings[matchingKey]:null;
+   const unwrap=entry=>{
+    if(typeof entry==='string')return isPayload(entry)?{payload:clean(entry),group:entry}:null;
+    if(!entry||typeof entry!=='object')return null;
+    const direct=entry.encoding??entry.encoded??entry.data??entry.payload??entry.base64;
+    if(typeof direct==='string'&&isPayload(direct))return {payload:clean(direct),group:entry};
+    for(const child of Object.values(entry)){const result=child&&typeof child==='object'?unwrap(child):null;if(result)return result;}
+    return null;
+   };
+   let result=group?unwrap(group):null;
+   if(!result){
+    // Some .naiv4vibe exports spell model keys differently or nest the encoding under another level.
+    for(const candidate of Object.values(encodings)){result=unwrap(candidate);if(result)break;}
+   }
+   if(result){found=result.payload;foundGroup=result.group;return;}
+   // Do not stop here: some bundle variants keep a usable payload beside the encodings map.
+  }
+  if(isCanonical&&typeof value.image==='string'&&isPayload(value.image)){found=clean(value.image);return;}
+  for(const [k,v] of Object.entries(value)){if(k==='encodings'||(isCanonical&&k==='image'))continue;walk(v,k,false);}
+ };
+ walk(raw);
+ if(!found)return null;
+ const serialized=safeMigrationStringify(raw)||'';
+ const readNumber=(re,fallback)=>{const m=serialized.match(re);return m?Number(m[1]):fallback;};
+ const strength=Number.isFinite(Number(raw?.importInfo?.strength))?Number(raw.importInfo.strength):readNumber(/"(?:reference_strength|referenceStrength|strength)"\s*:\s*([0-9.]+)/i,0.6);
+ let informationExtracted=readNumber(/"(?:reference_information_extracted|referenceInformationExtracted|information_extracted|informationExtracted|info_extracted|infoExtracted)"\s*:\s*([0-9.]+)/i,1);
+ const group=foundGroup&&typeof foundGroup==='object'?foundGroup:raw?.encodings?.[key];
+ if(group&&typeof group==='object'){
+  const enc=('encoding' in group||'encoded' in group||'data' in group||'payload' in group)?group:Object.values(group).find(v=>v&&typeof v==='object'&&('encoding' in v||'encoded' in v||'data' in v||'payload' in v));
+  const info=enc?.params?.information_extracted??enc?.params?.informationExtracted??enc?.infoExtracted;
+  if(Number.isFinite(Number(info)))informationExtracted=Number(info);
+ }
+ return {image:found,strength,informationExtracted};
+}
+
+function qlAutoCoordX(i,n){
+ const grid=[0.1,0.3,0.5,0.7,0.9];
+ if(n<=1)return 0.5;
+ if(n===2)return i===0?0.3:0.7;
+ const raw=0.1+(0.8*i)/(n-1);
+ return grid.reduce((a,b)=>Math.abs(b-raw)<Math.abs(a-raw)?b:a,0.5);
+}
+
+async function requestImageUnlocked(prompt, negativeOverride, vibeItem=null, naiPromptData=null, edit=null, sizeOv=''){
+ const signal=qlCurSignal||undefined;
+ const c=cfg();
+ const ov=String(sizeOv||'').split('x').map(Number),ovOk=!edit&&ov.length===2&&ov.every(n=>Number.isFinite(n)&&n>0);
+ let raw='',data=null,res;
+ if(c.provider==='novelai'||c.provider==='novelai-thirdparty'){
+  const naiModel=c.naiModel||'nai-diffusion-4-5-full';
+  // 官网使用扩展内保存的 NovelAI Key；第三方使用服务商提供的 Key 与地址。
+  const negative=qlWithExtraNeg(String(negativeOverride??c.negative??''),c);
+  const isV4=/^nai-diffusion-(?:4(?:-|$)|5-)/i.test(naiModel);
+  const isV5=/^nai-diffusion-5-/i.test(naiModel);
+  const isV3=/^nai-diffusion-3(?:-|$)/i.test(naiModel);
+  const width=edit?edit.width:(ovOk?ov[0]:(Number(c.naiWidth)||832));
+  const height=edit?edit.height:(ovOk?ov[1]:(Number(c.naiHeight)||1216));
+  // DDIM 只有 V3 模型支持；其它模型选了它就回退到 Euler Ancestral，避免接口报错。
+  const sampler=(c.naiSampler==='ddim_v3'&&!isV3)?'k_euler_ancestral':(c.naiSampler||'k_euler_ancestral');
+  const parameters={
+   params_version:isV5?4:3,
+   width,
+   height,
+   scale:Number(c.naiScale)||5,
+   sampler,
+   noise_schedule:c.naiScheduler||'karras',
+   steps:Number(c.naiSteps)||28,
+   n_samples:1,
+   seed:Number(c.naiSeed)>=0?Math.min(2147483647,Math.floor(Number(c.naiSeed))):Math.floor(Math.random()*2147483647),
+   negative_prompt:negative,
+   ucPreset:Number.isInteger(Number(c.naiUcPreset))&&Number(c.naiUcPreset)>=0&&Number(c.naiUcPreset)<=4?Number(c.naiUcPreset):3,
+   qualityToggle:qlNaiQualityToggle(naiModel,c.naiQualityMode),
+   dynamic_thresholding:false,
+   controlnet_strength:1,
+   legacy:false,
+   legacy_uc:false,
+   add_original_image:true,
+   cfg_rescale:0,
+   skip_cfg_above_sigma:null,
+   legacy_v3_extend:false,
+   stream:'msgpack',
+   reference_strength_multiple:[],
+   normalize_reference_strength_multiple:c.naiNormalizeVibeStrengths!==false,
+   use_coords:false
+  };
+  if(sampler==='k_euler_ancestral'){
+   parameters.deliberate_euler_ancestral_bug=false;
+   parameters.prefer_brownian=true;
+  }
+  if(isV3){
+   parameters.sm=false;
+   parameters.sm_dyn=false;
+   parameters.reference_image_multiple=[];
+   parameters.reference_information_extracted_multiple=[];
+   parameters.prompt=qlNaiAppendQualityTags(prompt,naiModel,c.naiQualityMode||'standard');
+  }else if(isV4){
+   parameters.reference_image_multiple_cached=[];
+   const structured= naiPromptData&&Array.isArray(naiPromptData.characters)&&naiPromptData.characters.length>0
+    ?naiPromptData:null;
+   const baseCaption=qlNaiAppendQualityTags(structured?String(structured.basePrompt||prompt):prompt,naiModel,c.naiQualityMode||'standard');
+   // 自动站位（设置里可选，默认关）：两个及以上角色时，按出现顺序从左到右排开，坐标吸附到 NAI 的 5×5 网格（0.1/0.3/0.5/0.7/0.9）。
+   const coordsOn=!!c.naiAutoCoords&&!!structured&&structured.characters.length>=2;
+   const centerOf=i=>coordsOn?{x:qlAutoCoordX(i,structured.characters.length),y:0.5}:{x:0.5,y:0.5};
+   if(coordsOn)parameters.use_coords=true;
+   const characterCaptions=structured?structured.characters.map((character,i)=>({char_caption:String(character.prompt||''),centers:[centerOf(i)]})):[];
+   parameters.characterPrompts=structured?structured.characters.map((character,i)=>({prompt:String(character.prompt||''),uc:'',center:centerOf(i),enabled:true})):[];
+   parameters.v4_prompt={caption:{base_caption:baseCaption,char_captions:characterCaptions},use_coords:coordsOn,use_order:true};
+   parameters.v4_negative_prompt={caption:{base_caption:negative,char_captions:characterCaptions.map((x,i)=>({char_caption:'',centers:[centerOf(i)]}))},legacy_uc:false};
+  }else{
+   parameters.prompt=qlNaiAppendQualityTags(prompt,naiModel,c.naiQualityMode||'standard');
+  }
+  if(vibeItem){
+   if(/^nai-diffusion-5-full$/i.test(naiModel))throw new Error('NovelAI V5 Full（5F）不支持 Vibe；请切换到 V5 Curated、V4/V4.5 或 V3 模型，或先取消当前 Vibe。');
+   const vibes=Array.isArray(vibeItem.entries)
+    ?vibeItem.entries.map(item=>{const source=item.raw?{...item.raw,image:item.image||item.raw.image||''}:item;const extracted=extractUsableVibe(source,naiModel);const hasModelMap=JSON.stringify(source).includes('"encodings"');const image=extracted?.image||(!hasModelMap&&typeof item.image==='string'&&item.image.trim()?String(item.image).trim().replace(/^data:(?:application\/octet-stream|image\/[^;]+);base64,/i,'').replace(/\s+/g,''):'');return image?{image,strength:Number(item.strength??extracted?.strength??0.6),informationExtracted:Number(item.informationExtracted??extracted?.informationExtracted??1)}:null;}).filter(Boolean)
+    :(()=>{const one=extractUsableVibe(vibeItem.raw||vibeItem,naiModel);return one?[one]:[];})();
+   if(!vibes.length)throw new Error('这个 Vibe 组没有识别到可发送的编码。请重新导入包含 encoding 数据的 .naiv4vibe / bundle 或智绘姬导出 JSON；普通预览图不能替代编码。');
+   if(vibes.length>16)throw new Error('NovelAI 单次最多使用 16 条 Vibe 参考，请先删除多余条目。');
+   if(vibes.some(v=>!Number.isFinite(v.strength)||v.strength<0||v.strength>1||!Number.isFinite(v.informationExtracted)||v.informationExtracted<0||v.informationExtracted>1))throw new Error('Vibe 强度与 Information Extracted 必须在 0 到 1 之间。');
+   parameters.reference_strength_multiple=vibes.map(v=>v.strength);
+   parameters.normalize_reference_strength_multiple=c.naiNormalizeVibeStrengths!==false;
+   if(isV3){
+    parameters.reference_image_multiple=vibes.map(v=>v.image);
+    parameters.reference_information_extracted_multiple=vibes.map(v=>v.informationExtracted);
+   }else if(isV4){
+    parameters.reference_image_multiple_cached=vibes.map(v=>({cache_secret_key:(crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,ch=>{const n=Math.random()*16|0;return(ch==='x'?n:(n&3|8)).toString(16);})),data:v.image}));
+   }else{
+    throw new Error('当前 NovelAI 模型不支持 Vibe Transfer，请切换到 V3、V4/V4.5 或受支持的 V5 模型。');
+   }
+  }
+  const third=c.provider==='novelai-thirdparty';
+  const naiKey=third?(c.naiThirdKey||''):(c.naiApiKey||'');
+  if(!naiKey)throw new Error(third?'请先填写 NAI 第三方 API Key。':'请先填写 NovelAI 官网 Key。');
+  const base=third?String(c.naiThirdEndpoint||'').replace(/\/$/,''):'https://image.novelai.net';
+  if(third&&!base)throw new Error('请先填写 NAI 第三方 API 地址。');
+  const endpoint=/\/ai\/generate-image$/i.test(base)?base:base+'/ai/generate-image';
+  const requestPrompt=qlNaiAppendQualityTags(isV4&&naiPromptData&&Array.isArray(naiPromptData.characters)&&naiPromptData.characters.length>0
+   ?String(naiPromptData.basePrompt||prompt):prompt,naiModel,c.naiQualityMode||'standard');
+  if(edit){
+   parameters.image=edit.image;
+   parameters.strength=Math.max(0.01,Math.min(0.99,Number(edit.strength)||0.7));
+   parameters.noise=Math.max(0,Math.min(0.99,Number(edit.noise)||0));
+   parameters.extra_noise_seed=Number.isFinite(edit.seed)?edit.seed:Math.floor(Math.random()*2147483647);
+   if(Number.isFinite(edit.seed))parameters.seed=edit.seed;
+   if(edit.mode==='inpaint'){parameters.mask=edit.mask;parameters.add_original_image=true;parameters.inpaintImg2ImgStrength=1;}
+  }
+  const editInpaint=!!edit&&edit.mode==='inpaint';
+  const requestModel=editInpaint&&!/-inpainting$/i.test(naiModel)?naiModel+'-inpainting':naiModel;
+  const requestBody={input:requestPrompt,model:requestModel,action:edit?(editInpaint?'infill':'img2img'):'generate',parameters,use_new_shared_trial:true};
+  res=await fetch(endpoint,{method:'POST',signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+naiKey},body:JSON.stringify(requestBody)});
+  if(!res.ok){raw=await res.text();throw new Error('NovelAI 请求失败（HTTP '+res.status+'）：'+raw.slice(0,240));}
+  let buffer;
+  try{
+   buffer=await res.arrayBuffer();
+  }catch(error){
+   throw new Error('读取 NovelAI 图片响应失败：'+(error?.message||String(error))+'。请检查网络、跨域代理或接口是否提前关闭连接。');
+  }
+  let value='';
+  try{
+   const view=new DataView(buffer);
+   const u8=new Uint8Array(buffer);
+   let eocd=-1;
+   const min=Math.max(0,view.byteLength-65557);
+   for(let i=view.byteLength-22;i>=min;i--){
+    if(view.getUint32(i,true)===0x06054b50){eocd=i;break;}
+   }
+   if(eocd<0)throw new Error('响应不是有效 ZIP（未找到中央目录结束记录）');
+   const entries=view.getUint16(eocd+10,true);
+   let offset=view.getUint32(eocd+16,true);
+   for(let n=0;n<entries && offset+46<=view.byteLength;n++){
+    if(view.getUint32(offset,true)!==0x02014b50)throw new Error('ZIP 中央目录结构无效');
+    const method=view.getUint16(offset+10,true);
+    const compressed=view.getUint32(offset+20,true);
+    const nameLen=view.getUint16(offset+28,true);
+    const extraLen=view.getUint16(offset+30,true);
+    const commentLen=view.getUint16(offset+32,true);
+    const localOffset=view.getUint32(offset+42,true);
+    if(offset+46+nameLen+extraLen+commentLen>view.byteLength)throw new Error('ZIP 中央目录长度越界');
+    const name=new TextDecoder().decode(u8.subarray(offset+46,offset+46+nameLen));
+    if(/\.(png|jpe?g|webp)$/i.test(name)){
+     if(localOffset+30>view.byteLength||view.getUint32(localOffset,true)!==0x04034b50)throw new Error('图片文件头无效');
+     const localNameLen=view.getUint16(localOffset+26,true);
+     const localExtraLen=view.getUint16(localOffset+28,true);
+     const dataStart=localOffset+30+localNameLen+localExtraLen;
+     if(dataStart+compressed>view.byteLength)throw new Error('图片压缩数据不完整');
+     let bytes=u8.slice(dataStart,dataStart+compressed);
+     if(method===8){
+      if(typeof DecompressionStream==='undefined')throw new Error('当前浏览器不支持 ZIP 的 DEFLATE 解压，请更新浏览器内核。');
+      try{
+       const reader=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+       const chunks=[];let total=0;
+       while(true){
+        const part=await reader.read();
+        if(part.done)break;
+        chunks.push(part.value);total+=part.value.length;
+       }
+       bytes=new Uint8Array(total);
+       let pos=0;
+       for(const chunk of chunks){bytes.set(chunk,pos);pos+=chunk.length;}
+      }catch(error){
+       throw new Error('ZIP 图片 DEFLATE 解压失败：'+(error?.message||String(error))+'。压缩数据可能不完整，或当前浏览器内核不兼容 deflate-raw。');
+      }
+     }else if(method!==0){
+      throw new Error('暂不支持 ZIP 压缩方式：'+method);
+     }
+     const mime=/\.jpe?g$/i.test(name)?'jpeg':/\.webp$/i.test(name)?'webp':'png';
+     let binary='';
+     for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+     value='data:image/'+mime+';base64,'+btoa(binary);
+     break;
+    }
+    offset+=46+nameLen+extraLen+commentLen;
+   }
+  }catch(error){
+   throw new Error('无法解包 NovelAI 返回的图片 ZIP：'+(error?.message||String(error)));
+  }
+  if(!value)throw new Error('NovelAI 响应的 ZIP 中未找到 PNG/JPG/WebP 图片文件。');
+  return value;
+ }
+ if(!c.endpoint||!c.apiKey)throw new Error('请先在拾帧设置中填写 OpenAI 兼容 API 地址和 Key');
+ const model=String(c.model||'').toLowerCase();
+ const negative=qlWithExtraNeg(String(negativeOverride??c.negative??''),c).trim();
+ const requestedSize=String(ovOk?ov[0]+'x'+ov[1]:(c.size||'1024x1024'));const body={model:c.model||'gpt-image-1',prompt,n:1,size:requestedSize==='auto'?'1024x1024':requestedSize};
+ if(model.includes('gpt-image')){
+  body.quality=c.quality;
+  if(negative)body.prompt=prompt+'\n\nAvoid these visual elements: '+negative;
+ }else if(negative){
+  body.negative_prompt=negative;
+ }
+ res=await fetch(c.endpoint.replace(/\/$/, '')+'/images/generations',{method:'POST',signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+c.apiKey},body:JSON.stringify(body)});
+ raw=await res.text();
+ try{data=JSON.parse(raw);}catch{throw new Error('接口返回非 JSON（HTTP '+res.status+'）');}
+ if(!res.ok)throw new Error(data?.error?.message||'HTTP '+res.status);
+ const item=data?.data?.[0];let url=item?.b64_json?'data:image/png;base64,'+item.b64_json:item?.url;
+ const candidates=[data?.images?.[0],data?.output?.[0]];
+ for(const v of candidates){
+  if(url||v==null)continue;
+  if(typeof v==='string')url=/^(data:|https?:)/.test(v)?v:'data:image/png;base64,'+v;
+  else if(typeof v==='object')url=v.url||(v.b64_json?'data:image/png;base64,'+v.b64_json:null)||(v.image?'data:image/png;base64,'+v.image:null);
+ }
+ if(typeof url!=='string'||!url)throw new Error('响应中没有可识别的图片');
+ return url;
+}
+
+/**
+ * 统一所有入口的有效提示词：手动生图、聊天标记、状态栏和重绘都应使用同一组已启用预设。
+ * 手动生图会自行组装参数；其他入口走此包装函数，避免自动触发漏掉画师串/Vibe。
+ */
+async function appRequestImage(prompt,negative,vibeItem,naiPromptData){
+ const controller=new AbortController(),seconds=Math.max(10,Math.min(600,Number(cfg().requestTimeoutSec)||180));
+ const timer=setTimeout(()=>controller.abort(),seconds*1000);qlCurSignal=controller.signal;
+ try{return await requestImageUnlocked(prompt,negative,vibeItem,naiPromptData,null,'');}
+ catch(error){if(controller.signal.aborted||error?.name==='AbortError')throw new Error('生图请求超时或已取消；请检查网络和接口地址后重试。');throw error;}
+ finally{clearTimeout(timer);qlCurSignal=null;}
+}
+function readAppGenerationConfig(){
+ saveImportedSettingsFromControls();
+ const c=cfg();
+ c.provider=$('#ql-fast-provider')?.value||c.provider||'novelai';
+ c.naiModel=$('#ql-fast-nai-model')?.value||c.naiModel||'nai-diffusion-4-5-full';
+ c.naiSteps=Number($('#ql-fast-nai-steps')?.value)||Number(c.naiSteps)||28;
+ c.naiScale=Number($('#ql-fast-nai-scale')?.value)||Number(c.naiScale)||5;
+ const dims=String($('#ql-fast-nai-size-preset')?.value||'').match(/^(\d+)x(\d+)$/);
+ c.naiWidth=dims?Number(dims[1]):Number(c.naiWidth)||832;c.naiHeight=dims?Number(dims[2]):Number(c.naiHeight)||1216;
+ c.naiSampler=$('#ql-fast-nai-sampler')?.value||c.naiSampler||'k_euler_ancestral';
+ c.naiScheduler=$('#ql-fast-nai-scheduler')?.value||c.naiScheduler||'karras';
+ c.naiQualityMode=$('#ql-fast-nai-quality')?.value||c.naiQualityMode||'standard';
+ c.naiUcPreset=Number($('#ql-fast-nai-uc')?.value??c.naiUcPreset??3);
+ c.naiSeed=$('#ql-fast-nai-seed')?.value===''?-1:Number($('#ql-fast-nai-seed')?.value??c.naiSeed??-1);
+ c.naiNormalizeVibeStrengths=$('#ql-fast-nai-normalize')?.checked??c.naiNormalizeVibeStrengths!==false;
+ c.endpoint=$('#ql-endpoint')?.value?.trim().replace(/\/$/,'')||c.endpoint||'';
+ c.apiKey=$('#ql-key')?.value?.trim()||c.apiKey||'';
+ c.naiApiKey=$('#ql-nai-key')?.value?.trim()||c.naiApiKey||'';
+ c.naiThirdEndpoint=$('#ql-nai-third-endpoint')?.value?.trim().replace(/\/$/,'')||c.naiThirdEndpoint||'';
+ c.naiThirdKey=$('#ql-nai-third-key')?.value?.trim()||c.naiThirdKey||'';
+ c.model=$('#ql-fast-model')?.value?.trim()||c.model||'gpt-image-1';
+ c.size=$('#ql-fast-size')?.value||c.size||'auto';
+ c.quality=$('#ql-fast-quality')?.value||c.quality||'medium';
+ c.negative=$('#ql-negative')?.value??c.negative??'';
+ return c;
+}
+function materializeAppVibe(group,c){
+ if(!group)return null;
+ if(Array.isArray(group.entries))return group;
+ const pool=Array.isArray(c.vibePool)?c.vibePool:[];
+ const refs=Array.isArray(group.refs)?group.refs:[];
+ const entries=refs.map(ref=>{
+  const item=pool.find(x=>x&&x.id===ref.poolId);if(!item)return null;
+  return {...item,poolId:item.id,strength:Number(ref.strength??item.strength??0.6),informationExtracted:Number(ref.informationExtracted??item.informationExtracted??1)};
+ }).filter(Boolean);
+ return {...group,entries};
+}
+function resolveAppActiveGeneration(prompt,c){
+ const combo=c.activeConfigMode!=='separate'&&Number(c.activeComboIndex)>=0?c.combinations?.[Number(c.activeComboIndex)]:null;
+ const presetIndex=combo?Number(combo.artistIndex??-1):Number(c.activePresetIndex??-1);
+ const vibeIndex=combo?Number(combo.vibeIndex??-1):Number(c.activeVibeIndex??-1);
+ const preset=presetIndex>=0?c.presets?.[presetIndex]:null;
+ const vibeGroup=vibeIndex>=0?c.vibes?.[vibeIndex]:null;
+ const vibe=materializeAppVibe(vibeGroup,c);
+ const finalPrompt=[preset?.positive,String(prompt||'').trim()].filter(Boolean).join(', ');
+ const finalNegative=[String(c.negative||'').trim(),String(preset?.negative||'').trim()].filter(Boolean).join(', ');
+ return {prompt:finalPrompt,negative:finalNegative,preset,vibe};
+}
+async function saveGeneratedAsset(dataUrl){
+ let blob;
+ if(/^data:/i.test(dataUrl))blob=await (await fetch(dataUrl)).blob();
+ else{const response=await fetch(dataUrl);if(!response.ok)throw new Error('读取生成图片失败（HTTP '+response.status+'）');blob=await response.blob();}
+ const bytes=await blob.arrayBuffer(),digest=await crypto.subtle.digest('SHA-256',bytes);
+ const id=[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');
+ const info=parse(native.localServerInfo()),base=String(info.url||'').replace(/\/+$/,'');
+ if(!base||!info.token)throw new Error('本机素材数据库尚未启动，无法保存生成图片。');
+ const response=await fetch(base+'/v1/assets/'+id,{method:'PUT',headers:{
+  Authorization:'Bearer '+info.token,'X-Asset-Id':id,'X-Asset-Mime':blob.type||'image/png','X-Asset-Name':'shizhen-'+Date.now()+'.png'
+ },body:bytes});
+ if(!response.ok)throw new Error('保存图片素材失败（HTTP '+response.status+'）');
+ const result=await response.json();if(!result.ok)throw new Error(result.error||'素材保存失败');
+ return 'shizhen-asset://'+id;
+}
+function showGeneratedImage(dataUrl){
+ const host=$('#ql-result');if(!host)return;
+ host.replaceChildren();const image=document.createElement('img');image.alt='拾帧生成结果';image.src=dataUrl;image.style.cssText='display:block;max-width:100%;max-height:70vh;object-fit:contain;margin:auto;border-radius:12px;cursor:zoom-in';
+ image.addEventListener('click',()=>{const overlay=document.createElement('div');overlay.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:12px';const full=document.createElement('img');full.src=dataUrl;full.alt='生成图片原图';full.style.cssText='max-width:100%;max-height:100%;object-fit:contain';overlay.append(full);overlay.addEventListener('click',()=>overlay.remove());document.body.append(overlay);});
+ host.append(image);
+}
+let appGenerationBusy=false;
+async function runStandaloneGeneration(){
+ if(appGenerationBusy)return;
+ const button=$('#ql-generate'),indicator=$('#ql-gen-indicator');
+ const prompt=String($('#ql-prompt')?.value||'').trim();
+ if(!prompt){set('ql-status','请先填写画面提示词，或选择包含正向画师串的配置。');return;}
+ appGenerationBusy=true;if(button)button.disabled=true;if(indicator)indicator.hidden=false;set('ql-status','正在准备独立生图请求…');
+ try{
+  const c=readAppGenerationConfig(),resolved=resolveAppActiveGeneration(prompt,c);
+  if(!resolved.prompt.trim())throw new Error('最终提示词为空，请填写画面提示词或画师串。');
+  if(c.provider==='novelai'&&!c.naiApiKey)throw new Error('请先在偏好设置中导入或填写 NovelAI 官网 Key。');
+  if(c.provider==='novelai-thirdparty'&&(!c.naiThirdEndpoint||!c.naiThirdKey))throw new Error('请先填写 NovelAI 第三方 API 地址和 Key。');
+  if(c.provider==='openai'&&(!c.endpoint||!c.apiKey))throw new Error('请先填写 OpenAI 兼容 API 地址和 Key。');
+  set('ql-status','正在连接 '+(c.provider==='openai'?'OpenAI 兼容服务':'NovelAI')+'…');
+  const image=await appRequestImage(resolved.prompt,resolved.negative,resolved.vibe,null);
+  set('ql-status','图片已生成，正在写入本机素材库…');
+  const assetRef=await saveGeneratedAsset(image);
+  const record={at:Date.now(),source:'app-viewfinder',collection:'cache',prompt:resolved.prompt,basePrompt:prompt,negative:resolved.negative,
+   provider:c.provider,model:c.provider==='openai'?c.model:c.naiModel,size:c.provider==='openai'?c.size:(c.naiWidth+'x'+c.naiHeight),quality:c.quality,
+   dataUrl:assetRef,thumb:assetRef,preset:resolved.preset?{id:resolved.preset.id||'',name:resolved.preset.name||'',positive:resolved.preset.positive||'',negative:resolved.preset.negative||''}:null,
+   vibe:resolved.vibe?{name:resolved.vibe.name||'',entries:(resolved.vibe.entries||[]).map(x=>({strength:x.strength??0.6,informationExtracted:x.informationExtracted??1,identifier:x.identifier||x.raw?.identifier||'',type:x.type||x.raw?.type||'encoding'}))}:null};
+  if(!Array.isArray(library.records))library.records=[];
+  library.records.unshift(record);
+  const limit=Math.max(0,Number(c.recordLimit??800));if(limit)library.records=library.records.slice(0,limit);
+  const saved=parse(native.saveLibrary(JSON.stringify(library)));
+  if(!saved?.ok)throw new Error('图片已生成并存入素材文件，但保存拾帧记录失败：'+(saved?.error||'未知错误'));
+  showGeneratedImage(image);refresh();
+  set('ql-status','独立生图完成，结果已保存到本机底片。');
+ }catch(error){set('ql-status','生图失败：'+(error?.message||String(error)));}
+ finally{appGenerationBusy=false;if(button)button.disabled=false;if(indicator)indicator.hidden=true;}
+}
+function wireStandaloneGeneration(){$('#ql-generate')?.addEventListener('click',runStandaloneGeneration);}
+
 function wireDataWorkspace(){
+ wireStandaloneGeneration();
  wireGenerationSelections();
  $('#sz-data-category')?.addEventListener('change',()=>{dataSelectedIndex=0;renderDataWorkspace();});
  $('#sz-data-entry')?.addEventListener('change',()=>{dataSelectedIndex=Number($('#sz-data-entry').value)||0;renderDataWorkspace();});
