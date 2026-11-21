@@ -107,6 +107,19 @@ class ShizhenVaultServer(
             }
         }
         collect(settings)
+        // Linked character card PNGs are package resources referenced by manifest.characters,
+        // not by a settings JSON pointer. Keep them when the App edits its local library.
+        val characters = oldManifest.optJSONArray("characters") ?: org.json.JSONArray()
+        for (i in 0 until characters.length()) {
+            val card = characters.optJSONObject(i) ?: continue
+            val cardAssetId = card.optString("cardAssetId")
+            if (cardAssetId.isBlank()) continue
+            require(cardAssetId.matches(Regex("[a-f0-9]{64}")) &&
+                File(assetDir, cardAssetId).isFile && index.hasAsset(cardAssetId)) {
+                "关联角色卡文件缺失：$cardAssetId"
+            }
+            referenced.add(cardAssetId)
+        }
         val assets = org.json.JSONArray()
         for (id in referenced) {
             val metadata = available[id]
