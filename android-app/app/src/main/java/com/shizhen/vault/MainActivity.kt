@@ -236,6 +236,11 @@ class MainActivity : Activity() {
         } catch (error: Exception) {
             JSONObject().put("ok", false).put("error", error.message ?: "读取拾帧库失败").toString()
         }
+        @JavascriptInterface fun getVaultManifest(): String = try {
+            (vaultServer?.currentManifest() ?: JSONObject()).toString()
+        } catch (error: Exception) {
+            JSONObject().put("ok", false).put("error", error.message ?: "读取迁移清单失败").toString()
+        }
         @JavascriptInterface fun saveLibrary(settingsJson: String): String = try {
             (vaultServer ?: throw IOException("本地数据库服务未启动")).saveLibrary(settingsJson).toString()
         } catch (error: Exception) {
