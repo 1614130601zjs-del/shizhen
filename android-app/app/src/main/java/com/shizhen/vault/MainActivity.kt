@@ -33,10 +33,6 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val chooseFolder = Button(this).apply {
-            text = "选择本地素材库文件夹"
-            setOnClickListener { chooseVaultFolder() }
-        }
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -44,8 +40,6 @@ class MainActivity : Activity() {
             webViewClient = WebViewClient()
             addJavascriptInterface(VaultBridge(), "ShizhenNative")
         }
-        root.addView(chooseFolder, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(webView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
@@ -215,6 +209,9 @@ class MainActivity : Activity() {
             JSONObject().put("ok", false).put("error", error.message ?: "保存拾帧库失败").toString()
         }
         @JavascriptInterface fun hasExternalFolder(): Boolean = treeUri != null
+        @JavascriptInterface fun chooseExternalFolder() {
+            runOnUiThread { this@MainActivity.chooseVaultFolder() }
+        }
         @JavascriptInterface fun importBackupZip(base64: String): String = try {
             val bytes = Base64.decode(base64, Base64.DEFAULT)
             VaultBackupImporter.import(this@MainActivity, bytes, ::writeBytes).toString()
