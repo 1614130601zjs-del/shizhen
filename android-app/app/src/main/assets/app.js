@@ -1,0 +1,53 @@
+(() => {
+  const $ = selector => document.querySelector(selector);
+  const folderStatus = $('#folderStatus');
+  const importStatus = $('#importStatus');
+  const fileList = $('#fileList');
+  const native = window.ShizhenNative;
+  const encodeBase64 = buffer => {
+    const bytes = new Uint8Array(buffer); let binary = ''; const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    return btoa(binary);
+  };
+  const safeName = name => String(name || 'asset').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '_');
+  function updateFolderStatus(external) {
+    folderStatus.textContent = external
+      ? '已连接你选择的手机文件夹。新导入的素材会写入这个位置。'
+      : '当前使用 App 私有存储。可在顶部选择一个手机文件夹作为长期素材库。';
+  }
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+  function refresh() {
+    try {
+      const result = JSON.parse(native.listFiles());
+      if (!result.ok) throw new Error(result.error);
+      const files = result.files || []; fileList.innerHTML = '';
+      if (!files.length) { fileList.innerHTML = '<div class="empty">这里还没有素材。导入文件后会显示在这里。</div>'; return; }
+      files.sort((a,b) => a.path.localeCompare(b.path));
+      files.forEach(file => {
+        const row = document.createElement('div'); row.className = 'item';
+        const info = document.createElement('div'); const name = document.createElement('strong');
+        name.textContent = file.path; const size = document.createElement('small'); size.textContent = formatSize(file.size);
+        info.append(name,size); row.append(info); fileList.append(row);
+      });
+    } catch (error) { fileList.textContent = '读取失败：' + error.message; }
+  }
+  $('#files').addEventListener('change', async event => {
+    const files = Array.from(event.target.files || []); if (!files.length) return;
+    let saved = 0; const failures = [];
+    for (const file of files) {
+      try {
+        const result = JSON.parse(native.saveFile('inbox/' + Date.now() + '_' + safeName(file.name), encodeBase64(await file.arrayBuffer())));
+        if (!result.ok) throw new Error(result.error); saved++;
+      } catch (error) { failures.push(file.name + '：' + error.message); }
+    }
+    importStatus.textContent = '已保存 ' + saved + ' 个文件' + (failures.length ? '；失败：' + failures.join('；') : '');
+    event.target.value = ''; refresh();
+  });
+  $('#refresh').addEventListener('click', refresh);
+  window.ShizhenVault = { folderChanged: updateFolderStatus };
+  updateFolderStatus(native.hasExternalFolder()); refresh();
+})();
