@@ -19,10 +19,13 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.SecureRandom
 
 class MainActivity : Activity() {
     private lateinit var webView: WebView
     private var treeUri: Uri? = null
+    private var vaultServer: ShizhenVaultServer? = null
+    private var vaultToken: String = ""
     private val pickFolderRequest = 4102
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,6 +49,17 @@ class MainActivity : Activity() {
         setContentView(root)
         treeUri = getSharedPreferences("vault", MODE_PRIVATE)
             .getString("treeUri", null)?.let(Uri::parse)
+        val prefs = getSharedPreferences("vault", MODE_PRIVATE)
+        vaultToken = prefs.getString("vaultToken", null) ?: ByteArray(32).also {
+            SecureRandom().nextBytes(it)
+        }.let { Base64.encodeToString(it, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING) }
+            .also { prefs.edit().putString("vaultToken", it).apply() }
+        vaultServer = ShizhenVaultServer(this, vaultToken, File(filesDir, "vault-db").apply { mkdirs() })
+        try {
+            vaultServer?.start(5000, false)
+        } catch (error: Exception) {
+            Toast.makeText(this, "本地数据库服务启动失败：" + (error.message ?: "未知错误"), Toast.LENGTH_LONG).show()
+        }
         webView.loadUrl("file:///android_asset/index.html")
     }
 
@@ -171,7 +185,16 @@ class MainActivity : Activity() {
         }
     }
 
+    override fun onDestroy() {
+        vaultServer?.stop()
+        vaultServer = null
+        super.onDestroy()
+    }
+
     inner class VaultBridge {
+        @JavascriptInterface fun localServerInfo(): String =
+            JSONObject().put("url", "http://127.0.0.1:8765")
+                .put("token", vaultToken).put("running", vaultServer != null).toString()
         @JavascriptInterface fun hasExternalFolder(): Boolean = treeUri != null
         @JavascriptInterface fun importBackupZip(base64: String): String = try {
             val bytes = Base64.decode(base64, Base64.DEFAULT)
