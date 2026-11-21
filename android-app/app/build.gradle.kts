@@ -13,4 +13,7 @@ android {
         versionName = "0.5.0"
     }
 }
-dependencies {\n    implementation("androidx.documentfile:documentfile:1.0.1")\n    implementation("org.nanohttpd:nanohttpd:2.3.1")\n}
+dependencies {
+    implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
+}
