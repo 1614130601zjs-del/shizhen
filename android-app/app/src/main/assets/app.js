@@ -5,6 +5,16 @@
   const fileList = $('#fileList');
   const tavernStatus = $('#tavernStatus');
   const native = window.ShizhenNative;
+  try {
+    const info = JSON.parse(native.localServerInfo());
+    $('#vaultServerUrl').textContent = info.url;
+    $('#vaultServerToken').textContent = info.token;
+    $('#vaultServerStatus').textContent = info.running
+      ? '本地数据库服务已启动。拾帧插件可在 App 保持前台时连接。'
+      : '本地数据库服务未启动，请重启 App 后重试。';
+  } catch (error) {
+    $('#vaultServerStatus').textContent = '无法读取配对信息：' + error.message;
+  }
   const encodeBase64 = buffer => {
     const bytes = new Uint8Array(buffer); let binary = ''; const chunk = 0x8000;
     for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
