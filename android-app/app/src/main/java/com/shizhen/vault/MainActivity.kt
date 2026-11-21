@@ -43,6 +43,8 @@ class MainActivity : Activity() {
         root.addView(webView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
+        treeUri = getSharedPreferences("vault", MODE_PRIVATE)
+            .getString("treeUri", null)?.let(Uri::parse)
         webView.loadUrl("file:///android_asset/index.html")
     }
 
@@ -62,12 +64,13 @@ class MainActivity : Activity() {
         val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         contentResolver.takePersistableUriPermission(uri, flags)
         treeUri = uri
+        getSharedPreferences("vault", MODE_PRIVATE).edit().putString("treeUri", uri.toString()).apply()
         webView.evaluateJavascript("window.ShizhenVault && window.ShizhenVault.folderChanged(true)", null)
         Toast.makeText(this, "本地素材库位置已设置", Toast.LENGTH_SHORT).show()
     }
 
     private fun safeSegments(path: String): List<String> {
-        val clean = path.replace('\\\\', '/').trim('/')
+        val clean = path.replace('\\', '/').trim('/')
         require(clean.isNotBlank() && clean.split('/').all {
             it.isNotBlank() && it != "." && it != ".."
         }) { "无效的素材路径" }
