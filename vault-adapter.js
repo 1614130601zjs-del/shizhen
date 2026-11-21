@@ -70,11 +70,17 @@ function collectLinkedCharacterIndices(config, cards) {
     const linked = new Set();
     if (!Array.isArray(cards) || !cards.length) return linked;
     const byAvatar = new Map();
+    const byName = new Map();
     cards.forEach((card, index) => {
         const avatar = String(card?.avatar || '').trim();
+        const name = String(card?.name || '').trim().normalize('NFKC').toLocaleLowerCase();
         if (avatar) {
             if (!byAvatar.has(avatar)) byAvatar.set(avatar, []);
             byAvatar.get(avatar).push(index);
+        }
+        if (name) {
+            if (!byName.has(name)) byName.set(name, []);
+            byName.get(name).push(index);
         }
     });
     const seen = new WeakSet();
@@ -91,6 +97,10 @@ function collectLinkedCharacterIndices(config, cards) {
                 if (index >= 0 && index < cards.length) linked.add(index);
             } else if (childKey === 'characterAvatar' && typeof child === 'string') {
                 const matches = byAvatar.get(child.trim()) || [];
+                if (matches.length === 1) linked.add(matches[0]);
+            } else if (childKey === 'characterName' && typeof child === 'string') {
+                const name = child.trim().normalize('NFKC').toLocaleLowerCase();
+                const matches = byName.get(name) || [];
                 if (matches.length === 1) linked.add(matches[0]);
             }
             walk(child, childKey);
