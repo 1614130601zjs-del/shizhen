@@ -51,6 +51,67 @@ private class VaultIndex(context: Context) : SQLiteOpenHelper(context, "shizhen-
         }
         return rows
     }
+    fun currentLibrary(): JSONObject {
+        val payload = index.snapshot() ?: return JSONObject()
+        return JSONObject(payload).optJSONObject("snapshot") ?: JSONObject()
+    }
+
+    fun saveLibrary(settingsJson: String): JSONObject {
+        val settings = JSONObject(settingsJson)
+        // 连接凭据属于本机，不允许通过跨设备库编辑覆盖。
+        settings.remove("vaultEndpoint")
+        settings.remove("vaultToken")
+        val current = index.snapshot()?.let { JSONObject(it) } ?: JSONObject()
+        val oldManifest = current.optJSONObject("manifest") ?: JSONObject()
+        val oldAssets = oldManifest.optJSONArray("assets") ?: org.json.JSONArray()
+        val available = HashMap<String, JSONObject>()
+        for (i in 0 until oldAssets.length()) {
+            val item = oldAssets.optJSONObject(i) ?: continue
+            available[item.optString("id")] = item
+        }
+        val referenced = linkedSetOf<String>()
+        fun collect(value: Any?) {
+            when (value) {
+                is JSONObject -> {
+                    val keys = value.keys()
+                    while (keys.hasNext()) collect(value.opt(keys.next()))
+                }
+                is org.json.JSONArray -> for (i in 0 until value.length()) collect(value.opt(i))
+                is String -> if (value.startsWith("shizhen-asset://")) {
+                    val id = value.removePrefix("shizhen-asset://")
+                    require(id.matches(Regex("[a-f0-9]{64}"))) { "素材引用格式无效" }
+                    require(File(assetDir, id).isFile && index.hasAsset(id)) { "素材文件缺失：$id" }
+                    referenced.add(id)
+                }
+            }
+        }
+        collect(settings)
+        val assets = org.json.JSONArray()
+        for (id in referenced) {
+            val metadata = available[id]
+                ?: throw IllegalArgumentException("当前快照未登记该素材：$id")
+            assets.put(JSONObject(metadata.toString()))
+        }
+        val manifest = JSONObject(oldManifest.toString())
+            .put("format", "shizhen-plugin-vault")
+            .put("version", 1)
+            .put("plugin", "shizhen")
+            .put("createdAt", java.time.Instant.now().toString())
+            .put("assetCount", assets.length())
+            .put("snapshotBytes", settings.toString().toByteArray(Charsets.UTF_8).size)
+            .put("assets", assets)
+        val payload = JSONObject()
+            .put("format", "shizhen-plugin-vault")
+            .put("version", 1)
+            .put("manifest", manifest)
+            .put("snapshot", settings)
+        val saved = payload.toString()
+        snapshotFile.writeText(saved, Charsets.UTF_8)
+        val snapshotId = index.putSnapshot(saved)
+        return JSONObject().put("ok", true).put("snapshotId", snapshotId)
+            .put("assetCount", assets.length()).put("updatedAt", System.currentTimeMillis())
+    }
+
     fun listAssets(): JSONObject {
         val rows = org.json.JSONArray()
         readableDatabase.rawQuery("SELECT id,mime,filename,size,updated_at FROM assets ORDER BY updated_at DESC", null).use { c ->
