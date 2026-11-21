@@ -12,7 +12,7 @@
 - 导入时验证每个素材的路径、文件大小和 SHA-256；拒绝路径穿越、重复路径、缺失文件和不支持的版本。
 - 单个清单最大 4 MB，备份解压总量最大 512 MB，最多 10000 项。
 - 每次导入写入独立的 `backup-时间戳/` 目录，不覆盖既有文件。
-- 支持 Termux 同机酒馆连接检测，默认 `http://127.0.0.1:8000`；只允许本机回环地址。\n- 可通过 SillyTavern 本地 API 导出全部角色卡原始 PNG 和世界书 JSON，生成带 SHA-256 清单的 ZIP，保存到素材库 `exports/`。\n- 导出调用 `POST /api/characters/all`、`POST /api/characters/export`、`POST /api/worldinfo/list`、`POST /api/worldinfo/get`；单次素材总量限制 512 MB。
+- 支持 Termux 同机酒馆连接检测，默认 `http://127.0.0.1:8000`；只允许本机回环地址。\n- 可通过 SillyTavern 本地 API 导出全部角色卡原始 PNG 和世界书 JSON，生成带 SHA-256 清单的 ZIP，保存到素材库 `exports/`。\n- 导出调用 `POST /api/characters/all`、`POST /api/characters/export`、`POST /api/worldinfo/list`、`POST /api/worldinfo/get`；单次酒馆导出素材总量限制 128 MB（考虑手机内存占用）；ZIP 导入解压上限仍为 512 MB。
 
 ## 构建
 
