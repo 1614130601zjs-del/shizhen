@@ -24,6 +24,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#f6f1eb;col
 <button type="button" class="ql-tab" data-page="albums" role="tab" aria-selected="false">拾帧</button>
 <button type="button" class="ql-tab" data-page="theater" role="tab" aria-selected="false">小剧场</button>
 <button type="button" class="ql-tab" data-page="settings" role="tab" aria-selected="false">偏好</button>
+<button type="button" class="ql-tab" data-page="data" role="tab" aria-selected="false">数据</button>
 <button type="button" class="ql-tab" data-page="vault" role="tab" aria-selected="false">互传</button>
 <button type="button" class="ql-tab" data-page="prompt-gallery" role="tab" aria-selected="false" style="display:none">提示词图集</button>
 </nav>
@@ -43,6 +44,36 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#f6f1eb;col
 <label for="ql-ws-prompt">提示词</label><textarea id="ql-ws-prompt" rows="4"></textarea><label for="ql-ws-negative">负面提示词</label><textarea id="ql-ws-negative" rows="2"></textarea>
 <label for="ql-ws-strength">重绘强度 Strength：<span id="ql-ws-strength-out">0.7</span></label><input id="ql-ws-strength" type="range" min="0.01" max="0.99" step="0.01" value="0.7"><label for="ql-ws-noise">Noise：<span id="ql-ws-noise-out">0</span></label><input id="ql-ws-noise" type="range" min="0" max="0.99" step="0.01" value="0"><label for="ql-ws-seed">Seed（留空随机）</label><input id="ql-ws-seed" type="number" placeholder="随机"><label class="ql-ws-check"><input id="ql-ws-vibe" type="checkbox"> 带上取景区当前选中的 Vibe</label><label for="ql-ws-album">结果存放位置</label><select id="ql-ws-album"><option value="">影像缓存（默认）</option></select>
 <div class="ql-row"><button id="ql-ws-run" type="button" class="menu_button">开始重绘</button></div><p id="ql-ws-status" class="ql-muted" role="status"></p><div id="ql-ws-result"></div></div></section>
+</div>
+
+<div class="ql-page" data-page-panel="data" role="tabpanel" hidden>
+ <div class="ql-card">
+  <h3>拾帧原生数据</h3>
+  <p class="ql-muted">直接管理从插件快照移植的原始数据。保存时保留未编辑字段、稳定 ID、Vibe 原始编码与素材引用；不会把 Vibe 编码转换成普通图片。</p>
+  <label for="sz-data-category">数据类型</label>
+  <select id="sz-data-category">
+   <option value="presets">画师串</option><option value="vibes">Vibe 分组</option><option value="combinations">预设组合</option>
+   <option value="prompts">提示词库</option><option value="characters">角色词条库</option><option value="viewfinderRoles">取景角色</option>
+   <option value="bindings">角色配置绑定</option><option value="workLibrary">作品库</option><option value="worldbookModeManager">世界书联动配置</option>
+  </select>
+  <p id="sz-data-count" class="ql-muted">读取中…</p>
+  <label for="sz-data-entry">条目</label><select id="sz-data-entry"></select>
+  <div class="ql-row">
+   <button id="sz-data-new" type="button" class="menu_button">新建</button>
+   <button id="sz-data-delete" type="button" class="menu_button">删除当前条目</button>
+  </div>
+  <label for="sz-data-json">原始 JSON</label>
+  <textarea id="sz-data-json" rows="14" spellcheck="false" placeholder="选择条目后显示原始 JSON；保存时会完整保留 raw.encodings 等未知字段。"></textarea>
+  <div class="ql-row">
+   <button id="sz-data-save" type="button" class="menu_button ql-primary">保存到本机数据库</button>
+   <button id="sz-data-apply" type="button" class="menu_button">应用到取景</button>
+  </div>
+  <p id="sz-data-status" class="ql-muted" role="status">等待加载拾帧数据。</p>
+ </div>
+ <div class="ql-card">
+  <h3>数据迁移边界</h3>
+  <p class="ql-muted">画师串、Vibe、组合、角色词条、提示词、作品库和拾帧配置来自插件自身设置快照。世界书联动配置只记录绑定与规则；酒馆全局世界书正文仍需单独导入，不能从配置快照推断已经迁移。</p>
+ </div>
 </div>
 <div class="ql-page" data-page-panel="library" role="tabpanel" hidden>
 <nav class="ql-subtabs" role="tablist" aria-label="预设分区"><button type="button" class="ql-subtab active" data-subpage="artists" aria-selected="true">画师串</button><button type="button" class="ql-subtab" data-subpage="vibes" aria-selected="false">Vibe</button><button type="button" class="ql-subtab" data-subpage="bindings" aria-selected="false">预设</button></nav>

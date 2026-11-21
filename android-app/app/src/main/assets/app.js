@@ -301,4 +301,118 @@ if(native){set('sz-folder-status',native.hasExternalFolder()?'已选择外部文
 wireImportedSettings();
 wireAppearance();
 showPage('generate');
+
+function dataCategory(){return $('#sz-data-category')?.value||'presets';}
+function dataEntries(key=dataCategory()){
+ const value=library?.[key];
+ if(key==='worldbookModeManager')return value&&typeof value==='object'&&!Array.isArray(value)?[value]:[];
+ return Array.isArray(value)?value:[];
+}
+function dataEntryLabel(item,index,key){
+ const name=item?.name||item?.title||item?.label||item?.avatar||item?.id||('条目 '+(index+1));
+ if(key==='presets')return name+' · '+String(item?.positive||'').slice(0,36);
+ if(key==='vibes')return name+' · '+(Array.isArray(item?.entries)?item.entries.length+' 条引用':'单条编码');
+ if(key==='combinations')return name+' · 画师串 '+(Number(item?.artistIndex)>=0?Number(item.artistIndex)+1:'无')+' / Vibe '+(Number(item?.vibeIndex)>=0?Number(item.vibeIndex)+1:'无');
+ return String(name);
+}
+let dataSelectedIndex=0;
+function renderDataWorkspace(){
+ const category=$('#sz-data-category'),entry=$('#sz-data-entry'),editor=$('#sz-data-json');
+ if(!category||!entry||!editor)return;
+ const key=dataCategory(),items=dataEntries(key),isObject=key==='worldbookModeManager';
+ set('sz-data-count',isObject?'世界书联动配置对象':('共 '+items.length+' 条 · 原始数据字段完整保留'));
+ entry.replaceChildren();
+ if(isObject){
+  entry.hidden=true;
+  dataSelectedIndex=0;
+ }else{
+  entry.hidden=false;
+  items.forEach((item,index)=>entry.add(new Option(dataEntryLabel(item,index,key),String(index))));
+  dataSelectedIndex=Math.max(0,Math.min(items.length-1,dataSelectedIndex));
+  entry.value=items.length?String(dataSelectedIndex):'';
+ }
+ const item=items[dataSelectedIndex];
+ editor.value=item===undefined?'':JSON.stringify(item,null,2);
+ $('#sz-data-delete').disabled=isObject||!items.length;
+ $('#sz-data-apply').disabled=!item||!['presets','vibes','combinations'].includes(key);
+ set('sz-data-status',items.length?'已读取 '+(isObject?'世界书联动配置':items.length+' 条数据')+'。':'当前类型暂无数据，可新建条目。');
+}
+function saveDataWorkspace(){
+ const key=dataCategory(),editor=$('#sz-data-json');
+ let parsed;
+ try{parsed=JSON.parse(editor.value);}catch(error){set('sz-data-status','JSON 格式错误：'+error.message);return false;}
+ if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)){set('sz-data-status','条目必须是 JSON 对象。');return false;}
+ if(key==='worldbookModeManager')library[key]=parsed;
+ else{
+  if(!Array.isArray(library[key]))library[key]=[];
+  const index=Number($('#sz-data-entry').value);
+  if(Number.isInteger(index)&&index>=0&&index<library[key].length)library[key][index]=parsed;
+  else library[key].push(parsed);
+  dataSelectedIndex=library[key].findIndex(x=>x===parsed);
+ }
+ if(!native?.saveLibrary){set('sz-data-status','当前 App 版本没有本地数据库写入接口。');return false;}
+ const result=parse(native.saveLibrary(JSON.stringify(library)));
+ if(!result?.ok){set('sz-data-status','保存失败：'+(result?.error||'未知错误'));return false;}
+ library=parse(native.getLibrary());
+ renderDataWorkspace();
+ set('sz-data-status','已保存到本机数据库。原始字段与素材引用已交由数据库层保留。');
+ return true;
+}
+function newDataEntry(){
+ const key=dataCategory(),now=Date.now();
+ const templates={
+  presets:{id:'artist-'+now,name:'新画师串',positive:'',negative:''},
+  vibes:{id:'vibe-'+now,name:'新 Vibe 分组',entries:[]},
+  combinations:{id:'combo-'+now,name:'新组合',artistIndex:-1,vibeIndex:-1},
+  prompts:{id:'prompt-'+now,name:'新提示词',prompt:'',promptEn:''},
+  characters:{id:'character-'+now,name:'新角色词条',appearance:'',outfits:[]},
+  viewfinderRoles:{id:'role-'+now,name:'新取景角色',appearance:''},
+  bindings:{id:'binding-'+now,name:'新角色绑定',presetIndex:-1,vibeIndex:-1,comboIndex:-1},
+  workLibrary:{id:'work-'+now,name:'新作品',items:[]}
+ };
+ if(key==='worldbookModeManager'){library[key]={schemaVersion:4,enabled:false,mode:'pair',coreBook:'',coreBooks:{pair:'',group:''},worldviewBook:'',worldview:'',modeEntryBindings:{pair:{},group:{}},worldviewEntryOverrides:{},entryOverrides:{}};}
+ else{
+  if(!Array.isArray(library[key]))library[key]=[];
+  library[key].unshift(templates[key]||{id:'item-'+now,name:'新条目'});
+  dataSelectedIndex=0;
+ }
+ renderDataWorkspace();
+ $('#sz-data-status').textContent='已创建草稿；编辑 JSON 后点击保存写入本机。';
+}
+function applyDataEntry(){
+ const key=dataCategory(),items=dataEntries(key),item=items[Number($('#sz-data-entry').value)];
+ if(!item)return;
+ if(key==='presets'){
+  library.activeConfigMode='separate';library.activeComboIndex=-1;
+  library.activePresetIndex=Number($('#sz-data-entry').value);library.activeVibeIndex=-1;
+ }else if(key==='vibes'){
+  library.activeConfigMode='separate';library.activeComboIndex=-1;
+  library.activeVibeIndex=Number($('#sz-data-entry').value);
+ }else if(key==='combinations'){
+  const index=Number($('#sz-data-entry').value);
+  library.activeConfigMode='combo';library.activeComboIndex=index;
+  library.activePresetIndex=Number(item.artistIndex??-1);library.activeVibeIndex=Number(item.vibeIndex??-1);
+ }
+ if(native?.saveLibrary){
+  const result=parse(native.saveLibrary(JSON.stringify(library)));
+  if(result?.ok){library=parse(native.getLibrary());set('sz-data-status','已应用到取景配置并保存。');}
+  else set('sz-data-status','应用失败：'+(result?.error||'未知错误'));
+ }
+}
+function wireDataWorkspace(){
+ $('#sz-data-category')?.addEventListener('change',()=>{dataSelectedIndex=0;renderDataWorkspace();});
+ $('#sz-data-entry')?.addEventListener('change',()=>{dataSelectedIndex=Number($('#sz-data-entry').value)||0;renderDataWorkspace();});
+ $('#sz-data-new')?.addEventListener('click',newDataEntry);
+ $('#sz-data-delete')?.addEventListener('click',()=>{
+  const key=dataCategory(),index=Number($('#sz-data-entry').value);
+  if(key==='worldbookModeManager'||!Array.isArray(library[key])||!library[key][index])return;
+  library[key].splice(index,1);dataSelectedIndex=Math.max(0,index-1);
+  if(!saveDataWorkspace())renderDataWorkspace();
+ });
+ $('#sz-data-save')?.addEventListener('click',saveDataWorkspace);
+ $('#sz-data-apply')?.addEventListener('click',applyDataEntry);
+ renderDataWorkspace();
+}
+
+wireDataWorkspace();
 })();
