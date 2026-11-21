@@ -210,6 +210,30 @@ class MainActivity : Activity() {
             addAsset("characters/${archiveSafeName(avatar)}", png, "character", character.optString("name", avatar))
         }
 
+        var chatCount = 0
+        for (i in 0 until characters.length()) {
+            val character = characters.getJSONObject(i)
+            val avatar = character.optString("avatar")
+            if (avatar.isBlank() || !avatar.endsWith(".png", true)) continue
+            val chats = JSONArray(String(postTavern("chats/search",
+                JSONObject().put("avatar_url", avatar).put("query", "")), Charsets.UTF_8))
+            for (j in 0 until chats.length()) {
+                val chat = chats.getJSONObject(j)
+                val fileName = chat.optString("file_name")
+                if (fileName.isBlank()) continue
+                val exported = JSONObject(String(postTavern("chats/export",
+                    JSONObject().put("avatar_url", avatar)
+                        .put("file", if (fileName.endsWith(".jsonl")) fileName else "$fileName.jsonl")
+                        .put("format", "jsonl")
+                        .put("exportfilename", fileName)), Charsets.UTF_8))
+                val raw = exported.optString("result")
+                require(raw.isNotEmpty()) { "聊天记录导出为空：$fileName" }
+                addAsset("chats/${archiveSafeName(avatar)}/${archiveSafeName(fileName)}.jsonl",
+                    raw.toByteArray(Charsets.UTF_8), "chat", character.optString("name", avatar) + " / " + fileName)
+                chatCount++
+            }
+        }
+
         val worlds = JSONArray(String(postTavern("worldinfo/list", JSONObject()), Charsets.UTF_8))
         for (i in 0 until worlds.length()) {
             val world = worlds.getJSONObject(i)
@@ -240,7 +264,7 @@ class MainActivity : Activity() {
         writeBytes("exports/$backupName", archive)
         return JSONObject().put("ok", true).put("backupName", backupName)
             .put("path", "exports/$backupName").put("characters", characters.length())
-            .put("worldbooks", worlds.length()).put("files", files.size)
+            .put("worldbooks", worlds.length()).put("chats", chatCount).put("files", files.size)
             .put("bytes", totalBytes).put("archiveBytes", archive.size)
     }
 
