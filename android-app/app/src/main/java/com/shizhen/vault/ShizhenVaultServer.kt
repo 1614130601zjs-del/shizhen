@@ -191,6 +191,11 @@ class ShizhenVaultServer(
                     val value = index.snapshot(id) ?: return json(Response.Status.NOT_FOUND, JSONObject().put("error", "快照不存在"))
                     newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", value).withCors()
                 }
+                session.uri == "/v1/diagnostic-upload" && session.method == Method.PUT -> {
+                    // Exercises the exact browser CORS + PUT + NanoHTTPD body parser path without saving anything.
+                    val bytes = bodyFile(session).readBytes()
+                    json(Response.Status.OK, JSONObject().put("ok", true).put("size", bytes.size).put("sha256", digest(bytes)))
+                }
                 session.uri.startsWith("/v1/assets/") && session.method == Method.PUT -> {
                     val id = session.uri.removePrefix("/v1/assets/")
                     require(id.matches(Regex("[a-f0-9]{64}"))) { "资源 SHA-256 标识无效" }
