@@ -180,6 +180,7 @@ $('#sz-import-files')?.addEventListener('change',async e=>{
 });
 $('#sz-refresh-files')?.addEventListener('click',()=>{const r=parse(native.listFiles()),list=$('#sz-file-list');list.replaceChildren();if(!r.ok){list.textContent=r.error||'读取失败';return;}(r.files||[]).forEach(f=>{const p=document.createElement('p');p.className='ql-muted';p.textContent=f.path+' · '+bytes(Number(f.size||0));list.append(p);});if(!r.files?.length)list.textContent='暂无手动导入文件。';});
 $('#sz-asset-more')?.addEventListener('click',()=>renderAssetBatch(false).catch(error=>set('sz-vault-stats','读取图片失败：'+(error.message||error))));
+$('#sz-refresh-vault')?.addEventListener('click',()=>{try{refresh();set('sz-vault-stats','数据库索引已刷新。');}catch(error){set('sz-vault-stats','刷新失败：'+(error.message||error));}});
 window.ShizhenVault={folderChanged:ready=>set('sz-folder-status',ready?'已选择外部文件夹':'尚未选择外部文件夹')};
 if(native){set('sz-folder-status',native.hasExternalFolder()?'已选择外部文件夹':'尚未选择外部文件夹');refresh();loadAppearance();importedSettingsStatus();}
 wireAppearance();
