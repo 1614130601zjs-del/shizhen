@@ -85,6 +85,11 @@ export async function buildShizhenVaultSnapshot(config, options = {}) {
                     references: [],
                 };
                 assetsByHash.set(hash, asset);
+                if (typeof options.onAsset === 'function') {
+                    // Bulk sync streams one original image at a time; do not retain all image bytes in memory.
+                    await options.onAsset({ ...asset }, assetsByHash.size);
+                    delete asset.bytes;
+                }
             }
             asset.references.push(pointer);
             return IMAGE_REF_PREFIX + hash;
