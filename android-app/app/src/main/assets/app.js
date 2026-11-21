@@ -36,6 +36,17 @@
       });
     } catch (error) { fileList.textContent = '读取失败：' + error.message; }
   }
+  $('#backupFile').addEventListener('change', async event => {
+    const file = event.target.files?.[0]; if (!file) return;
+    importStatus.textContent = '正在校验备份包…';
+    try {
+      const result = JSON.parse(native.importBackupZip(encodeBase64(await file.arrayBuffer())));
+      if (!result.ok) throw new Error(result.error);
+      importStatus.textContent = '备份包校验通过，已导入 ' + result.imported + ' 个文件（' + formatSize(result.bytes) + '），备份编号：' + result.backupId;
+      refresh();
+    } catch (error) { importStatus.textContent = '备份包导入失败：' + error.message; }
+    event.target.value = '';
+  });
   $('#files').addEventListener('change', async event => {
     const files = Array.from(event.target.files || []); if (!files.length) return;
     let saved = 0; const failures = [];
