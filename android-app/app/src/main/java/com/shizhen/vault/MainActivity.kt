@@ -208,7 +208,7 @@ class MainActivity : Activity() {
         return generator.generateKey()
     }
 
-    private fun saveImportedSettings(json: String): JSONObject {
+    private fun encryptImportedSettings(json: String): JSONObject {
         val settings = JSONObject(json)
         require(settings.length() > 0) { "拾帧设置为空" }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -222,7 +222,7 @@ class MainActivity : Activity() {
         return JSONObject().put("ok", true).put("fieldCount", settings.length())
     }
 
-    private fun getImportedSettings(): JSONObject {
+    private fun readEncryptedImportedSettings(): JSONObject {
         val encoded = getSharedPreferences("vault", MODE_PRIVATE)
             .getString("importedSettingsEncrypted", null) ?: return JSONObject()
         val packed = Base64.decode(encoded, Base64.NO_WRAP)
@@ -294,12 +294,12 @@ class MainActivity : Activity() {
             JSONObject().put("ok", false).put("error", error.message ?: "保存拾帧库失败").toString()
         }
         @JavascriptInterface fun saveImportedSettings(settingsJson: String): String = try {
-            saveImportedSettings(settingsJson).toString()
+            encryptImportedSettings(settingsJson).toString()
         } catch (error: Exception) {
             JSONObject().put("ok", false).put("error", error.message ?: "加密保存设置失败").toString()
         }
         @JavascriptInterface fun getImportedSettings(): String = try {
-            getImportedSettings().toString()
+            readEncryptedImportedSettings().toString()
         } catch (error: Exception) {
             JSONObject().put("ok", false).put("error", error.message ?: "读取加密设置失败").toString()
         }
