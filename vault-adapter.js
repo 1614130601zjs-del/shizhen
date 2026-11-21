@@ -66,18 +66,81 @@ async function readImageSource(source, { fetchImpl, origin, mimeHint }) {
     return { bytes: new Uint8Array(await blob.arrayBuffer()), mime };
 }
 
-function characterManifest(cards) {
+function collectLinkedCharacterIndices(config, cards) {
+    const linked = new Set();
+    if (!Array.isArray(cards) || !cards.length) return linked;
+    const byAvatar = new Map();
+    cards.forEach((card, index) => {
+        const avatar = String(card?.avatar || '').trim();
+        if (avatar) {
+            if (!byAvatar.has(avatar)) byAvatar.set(avatar, []);
+            byAvatar.get(avatar).push(index);
+        }
+    });
+    const seen = new WeakSet();
+    function walk(value, key = '') {
+        if (!value || typeof value !== 'object' || seen.has(value)) return;
+        seen.add(value);
+        if (Array.isArray(value)) {
+            value.forEach(item => walk(item));
+            return;
+        }
+        for (const [childKey, child] of Object.entries(value)) {
+            if ((childKey === 'characterKey' || childKey === 'albumCharacterKey') && /^\\d+$/.test(String(child ?? ''))) {
+                const index = Number(child);
+                if (index >= 0 && index < cards.length) linked.add(index);
+            } else if (childKey === 'characterAvatar' && typeof child === 'string') {
+                const matches = byAvatar.get(child.trim()) || [];
+                if (matches.length === 1) linked.add(matches[0]);
+            }
+            walk(child, childKey);
+        }
+    }
+    walk(config);
+    for (const field of ['albumNames', 'albumCovers']) {
+        for (const key of Object.keys(config?.[field] || {})) {
+            if (/^\\d+$/.test(key) && Number(key) < cards.length) linked.add(Number(key));
+        }
+    }
+    return linked;
+}
+
+async function buildCharacterManifest(cards, config, registerAsset, { fetchImpl, origin }) {
     if (!Array.isArray(cards)) return [];
-    return cards.map((card, sourceIndex) => {
+    const linked = collectLinkedCharacterIndices(config, cards);
+    const rows = cards.map((card, sourceIndex) => {
         const name = String(card?.name || '').trim();
         const avatar = String(card?.avatar || '').trim();
         return {
-            sourceIndex,
-            name,
-            avatar,
-            stableId: avatar ? 'avatar:' + avatar : (name ? 'name:' + name.normalize('NFKC').toLocaleLowerCase() : 'index:' + sourceIndex),
+            sourceIndex, name, avatar,
+            stableId: avatar ? 'avatar:' + avatar : (name ? 'name:' + name.normalize('NFKC').toLowerCase() : 'index:' + sourceIndex),
+            linked: linked.has(sourceIndex),
         };
     });
+    for (const row of rows) {
+        if (!row.linked || !row.avatar || row.avatar.startsWith('data:')) continue;
+        try {
+            const url = new URL('/characters/' + encodeURIComponent(row.avatar), origin);
+            if (url.origin !== origin) throw new Error('角色卡文件不属于当前酒馆');
+            const response = await fetchImpl(url.href, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const blob = await response.blob();
+            const mime = blob.type || (/\\.png$/i.test(row.avatar) ? 'image/png' : 'application/octet-stream');
+            if (!String(mime).startsWith('image/') && mime !== 'application/octet-stream') throw new Error('返回内容不是角色卡文件');
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            if (!bytes.byteLength) throw new Error('角色卡文件为空');
+            row.cardAssetId = await registerAsset({
+                bytes, mime, filename: row.avatar.split('/').pop() || ('character-' + row.sourceIndex + '.png'),
+                source: 'character-card',
+                reference: { pointer: '/@characters/' + row.sourceIndex, mode: 'character-card', key: 'avatar' },
+            });
+            row.cardMime = mime;
+        } catch (error) {
+            row.cardStatus = 'unavailable';
+            row.cardError = String(error?.message || error).slice(0, 180);
+        }
+    }
+    return rows;
 }
 
 /**
@@ -97,6 +160,21 @@ export async function buildShizhenVaultSnapshot(config, options = {}) {
     const assetsByHash = new Map();
     const seenObjects = new WeakSet();
 
+    async function registerAsset({ bytes, mime, filename, source, reference }) {
+        const hash = await sha256(bytes);
+        let asset = assetsByHash.get(hash);
+        if (!asset) {
+            asset = { id: hash, sha256: hash, mime, filename: safeFilename(filename, mime), size: bytes.byteLength, bytes, source, references: [] };
+            assetsByHash.set(hash, asset);
+            if (typeof options.onAsset === 'function') {
+                await options.onAsset({ ...asset }, assetsByHash.size);
+                delete asset.bytes;
+            }
+        }
+        if (reference) asset.references.push(reference);
+        return hash;
+    }
+
     async function walk(value, key, pointer) {
         const rawInfo = rawImageInfo(value, key);
         const localPath = isLocalImagePath(value, key);
@@ -104,22 +182,10 @@ export async function buildShizhenVaultSnapshot(config, options = {}) {
             const mode = rawInfo ? 'raw-base64' : (isDataImage(value) ? 'data-url' : 'tavern-path');
             const source = rawInfo ? 'data:' + rawInfo.mime + ';base64,' + rawInfo.base64 : value;
             const { bytes, mime } = await readImageSource(source, { fetchImpl, origin, mimeHint: rawInfo?.mime });
-            const hash = await sha256(bytes);
-            let asset = assetsByHash.get(hash);
-            if (!asset) {
-                asset = {
-                    id: hash, sha256: hash, mime, filename: safeFilename(value, mime),
-                    size: bytes.byteLength, bytes,
-                    source: mode,
-                    references: [],
-                };
-                assetsByHash.set(hash, asset);
-                if (typeof options.onAsset === 'function') {
-                    await options.onAsset({ ...asset }, assetsByHash.size);
-                    delete asset.bytes;
-                }
-            }
-            asset.references.push({ pointer, mode, key: String(key || '') });
+            const hash = await registerAsset({
+                bytes, mime, filename: value, source: mode,
+                reference: { pointer, mode, key: String(key || '') },
+            });
             return IMAGE_REF_PREFIX + hash;
         }
         if (!value || typeof value !== 'object' || seenObjects.has(value)) return value;
@@ -138,13 +204,14 @@ export async function buildShizhenVaultSnapshot(config, options = {}) {
     }
 
     await walk(snapshot, '', '');
+    const characters = await buildCharacterManifest(options.characterCards, snapshot, registerAsset, { fetchImpl, origin });
     const assets = [...assetsByHash.values()];
     const manifest = {
         format: FORMAT, version: VERSION, schemaVersion: SCHEMA_VERSION,
         createdAt: new Date().toISOString(), plugin: 'shizhen',
         assetCount: assets.length,
         snapshotBytes: new TextEncoder().encode(JSON.stringify(snapshot)).byteLength,
-        characters: characterManifest(options.characterCards),
+        characters,
         assets: assets.map(({ bytes, ...metadata }) => metadata),
     };
     return { manifest, snapshot, assets };
