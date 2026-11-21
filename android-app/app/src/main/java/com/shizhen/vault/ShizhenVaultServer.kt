@@ -144,6 +144,8 @@ class ShizhenVaultServer(
         addHeader("Access-Control-Allow-Origin", "*")
         addHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS")
         addHeader("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Asset-Mime,X-Asset-Name")
+        // Android WebView may classify file:// -> loopback as a Private Network Access request.
+        addHeader("Access-Control-Allow-Private-Network", "true")
         addHeader("Access-Control-Max-Age", "600")
         return this
     }
