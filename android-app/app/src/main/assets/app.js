@@ -814,6 +814,44 @@ function materializeAppVibe(group,c){
  }).filter(Boolean);
  return {...group,entries};
 }
+function appCharacterKey(item){return String(item?.id||((item?.characterKey??'')+'::'+(item?.name||item?.characterName||'')));}
+function selectedAppCharacters(c){
+ const selected=new Set(Array.isArray(c.androidSelectedCharacterKeys)?c.androidSelectedCharacterKeys:[]);
+ return (Array.isArray(c.characters)?c.characters:[]).filter(item=>item&&selected.has(appCharacterKey(item)));
+}
+function appCharacterPrompt(item,scene){
+ const parts=[String(item?.appearance||'').trim()];
+ const text=String(scene||'').toLowerCase();
+ for(const outfit of (Array.isArray(item?.outfits)?item.outfits:[])){
+  const triggers=String(outfit?.triggers||'').split(/[|,，、\n]/).map(x=>x.trim().toLowerCase()).filter(Boolean);
+  if(triggers.some(trigger=>text.includes(trigger)))parts.push(String(outfit?.text||'').trim());
+ }
+ return parts.filter(Boolean).join(', ');
+}
+
+function renderAppCharacterChoices(){
+ const host=$('#sz-app-character-list');if(!host)return;
+ host.replaceChildren();
+ const items=Array.isArray(library.characters)?library.characters:[];
+ const usable=items.filter(item=>item&&String(item.appearance||'').trim());
+ if(!usable.length){const p=document.createElement('p');p.className='ql-muted';p.textContent='当前快照没有可用的角色外貌词条。请先在「数据」页导入或编辑角色词条。';host.append(p);return;}
+ const selected=new Set(Array.isArray(library.androidSelectedCharacterKeys)?library.androidSelectedCharacterKeys:[]);
+ usable.forEach(item=>{
+  const key=appCharacterKey(item),label=document.createElement('label');label.className='ql-check';label.style.cssText='display:flex;align-items:flex-start;gap:10px;margin:8px 0';
+  const input=document.createElement('input');input.type='checkbox';input.checked=selected.has(key);
+  const textNode=document.createElement('span'),name=document.createElement('strong'),desc=document.createElement('small');
+  name.textContent=item.name||item.characterName||'未命名角色';desc.textContent=String(item.appearance||'').slice(0,180);desc.style.cssText='display:block;opacity:.72;margin-top:3px;white-space:normal';
+  textNode.append(name,desc);label.append(input,textNode);host.append(label);
+  input.addEventListener('change',()=>{
+   const next=new Set(Array.isArray(library.androidSelectedCharacterKeys)?library.androidSelectedCharacterKeys:[]);
+   if(input.checked)next.add(key);else next.delete(key);
+   library.androidSelectedCharacterKeys=[...next];
+   const saved=parse(native.saveLibrary(JSON.stringify(library)));
+   set('ql-status',saved?.ok?'角色选择已保存。':'角色选择保存失败：'+(saved?.error||'未知错误'));
+  });
+ });
+}
+
 function resolveAppActiveGeneration(prompt,c){
  const combo=c.activeConfigMode!=='separate'&&Number(c.activeComboIndex)>=0?c.combinations?.[Number(c.activeComboIndex)]:null;
  const presetIndex=combo?Number(combo.artistIndex??-1):Number(c.activePresetIndex??-1);
@@ -821,9 +859,13 @@ function resolveAppActiveGeneration(prompt,c){
  const preset=presetIndex>=0?c.presets?.[presetIndex]:null;
  const vibeGroup=vibeIndex>=0?c.vibes?.[vibeIndex]:null;
  const vibe=materializeAppVibe(vibeGroup,c);
- const finalPrompt=[preset?.positive,String(prompt||'').trim()].filter(Boolean).join(', ');
+ const basePrompt=[preset?.positive,String(prompt||'').trim()].filter(Boolean).join(', ');
  const finalNegative=[String(c.negative||'').trim(),String(preset?.negative||'').trim()].filter(Boolean).join(', ');
- return {prompt:finalPrompt,negative:finalNegative,preset,vibe};
+ const characters=selectedAppCharacters(c).map(item=>({item,prompt:appCharacterPrompt(item,prompt)})).filter(x=>x.prompt);
+ const structured=/^(?:novelai|novelai-thirdparty)$/.test(c.provider||'')&&/^nai-diffusion-(?:4(?:-|$)|5-)/i.test(String(c.naiModel||''));
+ const naiPromptData=structured&&characters.length?{basePrompt,characters:characters.map(x=>({key:x.item.name||x.item.characterName||'角色',prompt:x.prompt}))}:null;
+ const finalPrompt=structured?basePrompt:[basePrompt,...characters.map(x=>x.prompt)].filter(Boolean).join(', ');
+ return {prompt:finalPrompt,negative:finalNegative,preset,vibe,naiPromptData,characters:characters.map(x=>x.item)};
 }
 async function saveGeneratedAsset(dataUrl){
  let blob;
@@ -860,12 +902,13 @@ async function runStandaloneGeneration(){
   if(c.provider==='novelai-thirdparty'&&(!c.naiThirdEndpoint||!c.naiThirdKey))throw new Error('请先填写 NovelAI 第三方 API 地址和 Key。');
   if(c.provider==='openai'&&(!c.endpoint||!c.apiKey))throw new Error('请先填写 OpenAI 兼容 API 地址和 Key。');
   set('ql-status','正在连接 '+(c.provider==='openai'?'OpenAI 兼容服务':'NovelAI')+'…');
-  const image=await appRequestImage(resolved.prompt,resolved.negative,resolved.vibe,null);
+  const image=await appRequestImage(resolved.prompt,resolved.negative,resolved.vibe,resolved.naiPromptData);
   set('ql-status','图片已生成，正在写入本机素材库…');
   const assetRef=await saveGeneratedAsset(image);
   const record={at:Date.now(),source:'app-viewfinder',collection:'cache',prompt:resolved.prompt,basePrompt:prompt,negative:resolved.negative,
    provider:c.provider,model:c.provider==='openai'?c.model:c.naiModel,size:c.provider==='openai'?c.size:(c.naiWidth+'x'+c.naiHeight),quality:c.quality,
    dataUrl:assetRef,thumb:assetRef,preset:resolved.preset?{id:resolved.preset.id||'',name:resolved.preset.name||'',positive:resolved.preset.positive||'',negative:resolved.preset.negative||''}:null,
+   characters:resolved.characters.map(x=>({name:x.name||x.characterName||'',characterKey:x.characterKey||''})),
    vibe:resolved.vibe?{name:resolved.vibe.name||'',entries:(resolved.vibe.entries||[]).map(x=>({strength:x.strength??0.6,informationExtracted:x.informationExtracted??1,identifier:x.identifier||x.raw?.identifier||'',type:x.type||x.raw?.type||'encoding'}))}:null};
   if(!Array.isArray(library.records))library.records=[];
   library.records.unshift(record);
@@ -877,7 +920,16 @@ async function runStandaloneGeneration(){
  }catch(error){set('ql-status','生图失败：'+(error?.message||String(error)));}
  finally{appGenerationBusy=false;if(button)button.disabled=false;if(indicator)indicator.hidden=true;}
 }
-function wireStandaloneGeneration(){$('#ql-generate')?.addEventListener('click',runStandaloneGeneration);}
+function wireStandaloneGeneration(){
+ $('#ql-generate')?.addEventListener('click',runStandaloneGeneration);
+ renderAppCharacterChoices();
+ $('#ql-fast-provider')?.addEventListener('change',()=>{
+  const openai=$('#ql-fast-provider').value==='openai';
+  if($('#ql-fast-openai'))$('#ql-fast-openai').hidden=!openai;
+  if($('#ql-fast-nai'))$('#ql-fast-nai').hidden=openai;
+  saveImportedSettingsFromControls();
+ });
+}
 
 function wireDataWorkspace(){
  wireStandaloneGeneration();
