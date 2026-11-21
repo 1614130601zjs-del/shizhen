@@ -164,6 +164,12 @@ class MainActivity : Activity() {
 
     inner class VaultBridge {
         @JavascriptInterface fun hasExternalFolder(): Boolean = treeUri != null
+        @JavascriptInterface fun importBackupZip(base64: String): String = try {
+            val bytes = Base64.decode(base64, Base64.DEFAULT)
+            VaultBackupImporter.import(this@MainActivity, bytes, ::writeBytes).toString()
+        } catch (error: Exception) {
+            JSONObject().put("ok", false).put("error", error.message ?: "备份包导入失败").toString()
+        }
         @JavascriptInterface fun savedTavernAddress(): String =
             getSharedPreferences("vault", MODE_PRIVATE).getString("tavernAddress", "http://127.0.0.1:8000")!!
         @JavascriptInterface fun testTavern(address: String): String = try {
