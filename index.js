@@ -6466,14 +6466,27 @@ function init(){const root=$('#shizhen-panel');if(!root||root.dataset.ready)retu
  $('#ql-vault-push').onclick=async()=>{const b=$('#ql-vault-push');if(b.disabled)return;b.disabled=true;let stage='连接检查';try{conn();stage='读取拾帧设置并逐张提取、上传原图';msg.textContent='正在读取拾帧素材；图片将逐张提取并上传，不会一次性占用大量内存…';let uploadedCount=0;const built=await buildShizhenVaultSnapshot(cfg(),{characterCards:getCharacterCards(),onAsset:async a=>{const i=++uploadedCount;stage='上传图片 '+i+'（'+a.filename+'，'+Math.round(a.size/1024)+' KB）';msg.textContent='已上传 '+i+' 张图片，正在处理：'+a.filename+'…';await uploadAsset(a,attempt=>{msg.textContent='第 '+i+' 张图片上传响应异常，正在校验数据库并进行第 '+attempt+' 次恢复尝试…';});}});stage='提交拾帧设置索引';msg.textContent='正在提交拾帧设置索引…';const snapshotPayload=JSON.stringify({format:built.manifest.format,version:built.manifest.version,manifest:built.manifest,snapshot:built.snapshot});const snapshotBody=new TextEncoder().encode(snapshotPayload);if(!snapshotBody.byteLength)throw new Error('拾帧设置索引序列化结果为空，已阻止提交');await req('/v1/snapshot',{method:'POST',timeoutMs:120000,headers:{'Content-Type':'application/json'},body:snapshotBody});msg.textContent='同步完成：'+built.manifest.assetCount+' 个图片文件，设置快照 '+Math.round(built.manifest.snapshotBytes/1024)+' KB。';}catch(e){msg.textContent='同步失败（'+stage+'）：'+(e.message||e);}finally{b.disabled=false;}};
  $('#ql-vault-pull').onclick=async()=>{if(!await qlConfirm('从本地数据库恢复并替换当前拾帧数据？酒馆其他内容不会被修改。建议先同步当前数据。'))return;const b=$('#ql-vault-pull');b.disabled=true;try{msg.textContent='读取数据库快照…';const p=await(await req('/v1/snapshot')).json();if(p.format!=='shizhen-plugin-vault'||p.version!==1||!p.snapshot||!p.manifest)throw new Error('快照格式无效');const sourceCharacters=Array.isArray(p.manifest.characters)?p.manifest.characters:[];
 let targetCharacters=getCharacterCards();
-const importedCardAvatars=new Map();
-const findCharacterMatches=source=>{
+const importedCardAvatars=new Map(),characterMatches=new Map();
+const findCharacterIndex=async source=>{
  const avatar=String(source.avatar||'').trim(),name=String(source.name||'').trim();
  let matches=avatar?targetCharacters.map((card,index)=>({card,index})).filter(x=>String(x.card?.avatar||'').trim()===avatar):[];
  if(matches.length!==1&&name)matches=targetCharacters.map((card,index)=>({card,index})).filter(x=>String(x.card?.name||'').trim()===name);
- return matches;
+ if(matches.length!==1)return null;
+ if(source.cardAssetId){
+  const targetAvatar=String(matches[0].card?.avatar||'').trim();
+  if(!targetAvatar)return null;
+  try{
+   const response=await fetch('/characters/'+encodeURIComponent(targetAvatar));
+   if(!response.ok)return null;
+   const bytes=await response.arrayBuffer();
+   const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
+   if(hash!==source.cardAssetId)return null;
+  }catch{return null;}
+ }
+ return matches[0].index;
 };
-const missingCards=sourceCharacters.filter(source=>source.linked&&source.cardAssetId&&findCharacterMatches(source).length!==1);
+for(const source of sourceCharacters)characterMatches.set(Number(source.sourceIndex),await findCharacterIndex(source));
+const missingCards=sourceCharacters.filter(source=>source.linked&&source.cardAssetId&&characterMatches.get(Number(source.sourceIndex))==null);
 let importMissingCards=false;
 if(missingCards.length)importMissingCards=await qlConfirm('目标酒馆缺少 '+missingCards.length+' 张拾帧关联角色卡：'+missingCards.map(x=>x.name||x.avatar).join('、')+'。是否导入原始 PNG 角色卡？导入会新增角色卡，不会覆盖现有卡片，也不会导入聊天记录或酒馆全局世界书。');
 const setPointer=(root,pointer,value)=>{
@@ -6565,8 +6578,10 @@ if(sourceCharacters.length){
   const sourceIndex=Number(source.sourceIndex);
   if(!Number.isInteger(sourceIndex)||sourceIndex<0)continue;
   const importedAvatar=importedCardAvatars.get(sourceIndex);
-  const matches=importedAvatar?targetCharacters.map((card,index)=>({card,index})).filter(x=>String(x.card?.avatar||'').trim()===importedAvatar):findCharacterMatches(source);
-  characterMap.set(sourceIndex,matches.length===1?matches[0].index:null);
+  if(importedAvatar){
+   const matches=targetCharacters.map((card,index)=>({card,index})).filter(x=>String(x.card?.avatar||'').trim()===importedAvatar);
+   characterMap.set(sourceIndex,matches.length===1?matches[0].index:null);
+  }else characterMap.set(sourceIndex,characterMatches.get(sourceIndex)??null);
  }
  const remapObject=value=>{
   if(Array.isArray(value)){value.forEach(remapObject);return;}
