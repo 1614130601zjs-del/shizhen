@@ -18,6 +18,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : Activity() {
     private lateinit var webView: WebView
@@ -139,8 +141,40 @@ class MainActivity : Activity() {
         return result
     }
 
+    private fun probeLocalTavern(address: String): JSONObject {
+        val url = URL(address.trim().trimEnd('/'))
+        require(url.protocol == "http" && url.host in setOf("127.0.0.1", "localhost", "::1")) {
+            "出于安全考虑，目前只允许连接本机 127.0.0.1 / localhost"
+        }
+        val connection = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 3500
+            readTimeout = 3500
+            instanceFollowRedirects = false
+        }
+        return try {
+            val code = connection.responseCode
+            JSONObject().put("ok", code in 200..399)
+                .put("httpStatus", code)
+                .put("message", if (code in 200..399) "已连接到本机服务。此检测只确认端口可访问，尚未完成酒馆 API 配对。" else "本机服务有响应，但返回 HTTP $code。")
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     inner class VaultBridge {
         @JavascriptInterface fun hasExternalFolder(): Boolean = treeUri != null
+        @JavascriptInterface fun savedTavernAddress(): String =
+            getSharedPreferences("vault", MODE_PRIVATE).getString("tavernAddress", "http://127.0.0.1:8000")!!
+        @JavascriptInterface fun testTavern(address: String): String = try {
+            val result = probeLocalTavern(address)
+            if (result.optBoolean("ok")) {
+                getSharedPreferences("vault", MODE_PRIVATE).edit().putString("tavernAddress", address.trim().trimEnd('/')).apply()
+            }
+            result.toString()
+        } catch (error: Exception) {
+            JSONObject().put("ok", false).put("message", error.message ?: "连接失败").toString()
+        }
         @JavascriptInterface fun saveFile(path: String, base64: String): String = try {
             writeBytes(path, Base64.decode(base64, Base64.DEFAULT))
             JSONObject().put("ok", true).toString()
