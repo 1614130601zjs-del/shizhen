@@ -100,9 +100,27 @@ function wireAppearance(){
 function downloadText(text,filename,type){const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);}
 function copy(v){const t=document.createElement('textarea');t.value=v;document.body.append(t);t.select();try{document.execCommand('copy')}catch(e){}t.remove();}
 const bytes=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';
+let assetRows=[],assetOffset=0,assetServerInfo=null;
+async function renderAssetBatch(reset=false){
+ const list=$('#sz-asset-list'),more=$('#sz-asset-more');if(!list)return;
+ if(reset){assetOffset=0;list.replaceChildren();}
+ const batch=assetRows.slice(assetOffset,assetOffset+24);
+ if(!assetRows.length){list.textContent='数据库中还没有同步图片。';if(more)more.hidden=true;return;}
+ if(!batch.length){if(more)more.hidden=true;return;}
+ for(const asset of batch){
+  const row=document.createElement('div');row.className='ql-record';row.style.cssText='display:flex;align-items:center;gap:12px';
+  const image=document.createElement('img');image.alt=asset.filename||'拾帧图片';image.loading='lazy';image.style.cssText='width:76px;height:76px;flex:0 0 76px;object-fit:cover;border-radius:10px;background:var(--ql-panel)';
+  const info=document.createElement('div');info.style.cssText='min-width:0;flex:1';
+  const title=document.createElement('strong'),meta=document.createElement('p');title.textContent=asset.filename||asset.id;title.style.cssText='display:block;overflow-wrap:anywhere';
+  meta.className='ql-muted';meta.textContent=(asset.mime||'图片')+' · '+bytes(Number(asset.size||0));info.append(title,meta);row.append(image,info);list.append(row);
+  if(assetServerInfo?.url&&assetServerInfo?.token){try{const response=await fetch(assetServerInfo.url.replace(/\\/+$/,'')+'/v1/assets/'+encodeURIComponent(asset.id),{headers:{Authorization:'Bearer '+assetServerInfo.token}});if(!response.ok)throw new Error('HTTP '+response.status);image.src=URL.createObjectURL(await response.blob());}catch(error){image.alt='预览暂不可用：'+(error.message||'读取失败');}}
+ }
+ assetOffset+=batch.length;if(more){more.hidden=assetOffset>=assetRows.length;more.textContent='继续显示（已显示 '+assetOffset+' / '+assetRows.length+'）';}
+}
 function refresh(){
  if(!native){set('sz-vault-server','原生数据库服务不可用');return;}
  const info=parse(native.localServerInfo()),stats=parse(native.localDatabaseStats()),assets=stats.assets||[],snaps=stats.snapshots||[];
+ assetRows=assets.slice();assetServerInfo=info;
  set('sz-vault-server',info.running?'本地数据库服务运行中':'本地数据库服务未启动');
  $('#sz-vault-url').value=info.url||'http://127.0.0.1:8765';$('#sz-vault-token').value=info.token||'';
  const total=assets.reduce((n,a)=>n+Number(a.size||0),0);
@@ -110,6 +128,7 @@ function refresh(){
  const list=$('#sz-snapshot-list');list.replaceChildren();
  if(!snaps.length)list.textContent='暂无历史快照。完成首次插件同步后会在这里显示。';
  snaps.forEach(s=>{const row=document.createElement('div');row.className='ql-record';const title=document.createElement('strong'),meta=document.createElement('p');title.textContent=s.current?'当前版本':'历史版本';meta.className='ql-muted';meta.textContent=new Date(Number(s.createdAt)).toLocaleString()+' · '+s.id;row.append(title,meta);list.append(row);});
+ renderAssetBatch(true).catch(error=>{const target=$('#sz-asset-list');if(target)target.textContent='读取图片列表失败：'+(error.message||error);});
 }
 $('#sz-copy-url')?.addEventListener('click',()=>copy($('#sz-vault-url').value));
 $('#sz-copy-token')?.addEventListener('click',()=>copy($('#sz-vault-token').value));
@@ -123,6 +142,7 @@ $('#sz-import-files')?.addEventListener('change',async e=>{
  e.target.value='';refresh();
 });
 $('#sz-refresh-files')?.addEventListener('click',()=>{const r=parse(native.listFiles()),list=$('#sz-file-list');list.replaceChildren();if(!r.ok){list.textContent=r.error||'读取失败';return;}(r.files||[]).forEach(f=>{const p=document.createElement('p');p.className='ql-muted';p.textContent=f.path+' · '+bytes(Number(f.size||0));list.append(p);});if(!r.files?.length)list.textContent='暂无手动导入文件。';});
+$('#sz-asset-more')?.addEventListener('click',()=>renderAssetBatch(false).catch(error=>set('sz-vault-stats','读取图片失败：'+(error.message||error))));
 window.ShizhenVault={folderChanged:ready=>set('sz-folder-status',ready?'已选择外部文件夹':'尚未选择外部文件夹')};
 if(native){set('sz-folder-status',native.hasExternalFolder()?'已选择外部文件夹':'尚未选择外部文件夹');refresh();loadAppearance();}
 wireAppearance();
