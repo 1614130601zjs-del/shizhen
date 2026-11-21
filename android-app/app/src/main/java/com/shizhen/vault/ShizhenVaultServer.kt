@@ -158,8 +158,13 @@ class ShizhenVaultServer(
     private fun bodyFile(session: IHTTPSession): File {
         val files = HashMap<String, String>()
         session.parseBody(files)
-        val path = files["postData"] ?: throw IOException("请求体为空")
-        return File(path)
+        // NanoHTTPD 2.3.1 stores raw POST bodies as "postData", but PUT bodies as "content".
+        // Asset uploads use PUT; looking only for postData made every non-empty upload look empty.
+        val key = if (session.method == Method.PUT) "content" else "postData"
+        val path = files[key] ?: throw IOException("请求体为空（" + session.method + "，已解析字段：" + files.keys.joinToString() + "）")
+        val file = File(path)
+        if (!file.isFile || file.length() == 0L) throw IOException("请求体为空（" + session.method + "，长度为 0）")
+        return file
     }
 
     override fun serve(session: IHTTPSession): Response {
