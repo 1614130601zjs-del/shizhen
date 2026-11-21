@@ -143,7 +143,7 @@ class ShizhenVaultServer(
     private fun Response.withCors(): Response {
         addHeader("Access-Control-Allow-Origin", "*")
         addHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS")
-        addHeader("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Asset-Mime,X-Asset-Name")
+        addHeader("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Asset-Id,X-Asset-Mime,X-Asset-Name")
         // Android WebView may classify file:// -> loopback as a Private Network Access request.
         addHeader("Access-Control-Allow-Private-Network", "true")
         addHeader("Access-Control-Max-Age", "600")
@@ -177,8 +177,28 @@ class ShizhenVaultServer(
         if (!authorized(session)) return json(Response.Status.UNAUTHORIZED, JSONObject().put("ok", false).put("error", "配对令牌无效"))
         return try {
             when {
-                session.uri == "/v1/assets" && session.method == Method.GET ->
-                    json(Response.Status.OK, index.listAssets())
+                session.uri == "/v1/assets" && session.method == Method.GET -> {
+                    val id = session.headers["x-asset-id"]
+                    if (id.isNullOrBlank()) {
+                        json(Response.Status.OK, index.listAssets())
+                    } else {
+                        require(id.matches(Regex("[a-f0-9]{64}"))) { "资源标识无效" }
+                        val file = File(assetDir, id)
+                        if (!file.isFile) return json(Response.Status.NOT_FOUND, JSONObject().put("error", "资源不存在"))
+                        newFixedLengthResponse(Response.Status.OK, "application/octet-stream", file.inputStream(), file.length()).withCors()
+                    }
+                }
+                session.uri == "/v1/assets" && session.method == Method.PUT -> {
+                    val id = session.headers["x-asset-id"] ?: throw IllegalArgumentException("缺少资源 SHA-256 标识")
+                    require(id.matches(Regex("[a-f0-9]{64}"))) { "资源 SHA-256 标识无效" }
+                    val bytes = bodyFile(session).readBytes()
+                    require(digest(bytes) == id) { "资源 SHA-256 校验失败" }
+                    File(assetDir, id).writeBytes(bytes)
+                    val mime = session.headers["x-asset-mime"] ?: "application/octet-stream"
+                    val filename = session.headers["x-asset-name"] ?: id
+                    index.putAsset(id, mime, filename, bytes.size.toLong())
+                    json(Response.Status.OK, JSONObject().put("ok", true).put("id", id).put("size", bytes.size))
+                }
                 session.uri == "/v1/snapshot" && session.method == Method.GET -> {
                     val value = index.snapshot() ?: return json(Response.Status.NOT_FOUND, JSONObject().put("error", "本地数据库还没有快照"))
                     newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", value).withCors()
