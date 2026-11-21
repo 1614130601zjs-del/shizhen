@@ -100,7 +100,7 @@ function wireAppearance(){
 function downloadText(text,filename,type){const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);}
 function copy(v){const t=document.createElement('textarea');t.value=v;document.body.append(t);t.select();try{document.execCommand('copy')}catch(e){}t.remove();}
 const bytes=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';
-let assetRows=[],assetOffset=0,assetServerInfo=null;
+let assetRows=[],assetOffset=0,assetServerInfo=null,characterRows=[];
 async function renderAssetBatch(reset=false){
  const list=$('#sz-asset-list'),more=$('#sz-asset-more');if(!list)return;
  if(reset){assetOffset=0;list.replaceChildren();}
@@ -117,9 +117,25 @@ async function renderAssetBatch(reset=false){
  }
  assetOffset+=batch.length;if(more){more.hidden=assetOffset>=assetRows.length;more.textContent='继续显示（已显示 '+assetOffset+' / '+assetRows.length+'）';}
 }
+async function renderCharacterRows(){
+ const list=$('#sz-character-list');if(!list)return;list.replaceChildren();
+ if(!characterRows.length){list.textContent='当前快照没有拾帧关联角色卡清单。';return;}
+ for(const character of characterRows){
+  const row=document.createElement('div');row.className='ql-record';row.style.cssText='display:flex;align-items:center;gap:12px';
+  const info=document.createElement('div');info.style.cssText='min-width:0;flex:1';
+  const title=document.createElement('strong'),meta=document.createElement('p');title.textContent=character.name||character.avatar||('角色 '+(Number(character.sourceIndex)+1));title.style.cssText='display:block;overflow-wrap:anywhere';
+  meta.className='ql-muted';meta.textContent=(character.avatar||'未记录头像文件名')+' · '+(character.cardAssetId?'已保存原始角色卡文件':'仅保存身份与绑定信息');
+  info.append(title,meta);row.append(info);
+  if(character.cardAssetId){
+   const image=document.createElement('img');image.alt=(character.name||'角色')+' 原始卡片';image.loading='lazy';image.style.cssText='width:76px;height:76px;flex:0 0 76px;object-fit:cover;border-radius:10px;background:var(--ql-panel)';row.prepend(image);
+   if(assetServerInfo?.url&&assetServerInfo?.token){try{const response=await fetch(assetServerInfo.url.replace(/\\/+$/,'')+'/v1/assets/'+encodeURIComponent(character.cardAssetId),{headers:{Authorization:'Bearer '+assetServerInfo.token}});if(!response.ok)throw new Error('HTTP '+response.status);image.src=URL.createObjectURL(await response.blob());}catch(error){image.alt='角色卡预览暂不可用：'+(error.message||'读取失败');}}
+  }
+  list.append(row);
+ }
+}
 function refresh(){
  if(!native){set('sz-vault-server','原生数据库服务不可用');return;}
- const info=parse(native.localServerInfo()),stats=parse(native.localDatabaseStats()),assets=stats.assets||[],snaps=stats.snapshots||[];
+ const info=parse(native.localServerInfo()),stats=parse(native.localDatabaseStats()),manifest=native.getVaultManifest?parse(native.getVaultManifest()):{},assets=stats.assets||[],snaps=stats.snapshots||[];characterRows=Array.isArray(manifest.characters)?manifest.characters:[];
  assetRows=assets.slice();assetServerInfo=info;
  set('sz-vault-server',info.running?'本地数据库服务运行中':'本地数据库服务未启动');
  $('#sz-vault-url').value=info.url||'http://127.0.0.1:8765';$('#sz-vault-token').value=info.token||'';
@@ -128,7 +144,7 @@ function refresh(){
  const list=$('#sz-snapshot-list');list.replaceChildren();
  if(!snaps.length)list.textContent='暂无历史快照。完成首次插件同步后会在这里显示。';
  snaps.forEach(s=>{const row=document.createElement('div');row.className='ql-record';const title=document.createElement('strong'),meta=document.createElement('p');title.textContent=s.current?'当前版本':'历史版本';meta.className='ql-muted';meta.textContent=new Date(Number(s.createdAt)).toLocaleString()+' · '+s.id;row.append(title,meta);list.append(row);});
- renderAssetBatch(true).catch(error=>{const target=$('#sz-asset-list');if(target)target.textContent='读取图片列表失败：'+(error.message||error);});
+ renderAssetBatch(true).catch(error=>{const target=$('#sz-asset-list');if(target)target.textContent='读取图片列表失败：'+(error.message||error);});renderCharacterRows().catch(error=>{const target=$('#sz-character-list');if(target)target.textContent='读取角色卡清单失败：'+(error.message||error);});
 }
 $('#sz-copy-url')?.addEventListener('click',()=>copy($('#sz-vault-url').value));
 $('#sz-copy-token')?.addEventListener('click',()=>copy($('#sz-vault-token').value));
