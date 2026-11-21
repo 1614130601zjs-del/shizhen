@@ -51,6 +51,27 @@ private class VaultIndex(context: Context) : SQLiteOpenHelper(context, "shizhen-
         }
         return rows
     }
+    fun listAssets(): JSONObject {
+        val rows = org.json.JSONArray()
+        readableDatabase.rawQuery("SELECT id,mime,filename,size,updated_at FROM assets ORDER BY updated_at DESC", null).use { c ->
+            while (c.moveToNext()) rows.put(JSONObject().put("id", c.getString(0)).put("mime", c.getString(1))
+                .put("filename", c.getString(2)).put("size", c.getLong(3)).put("updatedAt", c.getLong(4)))
+        }
+        return JSONObject().put("assets", rows)
+    }
+}
+
+/** Loopback-only, bearer-token protected bridge used exclusively by the Shizhen extension. */
+class ShizhenVaultServer(
+    context: Context,
+    private val token: String,
+    private val root: File,
+    port: Int = 8765
+) : NanoHTTPD("127.0.0.1", port) {
+    private val index = VaultIndex(context.applicationContext)
+    private val assetDir = File(root, "assets").apply { mkdirs() }
+    private val snapshotFile = File(root, "snapshot.json")
+
     fun currentLibrary(): JSONObject {
         val payload = index.snapshot() ?: return JSONObject()
         return JSONObject(payload).optJSONObject("snapshot") ?: JSONObject()
@@ -112,26 +133,6 @@ private class VaultIndex(context: Context) : SQLiteOpenHelper(context, "shizhen-
             .put("assetCount", assets.length()).put("updatedAt", System.currentTimeMillis())
     }
 
-    fun listAssets(): JSONObject {
-        val rows = org.json.JSONArray()
-        readableDatabase.rawQuery("SELECT id,mime,filename,size,updated_at FROM assets ORDER BY updated_at DESC", null).use { c ->
-            while (c.moveToNext()) rows.put(JSONObject().put("id", c.getString(0)).put("mime", c.getString(1))
-                .put("filename", c.getString(2)).put("size", c.getLong(3)).put("updatedAt", c.getLong(4)))
-        }
-        return JSONObject().put("assets", rows)
-    }
-}
-
-/** Loopback-only, bearer-token protected bridge used exclusively by the Shizhen extension. */
-class ShizhenVaultServer(
-    context: Context,
-    private val token: String,
-    private val root: File,
-    port: Int = 8765
-) : NanoHTTPD("127.0.0.1", port) {
-    private val index = VaultIndex(context.applicationContext)
-    private val assetDir = File(root, "assets").apply { mkdirs() }
-    private val snapshotFile = File(root, "snapshot.json")
 
     private fun digest(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes)
         .joinToString("") { "%02x".format(it) }
