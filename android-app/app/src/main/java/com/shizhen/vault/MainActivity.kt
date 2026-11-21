@@ -26,6 +26,7 @@ class MainActivity : Activity() {
     private var treeUri: Uri? = null
     private var vaultServer: ShizhenVaultServer? = null
     private var vaultToken: String = ""
+    private var vaultServerStarted = false
     private val pickFolderRequest = 4102
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,7 +58,11 @@ class MainActivity : Activity() {
         vaultServer = ShizhenVaultServer(this, vaultToken, File(filesDir, "vault-db").apply { mkdirs() })
         try {
             vaultServer?.start(5000, false)
+            vaultServerStarted = true
         } catch (error: Exception) {
+            vaultServerStarted = false
+            vaultServer?.stop()
+            vaultServer = null
             Toast.makeText(this, "本地数据库服务启动失败：" + (error.message ?: "未知错误"), Toast.LENGTH_LONG).show()
         }
         webView.loadUrl("file:///android_asset/index.html")
@@ -188,13 +193,14 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         vaultServer?.stop()
         vaultServer = null
+        vaultServerStarted = false
         super.onDestroy()
     }
 
     inner class VaultBridge {
         @JavascriptInterface fun localServerInfo(): String =
             JSONObject().put("url", "http://127.0.0.1:8765")
-                .put("token", vaultToken).put("running", vaultServer != null).toString()
+                .put("token", vaultToken).put("running", vaultServerStarted).toString()
         @JavascriptInterface fun hasExternalFolder(): Boolean = treeUri != null
         @JavascriptInterface fun importBackupZip(base64: String): String = try {
             val bytes = Base64.decode(base64, Base64.DEFAULT)
