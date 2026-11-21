@@ -15,6 +15,17 @@
   } catch (error) {
     $('#vaultServerStatus').textContent = '无法读取配对信息：' + error.message;
   }
+  function updateDatabaseStats() {
+    try {
+      const stats = JSON.parse(native.localDatabaseStats());
+      const assets = stats.assets || [], snapshots = stats.snapshots || [];
+      const bytes = assets.reduce((sum, item) => sum + Number(item.size || 0), 0);
+      $('#vaultDatabaseStats').textContent = '数据库：' + assets.length + ' 个原始文件 · ' +
+        snapshots.length + ' 个历史快照 · ' + formatSize(bytes);
+    } catch (error) {
+      $('#vaultDatabaseStats').textContent = '数据库索引读取失败：' + error.message;
+    }
+  }
   const encodeBase64 = buffer => {
     const bytes = new Uint8Array(buffer); let binary = ''; const chunk = 0x8000;
     for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
@@ -32,6 +43,7 @@
     return (bytes / 1048576).toFixed(1) + ' MB';
   }
   function refresh() {
+    updateDatabaseStats();
     try {
       const result = JSON.parse(native.listFiles());
       if (!result.ok) throw new Error(result.error);
