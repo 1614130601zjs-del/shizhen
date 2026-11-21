@@ -230,13 +230,13 @@ class ShizhenVaultServer(
                 }
                 session.uri == "/v1/diagnostic-upload" && session.method == Method.PUT -> {
                     // Exercises the exact browser CORS + PUT + NanoHTTPD body parser path without saving anything.
-                    val bytes = bodyFile(session).readBytes()
+                    val bytes = bodyBytes(session)
                     json(Response.Status.OK, JSONObject().put("ok", true).put("size", bytes.size).put("sha256", digest(bytes)))
                 }
                 session.uri.startsWith("/v1/assets/") && session.method == Method.PUT -> {
                     val id = session.uri.removePrefix("/v1/assets/")
                     require(id.matches(Regex("[a-f0-9]{64}"))) { "资源 SHA-256 标识无效" }
-                    val bytes = bodyFile(session).readBytes()
+                    val bytes = bodyBytes(session)
                     require(digest(bytes) == id) { "资源 SHA-256 校验失败" }
                     File(assetDir, id).writeBytes(bytes)
                     val mime = session.headers["x-asset-mime"] ?: "application/octet-stream"
