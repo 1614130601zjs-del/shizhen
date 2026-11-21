@@ -29,6 +29,8 @@ class MainActivity : Activity() {
     private var vaultToken: String = ""
     private var vaultServerStarted = false
     private val pickFolderRequest = 4102
+    private val pickFileRequest = 4103
+    private var fileChooserCallback: android.webkit.ValueCallback<Array<Uri>>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,7 +38,30 @@ class MainActivity : Activity() {
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            webChromeClient = WebChromeClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onShowFileChooser(
+                    webView: WebView?,
+                    filePathCallback: android.webkit.ValueCallback<Array<Uri>>?,
+                    fileChooserParams: FileChooserParams?
+                ): Boolean {
+                    this@MainActivity.fileChooserCallback?.onReceiveValue(null)
+                    this@MainActivity.fileChooserCallback = filePathCallback
+                    return try {
+                        val intent = fileChooserParams?.createIntent()
+                            ?: Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "*/*"
+                            }
+                        startActivityForResult(intent, pickFileRequest)
+                        true
+                    } catch (error: Exception) {
+                        this@MainActivity.fileChooserCallback?.onReceiveValue(null)
+                        this@MainActivity.fileChooserCallback = null
+                        Toast.makeText(this@MainActivity, "无法打开文件选择器：" + (error.message ?: "未知错误"), Toast.LENGTH_LONG).show()
+                        false
+                    }
+                }
+            }
             webViewClient = WebViewClient()
             addJavascriptInterface(VaultBridge(), "ShizhenNative")
         }
@@ -74,6 +99,14 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated API retained for broad device compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == pickFileRequest) {
+            val callback = fileChooserCallback
+            fileChooserCallback = null
+            callback?.onReceiveValue(
+                if (resultCode == RESULT_OK) WebChromeClient.FileChooserParams.parseResult(resultCode, data) else null
+            )
+            return
+        }
         if (requestCode != pickFolderRequest || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
