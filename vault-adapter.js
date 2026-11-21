@@ -21,7 +21,7 @@ function isLocalImagePath(value, key) {
     if (!value.trim() || isDataImage(value) || value.startsWith(IMAGE_REF_PREFIX)) return false;
     if (/^(?:https?:)?\/\//i.test(value) || value.startsWith('blob:')) return false;
     const path = value.split(/[?#]/, 1)[0];
-    return path.startsWith('/user/images/') || path.startsWith('user/images/');
+    return path.startsWith('/user/images/') || path.startsWith('user/images/') || path.startsWith('/user/files/') || path.startsWith('user/files/');
 }
 
 function safeFilename(path, mime) {
@@ -44,7 +44,7 @@ async function readImageSource(source, { fetchImpl, origin }) {
         response = await fetchImpl(source);
     } else {
         const url = new URL(source, origin);
-        if (url.origin !== origin || !url.pathname.startsWith('/user/images/')) {
+        if (url.origin !== origin || !(url.pathname.startsWith('/user/images/') || url.pathname.startsWith('/user/files/'))) {
             throw new Error('拾帧图片引用不是本机酒馆图片路径');
         }
         response = await fetchImpl(url.href, { credentials: 'same-origin' });
