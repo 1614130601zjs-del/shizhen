@@ -66,6 +66,9 @@ export async function buildShizhenVaultSnapshot(config, options = {}) {
     if (typeof fetchImpl !== 'function' || !origin) throw new Error('当前环境无法读取拾帧图片资源');
 
     const snapshot = cloneJson(config);
+    // 配对地址与令牌属于当前设备连接信息，不属于可迁移的拾帧业务数据。
+    delete snapshot.vaultEndpoint;
+    delete snapshot.vaultToken;
     const assetsByHash = new Map();
     const seenObjects = new WeakSet();
 
