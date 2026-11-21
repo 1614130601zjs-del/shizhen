@@ -6,7 +6,7 @@
 const FORMAT = 'shizhen-plugin-vault';
 const VERSION = 1;
 const IMAGE_REF_PREFIX = 'shizhen-asset://';
-const IMAGE_KEYS = new Set(['dataUrl', 'image', 'avatar', 'url', 'cover', 'thumbnail']);
+const IMAGE_KEYS = new Set(['dataUrl', 'image', 'avatar', 'url', 'cover', 'thumbnail', 'thumb', 'characterAvatar']);
 
 function cloneJson(value) {
     return JSON.parse(JSON.stringify(value ?? null));
@@ -25,6 +25,7 @@ function isLocalImagePath(value, key) {
 }
 
 function safeFilename(path, mime) {
+    if (isDataImage(path)) return 'image.' + (({'image/jpeg':'jpg','image/png':'png','image/gif':'gif','image/webp':'webp','image/avif':'avif'})[mime] || 'img');
     const leaf = String(path || '').split(/[/?#]/).filter(Boolean).pop() || 'image';
     const cleaned = leaf.replace(/[^\w.\-一-龥]/g, '_').slice(-100);
     if (/\.[a-z0-9]{2,5}$/i.test(cleaned)) return cleaned;
