@@ -191,7 +191,7 @@ class MainActivity : Activity() {
         var totalBytes = 0L
         fun addAsset(path: String, bytes: ByteArray, kind: String, displayName: String) {
             totalBytes += bytes.size
-            require(totalBytes <= 512L * 1024L * 1024L) { "本次导出超过 512 MB 安全限制，请分批导出" }
+            require(totalBytes <= 128L * 1024L * 1024L) { "本次导出超过 128 MB 安全限制，请分批导出" }
             require(path !in files) { "导出文件名冲突：$path" }
             files[path] = bytes
             val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
