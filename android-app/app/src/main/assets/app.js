@@ -148,6 +148,27 @@ function refresh(){
 }
 $('#sz-copy-url')?.addEventListener('click',()=>copy($('#sz-vault-url').value));
 $('#sz-copy-token')?.addEventListener('click',()=>copy($('#sz-vault-token').value));
+function importedSettingsStatus(){
+ const target=$('#sz-import-settings-status');if(!target||!native?.getImportedSettings)return;
+ const saved=parse(native.getImportedSettings());
+ if(saved&&saved.ok===false){target.textContent='读取已移植设置失败：'+(saved.error||'未知错误');return;}
+ if(!saved||!Object.keys(saved).length){target.textContent='尚未从拾帧插件移植设置。';return;}
+ const provider=saved.provider==='novelai-thirdparty'?'NovelAI 第三方':saved.provider==='novelai'?'NovelAI 官网':'OpenAI 兼容服务';
+ const model=saved.provider==='novelai'||saved.provider==='novelai-thirdparty'?(saved.naiModel||'未设置模型'):(saved.model||'未设置模型');
+ target.textContent='已保存设置：'+provider+' · '+model+'。API 凭据已保存在 App 私有加密存储中。';
+}
+$('#sz-import-settings')?.addEventListener('click',()=>{
+ try{
+  if(!native?.getLibrary||!native?.saveImportedSettings)throw new Error('当前 App 版本尚未提供安全设置移植接口');
+  const config=parse(native.getLibrary());
+  if(!config||typeof config!=='object'||Array.isArray(config)||config.error)throw new Error(config?.error||'本地数据库中没有可用的拾帧设置快照');
+  if(!Object.keys(config).length)throw new Error('尚未收到拾帧插件的设置快照，请先在插件中执行一次同步');
+  const result=parse(native.saveImportedSettings(JSON.stringify(config)));
+  if(!result?.ok)throw new Error(result?.error||'App 保存设置失败');
+  set('sz-import-settings-status','一键移植完成。已保存 '+Object.keys(config).length+' 项插件配置；API 凭据已加密保存在本机。');
+  importedSettingsStatus();
+ }catch(error){set('sz-import-settings-status','移植失败：'+(error.message||error));}
+});
 $('#sz-test-tavern')?.addEventListener('click',()=>{const r=parse(native.testTavern($('#sz-tavern-address').value.trim()));set('sz-tavern-status',r.message||(r.ok?'本机服务可访问':'连接失败：'+(r.error||'未知错误')));});
 if(native?.savedTavernAddress)$('#sz-tavern-address').value=native.savedTavernAddress();
 $('#sz-choose-folder')?.addEventListener('click',()=>{if(native?.chooseExternalFolder)native.chooseExternalFolder();else set('sz-folder-status','此版本尚未接入目录授权入口');});
@@ -160,7 +181,7 @@ $('#sz-import-files')?.addEventListener('change',async e=>{
 $('#sz-refresh-files')?.addEventListener('click',()=>{const r=parse(native.listFiles()),list=$('#sz-file-list');list.replaceChildren();if(!r.ok){list.textContent=r.error||'读取失败';return;}(r.files||[]).forEach(f=>{const p=document.createElement('p');p.className='ql-muted';p.textContent=f.path+' · '+bytes(Number(f.size||0));list.append(p);});if(!r.files?.length)list.textContent='暂无手动导入文件。';});
 $('#sz-asset-more')?.addEventListener('click',()=>renderAssetBatch(false).catch(error=>set('sz-vault-stats','读取图片失败：'+(error.message||error))));
 window.ShizhenVault={folderChanged:ready=>set('sz-folder-status',ready?'已选择外部文件夹':'尚未选择外部文件夹')};
-if(native){set('sz-folder-status',native.hasExternalFolder()?'已选择外部文件夹':'尚未选择外部文件夹');refresh();loadAppearance();}
+if(native){set('sz-folder-status',native.hasExternalFolder()?'已选择外部文件夹':'尚未选择外部文件夹');refresh();loadAppearance();importedSettingsStatus();}
 wireAppearance();
 showPage('generate');
 })();
