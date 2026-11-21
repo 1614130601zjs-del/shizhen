@@ -18,7 +18,7 @@ function isDataImage(value) {
 }
 
 function rawImageInfo(value, key) {
-    if (typeof value !== 'string' || !IMAGE_KEYS.has(String(key || ''))) return null;
+    if (typeof value !== 'string' || isDataImage(value) || !IMAGE_KEYS.has(String(key || ''))) return null;
     const raw = value.trim().replace(/^data:[^,]*,/i, '').replace(/\s+/g, '');
     if (/^iVBOR/.test(raw)) return { mime: 'image/png', base64: raw, mode: 'raw-base64' };
     if (/^\/9j\//.test(raw)) return { mime: 'image/jpeg', base64: raw, mode: 'raw-base64' };
