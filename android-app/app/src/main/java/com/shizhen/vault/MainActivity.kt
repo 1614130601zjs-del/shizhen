@@ -204,6 +204,16 @@ class MainActivity : Activity() {
                 .put("token", vaultToken).put("running", vaultServerStarted).toString()
         @JavascriptInterface fun localDatabaseStats(): String =
             (vaultServer?.stats() ?: JSONObject().put("assets", org.json.JSONArray()).put("snapshots", org.json.JSONArray())).toString()
+        @JavascriptInterface fun getLibrary(): String = try {
+            (vaultServer?.currentLibrary() ?: JSONObject()).toString()
+        } catch (error: Exception) {
+            JSONObject().put("ok", false).put("error", error.message ?: "读取拾帧库失败").toString()
+        }
+        @JavascriptInterface fun saveLibrary(settingsJson: String): String = try {
+            (vaultServer ?: throw IOException("本地数据库服务未启动")).saveLibrary(settingsJson).toString()
+        } catch (error: Exception) {
+            JSONObject().put("ok", false).put("error", error.message ?: "保存拾帧库失败").toString()
+        }
         @JavascriptInterface fun hasExternalFolder(): Boolean = treeUri != null
         @JavascriptInterface fun importBackupZip(base64: String): String = try {
             val bytes = Base64.decode(base64, Base64.DEFAULT)
