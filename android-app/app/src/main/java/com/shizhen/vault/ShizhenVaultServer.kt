@@ -246,7 +246,8 @@ class ShizhenVaultServer(
                     json(Response.Status.OK, JSONObject().put("ok", true).put("id", id).put("size", bytes.size))
                 }
                 session.uri == "/v1/snapshot" && session.method == Method.GET -> {
-                    val value = index.snapshot() ?: return json(Response.Status.NOT_FOUND, JSONObject().put("error", "本地数据库还没有快照"))
+                    val value = currentSnapshotPayload()?.toString()
+                        ?: return json(Response.Status.NOT_FOUND, JSONObject().put("error", "本地数据库还没有快照"))
                     newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", value).withCors()
                 }
                 session.uri == "/v1/snapshots" && session.method == Method.GET ->
