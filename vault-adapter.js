@@ -86,7 +86,7 @@ function collectLinkedCharacterIndices(config, cards) {
             return;
         }
         for (const [childKey, child] of Object.entries(value)) {
-            if ((childKey === 'characterKey' || childKey === 'albumCharacterKey') && /^\\d+$/.test(String(child ?? ''))) {
+            if ((childKey === 'characterKey' || childKey === 'albumCharacterKey') && /^\d+$/.test(String(child ?? ''))) {
                 const index = Number(child);
                 if (index >= 0 && index < cards.length) linked.add(index);
             } else if (childKey === 'characterAvatar' && typeof child === 'string') {
@@ -99,7 +99,7 @@ function collectLinkedCharacterIndices(config, cards) {
     walk(config);
     for (const field of ['albumNames', 'albumCovers']) {
         for (const key of Object.keys(config?.[field] || {})) {
-            if (/^\\d+$/.test(key) && Number(key) < cards.length) linked.add(Number(key));
+            if (/^\d+$/.test(key) && Number(key) < cards.length) linked.add(Number(key));
         }
     }
     return linked;
