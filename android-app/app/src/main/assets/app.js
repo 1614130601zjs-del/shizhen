@@ -60,6 +60,19 @@
     event.target.value = ''; refresh();
   });
   $('#refresh').addEventListener('click', refresh);
+  $('#exportTavern').addEventListener('click', () => {
+    tavernStatus.textContent = '正在从酒馆读取角色卡与世界书并生成校验备份，请保持酒馆运行…';
+    try {
+      const result = JSON.parse(native.exportTavernBackup());
+      if (!result.ok) throw new Error(result.error || '导出失败');
+      tavernStatus.textContent = '备份已保存到本地素材库：' + result.path +
+        '。角色卡 ' + result.characters + ' 个，世界书 ' + result.worldbooks +
+        ' 个，共 ' + result.files + ' 个文件，压缩包 ' + formatSize(result.archiveBytes) + '。';
+      refresh();
+    } catch (error) {
+      tavernStatus.textContent = '酒馆备份失败：' + error.message;
+    }
+  });
   $('#testTavern').addEventListener('click', () => {
     const address = $('#tavernAddress').value.trim();
     tavernStatus.textContent = '正在检测本机酒馆服务…';
