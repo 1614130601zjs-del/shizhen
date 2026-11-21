@@ -140,7 +140,7 @@ async function buildCharacterManifest(cards, config, registerAsset, { fetchImpl,
             row.cardError = String(error?.message || error).slice(0, 180);
         }
     }
-    return rows;
+    return rows.filter(row => row.linked);
 }
 
 /**
