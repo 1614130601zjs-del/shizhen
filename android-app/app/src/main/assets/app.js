@@ -393,13 +393,63 @@ function applyDataEntry(){
   library.activeConfigMode='combo';library.activeComboIndex=index;
   library.activePresetIndex=Number(item.artistIndex??-1);library.activeVibeIndex=Number(item.vibeIndex??-1);
  }
+ syncGenerationConfigControls();
  if(native?.saveLibrary){
   const result=parse(native.saveLibrary(JSON.stringify(library)));
   if(result?.ok){library=parse(native.getLibrary());set('sz-data-status','已应用到取景配置并保存。');}
   else set('sz-data-status','应用失败：'+(result?.error||'未知错误'));
  }
 }
+
+function syncGenerationConfigControls(){
+ const presets=Array.isArray(library.presets)?library.presets:[],vibes=Array.isArray(library.vibes)?library.vibes:[],combos=Array.isArray(library.combinations)?library.combinations:[];
+ const fill=(id,items,placeholder,label)=>{const el=$('#'+id);if(!el)return;const value=el.value;el.replaceChildren(new Option(placeholder,'-1'));items.forEach((item,index)=>el.add(new Option(label(item,index),String(index))));if([...el.options].some(o=>o.value===value))el.value=value;};
+ fill('ql-active-preset',combos,'不使用组合',(x,i)=>x?.name||('组合 '+(i+1)));
+ fill('ql-active-artist',presets,'不使用画师串',(x,i)=>x?.name||('画师串 '+(i+1)));
+ fill('ql-active-vibe',vibes,'不使用 Vibe',(x,i)=>x?.name||('Vibe '+(i+1)));
+ const mode=library.activeConfigMode==='separate'?'separate':'combo';
+ if($('#ql-active-config-mode'))$('#ql-active-config-mode').value=mode;
+ if($('#ql-active-preset'))$('#ql-active-preset').value=String(Number(library.activeComboIndex??-1));
+ if($('#ql-active-artist'))$('#ql-active-artist').value=String(Number(library.activePresetIndex??-1));
+ if($('#ql-active-vibe'))$('#ql-active-vibe').value=String(Number(library.activeVibeIndex??-1));
+ if($('#ql-combo-config-row'))$('#ql-combo-config-row').hidden=mode==='separate';
+ if($('#ql-separate-config-row'))$('#ql-separate-config-row').hidden=mode!=='separate';
+}
+function saveGenerationSelection(){
+ if(!native?.saveLibrary)return;
+ const result=parse(native.saveLibrary(JSON.stringify(library)));
+ if(!result?.ok)set('ql-status','保存当前取景配置失败：'+(result?.error||'未知错误'));
+}
+function wireGenerationSelections(){
+ syncGenerationConfigControls();
+ $('#ql-active-config-mode')?.addEventListener('change',()=>{
+  library.activeConfigMode=$('#ql-active-config-mode').value==='separate'?'separate':'combo';
+  if(library.activeConfigMode==='separate')library.activeComboIndex=-1;
+  syncGenerationConfigControls();saveGenerationSelection();
+ });
+ $('#ql-active-preset')?.addEventListener('change',()=>{
+  const index=Number($('#ql-active-preset').value);library.activeConfigMode='combo';
+  library.activeComboIndex=Number.isInteger(index)?index:-1;
+  const combo=library.combinations?.[library.activeComboIndex];
+  if(combo){library.activePresetIndex=Number(combo.artistIndex??-1);library.activeVibeIndex=Number(combo.vibeIndex??-1);}
+  syncGenerationConfigControls();saveGenerationSelection();
+ });
+ $('#ql-active-artist')?.addEventListener('change',()=>{
+  library.activeConfigMode='separate';library.activeComboIndex=-1;
+  library.activePresetIndex=Number($('#ql-active-artist').value);syncGenerationConfigControls();saveGenerationSelection();
+ });
+ $('#ql-active-vibe')?.addEventListener('change',()=>{
+  library.activeConfigMode='separate';library.activeComboIndex=-1;
+  library.activeVibeIndex=Number($('#ql-active-vibe').value);syncGenerationConfigControls();saveGenerationSelection();
+ });
+ $('#ql-apply-preset')?.addEventListener('click',()=>{
+  const mode=library.activeConfigMode==='separate'?'独立配置':'组合';
+  saveGenerationSelection();set('ql-status','已保存取景区当前'+mode+'选择。');
+ });
+}
+
 function wireDataWorkspace(){
+ wireGenerationSelections();
  $('#sz-data-category')?.addEventListener('change',()=>{dataSelectedIndex=0;renderDataWorkspace();});
  $('#sz-data-entry')?.addEventListener('change',()=>{dataSelectedIndex=Number($('#sz-data-entry').value)||0;renderDataWorkspace();});
  $('#sz-data-new')?.addEventListener('click',newDataEntry);
@@ -407,7 +457,9 @@ function wireDataWorkspace(){
   const key=dataCategory(),index=Number($('#sz-data-entry').value);
   if(key==='worldbookModeManager'||!Array.isArray(library[key])||!library[key][index])return;
   library[key].splice(index,1);dataSelectedIndex=Math.max(0,index-1);
-  if(!saveDataWorkspace())renderDataWorkspace();
+  const result=parse(native?.saveLibrary?.(JSON.stringify(library))||'{}');
+  if(!result?.ok){set('sz-data-status','删除保存失败：'+(result?.error||'本地数据库不可用'));return;}
+  library=parse(native.getLibrary());renderDataWorkspace();set('sz-data-status','已删除条目并保存到本机数据库。');
  });
  $('#sz-data-save')?.addEventListener('click',saveDataWorkspace);
  $('#sz-data-apply')?.addEventListener('click',applyDataEntry);
