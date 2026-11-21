@@ -66,7 +66,7 @@
       const result = JSON.parse(native.exportTavernBackup());
       if (!result.ok) throw new Error(result.error || '导出失败');
       tavernStatus.textContent = '备份已保存到本地素材库：' + result.path +
-        '。角色卡 ' + result.characters + ' 个，世界书 ' + result.worldbooks +
+        '。角色卡 ' + result.characters + ' 个，聊天记录 ' + result.chats + ' 份，世界书 ' + result.worldbooks +
         ' 个，共 ' + result.files + ' 个文件，压缩包 ' + formatSize(result.archiveBytes) + '。';
       refresh();
     } catch (error) {
