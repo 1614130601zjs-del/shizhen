@@ -146,6 +146,37 @@ async function resolveLibraryImage(value){
  if(!response.ok)throw new Error('HTTP '+response.status);
  const url=URL.createObjectURL(await response.blob());galleryObjectUrls.push(url);return url;
 }
+// ===== 待推回插件标记 =====
+// app 是本地仓库：这里只负责"勾选/取消勾选"+持久化 record.pendingPushBack 这个标记，
+// 不负责真正的传输——插件侧新增的「拉取 App 里已标记的照片」按钮会读这个标记，
+// 按 record.uid 去重后追加合并进插件自己的记录，不是整体覆盖。
+function pendingCount(){
+ return (Array.isArray(library.records)?library.records:[]).filter(r=>r&&r.pendingPushBack).length;
+}
+function setPendingMark(libraryIndex,checked){
+ const record=Array.isArray(library.records)?library.records[libraryIndex]:null;
+ if(!record)return;
+ if(checked)record.pendingPushBack=true;else delete record.pendingPushBack;
+ persist();
+}
+// 两个独立的"待推回"计数条引用（底片页/角色相册页各一条），
+// 跨"继续显示"分批加载仍能原地刷新数字，不用每次都整段重建 DOM。
+let filmPendingBarText=null,albumPendingBarText=null;
+function buildPendingBar(onClear){
+ const bar=document.createElement('div');bar.className='ql-record';bar.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:12px';
+ const text=document.createElement('p');text.className='ql-muted';text.textContent='已标记 '+pendingCount()+' 张待推回插件';bar.append(text);
+ const clear=document.createElement('button');clear.type='button';clear.className='menu_button';clear.textContent='清除全部标记';
+ clear.addEventListener('click',()=>{for(const r of (library.records||[]))if(r&&r.pendingPushBack)delete r.pendingPushBack;persist();text.textContent='已标记 0 张待推回插件';onClear?.();});
+ bar.append(clear);bar._pendingText=text;return bar;
+}
+function attachPendingCheckbox(tile,record,barText){
+ const label=document.createElement('label');label.className='ql-pending-check';label.style.cssText='position:absolute;top:6px;left:6px;z-index:2;display:flex;align-items:center;gap:4px;background:var(--ql-field);padding:2px 6px;border-radius:8px;font-size:12px';
+ const box=document.createElement('input');box.type='checkbox';box.checked=!!record.pendingPushBack;
+ box.addEventListener('click',event=>event.stopPropagation());
+ box.addEventListener('change',()=>{setPendingMark(record._libraryIndex,box.checked);if(barText)barText.textContent='已标记 '+pendingCount()+' 张待推回插件';});
+ label.append(box,document.createTextNode('推回'));
+ tile.style.position='relative';tile.append(label);
+}
 function filmRecords(){
  return (Array.isArray(library.records)?library.records:[])
   .map((record,index)=>({...record,_libraryIndex:index}))
@@ -154,7 +185,7 @@ function filmRecords(){
 }
 async function renderFilmBatch(reset=false){
  const host=$('#ql-history'),more=$('#sz-film-more');if(!host)return;
- if(reset){filmOffset=0;filmRows=filmRecords();releaseGalleryUrls();host.replaceChildren();}
+ if(reset){filmOffset=0;filmRows=filmRecords();releaseGalleryUrls();host.replaceChildren();const bar=buildPendingBar(()=>renderFilmBatch(true));filmPendingBarText=bar._pendingText;host.before(bar);}
  if(!filmRows.length){host.textContent='本地底片相册暂无影像记录。';if(more)more.hidden=true;return;}
  const batch=filmRows.slice(filmOffset,filmOffset+24);
  for(const record of batch){
@@ -162,6 +193,7 @@ async function renderFilmBatch(reset=false){
   const button=document.createElement('button');button.type='button';button.className='ql-cache-image';button.setAttribute('aria-label','底片影像 '+(record.prompt||record.basePrompt||''));
   const image=document.createElement('img');image.loading='lazy';image.alt='底片影像';button.append(image);tile.append(button);
   const caption=document.createElement('p');caption.className='ql-muted';caption.textContent=record.at?new Date(Number(record.at)).toLocaleString():(record.source||'拾帧影像');tile.append(caption);host.append(tile);
+  attachPendingCheckbox(tile,record,filmPendingBarText);
   try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){image.alt='图片读取失败：'+(error.message||error);}
  }
  filmOffset+=batch.length;
@@ -170,6 +202,7 @@ async function renderFilmBatch(reset=false){
 async function renderCharacterAlbums(){
  const host=$('#ql-character-albums');if(!host)return;
  host.replaceChildren();
+ const bar=buildPendingBar(()=>renderCharacterAlbums());host.before(bar);albumPendingBarText=bar._pendingText;
  const records=(Array.isArray(library.records)?library.records:[])
   .map((record,index)=>({...record,_libraryIndex:index}))
   .filter(record=>record?.dataUrl&&record.albumCharacterName&&record.collection!=='deleted'&&record.collection!=='prompt-gallery'&&record.collection!=='cache');
@@ -184,6 +217,7 @@ async function renderCharacterAlbums(){
    const tile=document.createElement('article');tile.className='ql-cache-tile ql-album-photo';
    const button=document.createElement('button');button.type='button';button.className='ql-cache-image';button.setAttribute('aria-label','相册照片');
    const image=document.createElement('img');image.loading='lazy';image.alt='相册照片';button.append(image);tile.append(button);grid.append(tile);
+   attachPendingCheckbox(tile,record,albumPendingBarText);
    try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){image.alt='图片读取失败：'+(error.message||error);}
   }
  }

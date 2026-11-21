@@ -187,22 +187,39 @@ class ShizhenVaultServer(
         .put("snapshots", index.listSnapshots())
 
     private fun bodyBytes(session: IHTTPSession): ByteArray {
-        val fields = HashMap<String, String>()
-        session.parseBody(fields)
         return when (session.method) {
             Method.POST -> {
-                // NanoHTTPD 2.3.1 将原始 POST 正文直接放进 postData 字符串，
-                // 它不是临时文件路径。此前把它交给 File(path) 会把正常 JSON 误判为空文件。
-                val raw = fields["postData"] ?: throw IOException(
-                    "POST 请求体缺失（已解析字段：" + fields.keys.joinToString() +
-                        "，Content-Length：" + (session.headers["content-length"] ?: "未提供") + "）"
-                )
-                raw.toByteArray(Charsets.UTF_8).also {
-                    if (it.isEmpty()) throw IOException("POST 请求体为空（NanoHTTPD 已解析 postData，但内容长度为 0）")
+                // 不走 session.parseBody()：NanoHTTPD 2.3.1 对非 multipart 的 POST 正文，
+                // 会按 Content-Type 声明的编码把原始字节解码成 Java String 再塞进
+                // postData 字段（fi.iki.elonen.NanoHTTPD.HTTPSession#parseBody，
+                // ContentType.getEncoding() 在请求头未显式带 charset 时默认 US-ASCII）。
+                // 拾帧推送的 JSON 正文头是 "application/json"（无 charset），且内容含中文，
+                // 用 US-ASCII 解码会把每个非 ASCII 字节不可逆地替换成 U+FFFD：
+                // 不同的中文字符串被替换成完全相同的乱码后还会互相"撞车"合并，
+                // 这正是中文显示成问号/方块、且角色相册分组全部混在一起的根因。
+                // 直接按 Content-Length 从原始输入流读字节，不经过任何字符串解码，
+                // 保证字节级准确（PUT 分支走的 parseBody 临时文件路径本身是按字节写盘，
+                // 不受这个问题影响，不用改）。
+                val length = session.headers["content-length"]?.toLongOrNull()
+                    ?: throw IOException("POST 请求体缺失（缺少 Content-Length 请求头）")
+                if (length <= 0L) throw IOException("POST 请求体为空（Content-Length：$length）")
+                val stream = session.inputStream
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(64 * 1024)
+                var remaining = length
+                while (remaining > 0) {
+                    val read = stream.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                    if (read < 0) throw IOException("POST 请求体提前结束（已读 " + (length - remaining) + " / " + length + " 字节）")
+                    out.write(buffer, 0, read)
+                    remaining -= read
                 }
+                out.toByteArray()
             }
             Method.PUT -> {
-                // NanoHTTPD 2.3.1 将 PUT 正文写入临时文件，并把路径放在 content 字段。
+                // NanoHTTPD 2.3.1 将 PUT 正文写入临时文件，并把路径放在 content 字段；
+                // 这一步只做字节级拷贝，不经过字符串解码，不受上面 POST 那个问题影响。
+                val fields = HashMap<String, String>()
+                session.parseBody(fields)
                 val path = fields["content"] ?: throw IOException(
                     "PUT 请求体缺失（已解析字段：" + fields.keys.joinToString() +
                         "，Content-Length：" + (session.headers["content-length"] ?: "未提供") + "）"
