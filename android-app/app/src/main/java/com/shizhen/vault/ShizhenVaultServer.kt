@@ -72,22 +72,33 @@ class ShizhenVaultServer(
     private val assetDir = File(root, "assets").apply { mkdirs() }
     private val snapshotFile = File(root, "snapshot.json")
 
-    fun currentLibrary(): JSONObject {
-        val payload = index.snapshot() ?: return JSONObject()
-        return JSONObject(payload).optJSONObject("snapshot") ?: JSONObject()
+    // Full settings snapshots can exceed Android CursorWindow's ~2 MB row limit.
+    // snapshot.json is the authoritative current payload; SQLite keeps searchable history metadata.
+    private fun currentSnapshotPayload(): JSONObject? {
+        if (snapshotFile.isFile) {
+            val text = snapshotFile.readText(Charsets.UTF_8)
+            if (text.isNotBlank()) return JSONObject(text)
+        }
+        // One-time compatibility fallback for installations created before snapshot.json existed.
+        val legacy = index.snapshot() ?: return null
+        val payload = JSONObject(legacy)
+        snapshotFile.parentFile?.mkdirs()
+        snapshotFile.writeText(legacy, Charsets.UTF_8)
+        return payload
     }
 
-    fun currentManifest(): JSONObject {
-        val payload = index.snapshot() ?: return JSONObject()
-        return JSONObject(payload).optJSONObject("manifest") ?: JSONObject()
-    }
+    fun currentLibrary(): JSONObject =
+        currentSnapshotPayload()?.optJSONObject("snapshot") ?: JSONObject()
+
+    fun currentManifest(): JSONObject =
+        currentSnapshotPayload()?.optJSONObject("manifest") ?: JSONObject()
 
     fun saveLibrary(settingsJson: String): JSONObject {
         val settings = JSONObject(settingsJson)
         // 连接凭据属于本机，不允许通过跨设备库编辑覆盖。
         settings.remove("vaultEndpoint")
         settings.remove("vaultToken")
-        val current = index.snapshot()?.let { JSONObject(it) } ?: JSONObject()
+        val current = currentSnapshotPayload() ?: JSONObject()
         val oldManifest = current.optJSONObject("manifest") ?: JSONObject()
         val oldAssets = oldManifest.optJSONArray("assets") ?: org.json.JSONArray()
         val available = HashMap<String, JSONObject>()
