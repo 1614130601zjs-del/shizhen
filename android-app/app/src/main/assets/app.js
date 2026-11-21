@@ -311,7 +311,8 @@ function dataEntries(key=dataCategory()){
 function dataEntryLabel(item,index,key){
  const name=item?.name||item?.title||item?.label||item?.avatar||item?.id||('条目 '+(index+1));
  if(key==='presets')return name+' · '+String(item?.positive||'').slice(0,36);
- if(key==='vibes')return name+' · '+(Array.isArray(item?.entries)?item.entries.length+' 条引用':'单条编码');
+ if(key==='vibes'){const refs=Array.isArray(item?.refs)?item.refs:[];return name+' · '+refs.length+' 条池引用';}
+ if(key==='vibePool')return name+' · '+(item?.raw?.encodings?'含 raw.encodings':'编码字段待填写');
  if(key==='combinations')return name+' · 画师串 '+(Number(item?.artistIndex)>=0?Number(item.artistIndex)+1:'无')+' / Vibe '+(Number(item?.vibeIndex)>=0?Number(item.vibeIndex)+1:'无');
  return String(name);
 }
@@ -362,7 +363,8 @@ function newDataEntry(){
  const key=dataCategory(),now=Date.now();
  const templates={
   presets:{id:'artist-'+now,name:'新画师串',positive:'',negative:''},
-  vibes:{id:'vibe-'+now,name:'新 Vibe 分组',entries:[]},
+  vibes:{id:'vibe-'+now,name:'新 Vibe 分组',refs:[]},
+  vibePool:{id:'vibe-pool-'+now,name:'新 Vibe 编码',image:'',raw:{},strength:0.6,informationExtracted:1,source:'app',imageState:'none',createdAt:now},
   combinations:{id:'combo-'+now,name:'新组合',artistIndex:-1,vibeIndex:-1},
   prompts:{id:'prompt-'+now,name:'新提示词',prompt:'',promptEn:''},
   characters:{id:'character-'+now,name:'新角色词条',appearance:'',outfits:[]},
