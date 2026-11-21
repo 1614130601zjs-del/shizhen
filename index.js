@@ -1128,6 +1128,51 @@ function qlEffectiveAppearance(e){
 // 和相册头像一样：直接把图缩到 768 以内存进设置，列表和放大用同一张。
 async function qlSetEditImage(src){qlEditThumb=await qlThumbFromSrc(src);qlEditFull='';}
 async function qlThumbFromSrc(src){const im=await qlLoadImageSrc(src);return qlImageToCanvas(im,768).toDataURL('image/jpeg',0.88);}
+// 拾帧相册的网格/翻页视图之前一直直接读 record.dataUrl（原图，NAI 出的图经常好几 MB），
+// 一页哪怕只铺 6 张也要一次性加载几十 MB——这就是"有些图要刷很久才出来"的根因，不是文件
+// 丢了（丢了的话会一直裂图，不会"过一会就出来"）。这里按角色词库头像同一套思路，给相册也
+// 配一张小预览图：第一次见到某张图时现读一遍原图生成小图，转存成单独的小文件（不占 settings
+// 体积），存进 record.thumb，下次再打开这张相册就直接读小图，不用再等原图。
+// 并发/重复触发防护：同一条 record 正在生成缩略图时，后来者复用同一个 Promise，不再重复生成。
+async function qlEnsureRecordThumb(record){
+ if(!record||typeof record!=='object')return '';
+ if(record.thumb)return record.thumb;
+ if(record._qlThumbJob)return record._qlThumbJob;
+ const src=record.dataUrl;
+ if(typeof src!=='string'||!src)return '';
+ const job=(async()=>{
+  try{
+   const thumbDataUrl=await qlThumbFromSrc(src);
+   const path=await persistImageToTavern(thumbDataUrl,String(record.taskKey||record.id||record.at||Date.now())+'-thumb');
+   record.thumb=path;
+   // 渲染时传进来的 record 大多是 {...record} 克隆出来的（相册/缓存列表到处都这么写），
+   // 改克隆的 .thumb 存不进设置——按 uid（qlUidOf 保证每条记录都有）找回 cfg().records
+   // 里那条真正会被 save() 写盘的记录，一起补上，下次打开才不用重新生成。
+   if(record.uid){const live=(cfg().records||[]).find(r=>r&&r.uid===record.uid);if(live&&live!==record)live.thumb=path;}
+   save();
+   return path;
+  }catch(error){
+   console.warn('[拾帧] 生成相册缩略图失败，先继续显示原图。',error);
+   return '';
+  }finally{
+   delete record._qlThumbJob;
+  }
+ })();
+ record._qlThumbJob=job;
+ return job;
+}
+// 渲染完一批相册/缓存图片之后调用：谁还没有缩略图，就在后台补一张，生成好了直接把对应
+// <img> 的 src 换过去，不用整块重渲染。selector 对应各处用来定位单张图片按钮的 data 属性。
+function qlPatchMissingThumbs(container,items,selector){
+ if(!container||!Array.isArray(items))return;
+ for(const record of items){
+  if(!record||record.thumb||!record.dataUrl)continue;
+  const index=record._cacheIndex;if(index==null)continue;
+  const img=container.querySelector('['+selector+'="'+index+'"] img');
+  if(!img)continue;
+  qlEnsureRecordThumb(record).then(path=>{if(path&&img.isConnected)img.src=path;}).catch(()=>{});
+ }
+}
 // 有正在编辑的已有词条就直接写进去；新词条先放着，点“保存角色词条”时一起存。
 function qlApplyEditThumb(){const edit=$('#ql-character-save')?.dataset.edit;if(edit!==undefined){const c=cfg(),item=c.characters[Number(edit)];if(item){item.thumb=qlEditThumb;item.thumbFull=qlEditFull;save();renderLibrary();return true;}}return false;}
 function findCharacterBinding(characterId, characterName, settings=cfg()){
@@ -3927,7 +3972,8 @@ function history(){
   const isEgg=/^\s*[\[【]\s*彩蛋/.test(String(record.basePrompt||''));
   return kindValue==='egg'?isEgg:!isEgg;
  });
- host.innerHTML=(visibleRecords.length?'<div class="ql-cache-grid" data-columns="'+cols+'">'+visibleRecords.map(record=>{const egg=/^\s*[\[【]\s*彩蛋/.test(String(record.basePrompt||'')),kindLabel=egg?'彩蛋':record.source==='statusbar'?'状态栏':'',when=record.at?new Date(record.at).toLocaleString():'';return '<article class="ql-cache-tile" title="'+esc(when)+'"><button type="button" class="ql-cache-image" data-ql-detail="'+record._cacheIndex+'" aria-label="查看影像详情"><img loading="lazy" src="'+esc(record.dataUrl||'')+'" alt="影像记录">'+(kindLabel?'<span class="ql-cache-kind">'+kindLabel+'</span>':'')+'</button>'+(record.theaterHidden?'<button type="button" class="ql-cache-favorite ql-theater-restore" data-ql-restore-theater="'+record._cacheIndex+'" title="恢复到原小剧场组" aria-label="恢复到原小剧场组">↶</button>':'')+'</article>';}).join('')+'</div>':'<p class="ql-muted">暂无底片缓存影像。应用词笺生成的照片会单独保存在对应图集中。</p>');
+ host.innerHTML=(visibleRecords.length?'<div class="ql-cache-grid" data-columns="'+cols+'">'+visibleRecords.map(record=>{const egg=/^\s*[\[【]\s*彩蛋/.test(String(record.basePrompt||'')),kindLabel=egg?'彩蛋':record.source==='statusbar'?'状态栏':'',when=record.at?new Date(record.at).toLocaleString():'';return '<article class="ql-cache-tile" title="'+esc(when)+'"><button type="button" class="ql-cache-image" data-ql-detail="'+record._cacheIndex+'" aria-label="查看影像详情"><img loading="lazy" src="'+esc(record.thumb||record.dataUrl||'')+'" alt="影像记录">'+(kindLabel?'<span class="ql-cache-kind">'+kindLabel+'</span>':'')+'</button>'+(record.theaterHidden?'<button type="button" class="ql-cache-favorite ql-theater-restore" data-ql-restore-theater="'+record._cacheIndex+'" title="恢复到原小剧场组" aria-label="恢复到原小剧场组">↶</button>':'')+'</article>';}).join('')+'</div>':'<p class="ql-muted">暂无底片缓存影像。应用词笺生成的照片会单独保存在对应图集中。</p>');
+ qlPatchMissingThumbs(host,visibleRecords,'data-ql-detail');
  const albums=$('#ql-character-albums'),cacheView=host,viewTabs=document.querySelectorAll('[data-album-view]');
  const renderAlbums=()=>{
   if(!albums)return;
@@ -3948,7 +3994,7 @@ function history(){
   for(const record of favorites){const key=String(record.albumCharacterKey||record.albumCharacterName||'current');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(record);}
   for(const key of Object.keys(settings.albumNames))if(!groups.has(key))groups.set(key,[]);
   const titleFor=(key,items)=>String(settings.albumNames[key]||items[0]?.albumCharacterName||'当前角色').trim()||'未命名相册';
-  const imageTile=(record,index)=>'<article class="ql-cache-tile ql-album-photo '+(selectedPhotos().includes(index)?'is-selected':'')+'"><button type="button" class="ql-cache-image" data-album-photo="'+index+'" aria-label="查看照片"><img loading="lazy" src="'+esc(record.dataUrl||'')+'" alt="相册照片"></button><button type="button" class="ql-cache-favorite is-favorite" data-ql-unfavorite="'+record._cacheIndex+'" aria-label="移出相册" title="移出相册">×</button><button type="button" class="ql-cache-favorite ql-album-redraw" data-ql-redraw="'+record._cacheIndex+'" aria-label="送去工坊重绘" title="送去工坊重绘">✎</button></article>';
+  const imageTile=(record,index)=>'<article class="ql-cache-tile ql-album-photo '+(selectedPhotos().includes(index)?'is-selected':'')+'"><button type="button" class="ql-cache-image" data-album-photo="'+index+'" aria-label="查看照片"><img loading="lazy" src="'+esc(record.thumb||record.dataUrl||'')+'" alt="相册照片"></button><button type="button" class="ql-cache-favorite is-favorite" data-ql-unfavorite="'+record._cacheIndex+'" aria-label="移出相册" title="移出相册">×</button><button type="button" class="ql-cache-favorite ql-album-redraw" data-ql-redraw="'+record._cacheIndex+'" aria-label="送去工坊重绘" title="送去工坊重绘">✎</button></article>';
   const selectedPhotos=()=>String(albums.dataset.albumSelectedPhotos||'').split(',').filter(Boolean).map(Number).filter(Number.isFinite);
   const setSelectedPhotos=values=>{albums.dataset.albumSelectedPhotos=[...new Set(values)].join(',');};
   const books=[...groups.entries()];
@@ -3964,7 +4010,8 @@ function history(){
    const items=kindFilterAlbum?allItems.filter(r=>kindFilterAlbum==='egg'?isEggRecord(r):!isEggRecord(r)):allItems;
    const mode=settings.albumViewMode==='flip'?'flip':'spread';
    const moving=moveMode==='select';
-   albums.innerHTML=renderAlbumToolbarMarkup({backAttribute:'data-album-back',backLabel:'所有相册',eyebrow:'拾帧相册',title:'PHOTO ALBUM',count:items.length,actionMarkup:'<button type="button" class="menu_button" data-album-move>'+(moving?'完成选择并移动':'移动')+'</button>'})+(moving?'<p class="ql-muted" role="status">已选择 '+selectedPhotos().length+' 张照片，点击照片进行多选；再次点击「完成选择并移动」选择目标相册。</p>':'')+'<div class="ql-album-mode" role="group" aria-label="显示类型（彩蛋基本是正方形、画风也不一样，单独看更整齐）"><button type="button" class="menu_button '+(!kindFilterAlbum?'active':'')+'" data-album-kind="">全部</button><button type="button" class="menu_button '+(kindFilterAlbum==='normal'?'active':'')+'" data-album-kind="normal">正文</button><button type="button" class="menu_button '+(kindFilterAlbum==='egg'?'active':'')+'" data-album-kind="egg">彩蛋</button></div><div class="ql-album-mode" role="group" aria-label="照片排列方式"><button type="button" class="menu_button '+(mode==='flip'?'active':'')+'" data-album-mode="flip">翻页浏览</button><button type="button" class="menu_button '+(mode==='spread'?'active':'')+'" data-album-mode="spread">铺开浏览</button></div><div class="ql-album-paper '+(mode==='flip'?'is-flip':'is-spread')+'">'+(mode==='flip'?'<div class="ql-album-flip-book"><div class="ql-album-single-page"><button type="button" class="menu_button ql-chat-image-arrow ql-chat-image-arrow-prev ql-album-page-arrow" data-album-step="-1" aria-label="上一张"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="ql-album-single-photo" data-album-photo="'+String(items[0]?._cacheIndex ?? '')+'"><img src="'+esc(items[0]?.dataUrl||'')+'" alt="相册照片"></button><span class="ql-album-page-number" data-album-page-number>1/'+String(items.length)+'</span><button type="button" class="menu_button ql-chat-image-arrow ql-chat-image-arrow-next ql-album-page-arrow" data-album-step="1" aria-label="下一张"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div></div>':renderAlbumSpreadMarkup({items,photoMarkup:record=>imageTile(record,record._cacheIndex)}) )+'</div>';
+   albums.innerHTML=renderAlbumToolbarMarkup({backAttribute:'data-album-back',backLabel:'所有相册',eyebrow:'拾帧相册',title:'PHOTO ALBUM',count:items.length,actionMarkup:'<button type="button" class="menu_button" data-album-move>'+(moving?'完成选择并移动':'移动')+'</button>'})+(moving?'<p class="ql-muted" role="status">已选择 '+selectedPhotos().length+' 张照片，点击照片进行多选；再次点击「完成选择并移动」选择目标相册。</p>':'')+'<div class="ql-album-mode" role="group" aria-label="显示类型（彩蛋基本是正方形、画风也不一样，单独看更整齐）"><button type="button" class="menu_button '+(!kindFilterAlbum?'active':'')+'" data-album-kind="">全部</button><button type="button" class="menu_button '+(kindFilterAlbum==='normal'?'active':'')+'" data-album-kind="normal">正文</button><button type="button" class="menu_button '+(kindFilterAlbum==='egg'?'active':'')+'" data-album-kind="egg">彩蛋</button></div><div class="ql-album-mode" role="group" aria-label="照片排列方式"><button type="button" class="menu_button '+(mode==='flip'?'active':'')+'" data-album-mode="flip">翻页浏览</button><button type="button" class="menu_button '+(mode==='spread'?'active':'')+'" data-album-mode="spread">铺开浏览</button></div><div class="ql-album-paper '+(mode==='flip'?'is-flip':'is-spread')+'">'+(mode==='flip'?'<div class="ql-album-flip-book"><div class="ql-album-single-page"><button type="button" class="menu_button ql-chat-image-arrow ql-chat-image-arrow-prev ql-album-page-arrow" data-album-step="-1" aria-label="上一张"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button type="button" class="ql-album-single-photo" data-album-photo="'+String(items[0]?._cacheIndex ?? '')+'"><img src="'+esc(items[0]?.thumb||items[0]?.dataUrl||'')+'" alt="相册照片"></button><span class="ql-album-page-number" data-album-page-number>1/'+String(items.length)+'</span><button type="button" class="menu_button ql-chat-image-arrow ql-chat-image-arrow-next ql-album-page-arrow" data-album-step="1" aria-label="下一张"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div></div>':renderAlbumSpreadMarkup({items,photoMarkup:record=>imageTile(record,record._cacheIndex)}) )+'</div>';
+   qlPatchMissingThumbs(albums,mode==='flip'?items.slice(0,1):items.slice(0,6),'data-album-photo');
    const openMoveDialog=chosen=>{
     document.querySelector('.ql-album-move-overlay')?.remove();
     const cards=getCharacterCards();
@@ -4009,10 +4056,11 @@ function history(){
    albums.querySelectorAll('[data-album-kind]').forEach(button=>button.addEventListener('click',()=>{settings.albumKindFilter=button.dataset.albumKind||'';save();renderAlbums();}));
    const flipImage=albums.querySelector('.ql-album-single-photo img'),flipButton=albums.querySelector('.ql-album-single-photo'),pageNumber=albums.querySelector('[data-album-page-number]');
    let pageIndex=0;
-   const paintFlip=()=>{if(!flipImage||!items.length)return;const item=items[pageIndex];flipImage.src=item.dataUrl;flipButton.dataset.albumPhoto=String(item._cacheIndex);if(pageNumber)pageNumber.textContent=String(pageIndex+1)+'/'+String(items.length);const prev=albums.querySelector('[data-album-step="-1"]'),next=albums.querySelector('[data-album-step="1"]');if(prev)prev.disabled=pageIndex===0;if(next)next.disabled=pageIndex===items.length-1;};
+   const paintFlip=()=>{if(!flipImage||!items.length)return;const item=items[pageIndex];flipImage.src=item.thumb||item.dataUrl;flipButton.dataset.albumPhoto=String(item._cacheIndex);if(pageNumber)pageNumber.textContent=String(pageIndex+1)+'/'+String(items.length);const prev=albums.querySelector('[data-album-step="-1"]'),next=albums.querySelector('[data-album-step="1"]');if(prev)prev.disabled=pageIndex===0;if(next)next.disabled=pageIndex===items.length-1;
+    if(!item.thumb&&item.dataUrl)qlEnsureRecordThumb(item).then(path=>{if(path&&items[pageIndex]===item&&flipImage.isConnected)flipImage.src=path;}).catch(()=>{});};
    albums.querySelectorAll('[data-album-step]').forEach(button=>button.addEventListener('click',()=>{pageIndex=Math.max(0,Math.min(items.length-1,pageIndex+Number(button.dataset.albumStep)));paintFlip();}));
    let spreadPage=0;const spreadGrid=albums.querySelector('.ql-album-spread-grid'),spreadNumber=albums.querySelector('[data-spread-page-number]');
-   const paintSpread=()=>{if(!spreadGrid)return;const totalPages=Math.max(1,Math.ceil(items.length/6));spreadPage=Math.max(0,Math.min(totalPages-1,spreadPage));spreadGrid.innerHTML=items.slice(spreadPage*6,spreadPage*6+6).map(record=>imageTile(record,record._cacheIndex)).join('');if(spreadNumber)spreadNumber.textContent=String(spreadPage+1)+'/'+String(totalPages);const prev=albums.querySelector('[data-spread-step="-1"]'),next=albums.querySelector('[data-spread-step="1"]');if(prev)prev.disabled=spreadPage===0;if(next)next.disabled=spreadPage>=totalPages-1;};
+   const paintSpread=()=>{if(!spreadGrid)return;const totalPages=Math.max(1,Math.ceil(items.length/6));spreadPage=Math.max(0,Math.min(totalPages-1,spreadPage));const pageItems=items.slice(spreadPage*6,spreadPage*6+6);spreadGrid.innerHTML=pageItems.map(record=>imageTile(record,record._cacheIndex)).join('');if(spreadNumber)spreadNumber.textContent=String(spreadPage+1)+'/'+String(totalPages);const prev=albums.querySelector('[data-spread-step="-1"]'),next=albums.querySelector('[data-spread-step="1"]');if(prev)prev.disabled=spreadPage===0;if(next)next.disabled=spreadPage>=totalPages-1;qlPatchMissingThumbs(spreadGrid,pageItems,'data-album-photo');};
    const handlePhotoClick=event=>{const photo=event.target?.closest?.('[data-album-photo]');if(!photo)return;if(albums.dataset.albumMoveMode==='select'){event.preventDefault();event.stopPropagation();const index=Number(photo.dataset.albumPhoto),chosen=selectedPhotos();setSelectedPhotos(chosen.includes(index)?chosen.filter(value=>value!==index):[...chosen,index]);photo.closest('.ql-album-photo')?.classList.toggle('is-selected',selectedPhotos().includes(index));const hint=albums.querySelector('.ql-album-toolbar')?.nextElementSibling;if(hint?.matches('.ql-muted'))hint.textContent='已选择 '+selectedPhotos().length+' 张照片，点击照片进行多选；再次点击「完成选择并移动」选择目标相册。';return;}{const idx=Number(photo.dataset.albumPhoto);openDetail(qlResolveRecordIndex(uidSnap[idx],idx),null,'roleAlbum',key);}};
    // renderAlbums 每次重绘都会走到这里：不先摘掉上一次的监听，监听会越叠越多，偶数个监听让“选中”被反复切回去（表现为选择多张照片始终是 0 张）。
    if(albums._qlPhotoClick)albums.removeEventListener('click',albums._qlPhotoClick);
@@ -5232,8 +5280,9 @@ function renderLibrary(){
     items=currentRecords.map((record,cacheIndex)=>({...record,_cacheIndex:cacheIndex})).filter(record=>recordBelongsToPromptGallery(record,promptEntry,cfg()));
     pageCount=Math.max(1,Math.ceil(items.length/pageSize));
     const safePage=Math.max(0,Math.min(pageCount-1,Number(page)||0));
-    const photoButton=record=>'<article class="ql-cache-tile ql-album-photo"><button type="button" class="ql-cache-image" data-prompt-record="'+record._cacheIndex+'" aria-label="查看照片"><img loading="lazy" src="'+esc(record.dataUrl||'')+'" alt="相册照片"></button><button type="button" class="ql-cache-favorite is-favorite" data-prompt-unfav="'+record._cacheIndex+'" aria-label="移回底片" title="移回底片">×</button></article>';
+    const photoButton=record=>'<article class="ql-cache-tile ql-album-photo"><button type="button" class="ql-cache-image" data-prompt-record="'+record._cacheIndex+'" aria-label="查看照片"><img loading="lazy" src="'+esc(record.thumb||record.dataUrl||'')+'" alt="相册照片"></button><button type="button" class="ql-cache-favorite is-favorite" data-prompt-unfav="'+record._cacheIndex+'" aria-label="移回底片" title="移回底片">×</button></article>';
     content.innerHTML=renderAlbumToolbarMarkup({backAttribute:'data-prompt-gallery-back',backLabel:'返回提示词库',eyebrow:'PHOTO ALBUM',title:(promptEntry.name||'未命名提示词')+' 图集',count:items.length})+'<div class="ql-album-paper is-spread">'+(items.length?renderAlbumSpreadMarkup({items,page:safePage,photoMarkup:photoButton,stepAttribute:'data-prompt-gallery-step'}):'<div class="ql-album-empty-book"><div class="ql-album-empty-cover"><span>PHOTO ALBUM</span><strong>这本图集还没有照片</strong><small>应用该提示词生成图片后，关联的影像会自动收录在这里，不需要进入影像缓存。</small></div></div>')+'</div>'
+    qlPatchMissingThumbs(content,items.slice(safePage*pageSize,safePage*pageSize+pageSize),'data-prompt-record');
     content.querySelector('[data-prompt-gallery-back]')?.addEventListener('click',()=>{
      root.querySelectorAll('button.ql-tab').forEach(item=>{const active=item.dataset.page==='wordbank';item.classList.toggle('active',active);item.setAttribute('aria-selected',String(active));});
      root.querySelectorAll('[data-page-panel]').forEach(node=>{const active=node.dataset.pagePanel==='wordbank';node.hidden=!active;node.classList.toggle('active',active);});
