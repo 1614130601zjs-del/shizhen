@@ -37,3 +37,6 @@ git clone https://github.com/1614130601zjs-del/shizhen.git shizhen
 ## 许可
 
 本项目包含既有代码及其许可声明，请一并阅读仓库中的 `LICENSE` 文件。
+## Android 本地素材库
+
+独立 Android 工程位于 [android-app/](android-app/README.md)。当前 0.1.0 已搭建本地文件仓库底座，支持选择手机文件夹、原样保存导入文件；酒馆扫描、备份包解析与选择性恢复仍在后续开发中。
