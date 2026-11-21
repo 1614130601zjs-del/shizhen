@@ -10,6 +10,10 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#f6f1eb;col
 #shizhen-panel input,#shizhen-panel textarea,#shizhen-panel select{background:var(--ql-field);color:var(--ql-text)}
 #shizhen-panel .ql-muted{color:var(--ql-muted)}
 #shizhen-panel .ql-tab.active{background:color-mix(in srgb,var(--ql-accent) 14%,var(--ql-card))}
+
+/* Android: keep the standalone transfer page in normal vertical document flow. */
+#shizhen-panel .ql-page[data-page-panel="vault"]:not([hidden]){display:block!important;flex:1 1 auto;align-self:stretch;width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:hidden}
+#shizhen-panel .ql-page[data-page-panel="vault"]>.ql-card{display:block;width:100%;max-width:100%;box-sizing:border-box}
 </style></head><body><div id="ql-overlay"><section id="shizhen-panel">
 <header class="ql-header"><div class="ql-brand"><strong>拾帧</strong><span>故事仍在继续，快门为你停留。</span></div><button id="ql-close" class="menu_button ql-universal-close" type="button" aria-label="关闭拾帧" title="关闭" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
 <nav class="ql-tabs" aria-label="拾帧功能导航" role="tablist">
