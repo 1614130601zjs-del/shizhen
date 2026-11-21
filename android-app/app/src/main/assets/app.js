@@ -3,6 +3,7 @@
   const folderStatus = $('#folderStatus');
   const importStatus = $('#importStatus');
   const fileList = $('#fileList');
+  const tavernStatus = $('#tavernStatus');
   const native = window.ShizhenNative;
   const encodeBase64 = buffer => {
     const bytes = new Uint8Array(buffer); let binary = ''; const chunk = 0x8000;
@@ -48,6 +49,15 @@
     event.target.value = ''; refresh();
   });
   $('#refresh').addEventListener('click', refresh);
+  $('#testTavern').addEventListener('click', () => {
+    const address = $('#tavernAddress').value.trim();
+    tavernStatus.textContent = '正在检测本机酒馆服务…';
+    try {
+      const result = JSON.parse(native.testTavern(address));
+      tavernStatus.textContent = result.message || (result.ok ? '连接成功' : '连接失败');
+    } catch (error) { tavernStatus.textContent = '检测失败：' + error.message; }
+  });
+  $('#tavernAddress').value = native.savedTavernAddress();
   window.ShizhenVault = { folderChanged: updateFolderStatus };
   updateFolderStatus(native.hasExternalFolder()); refresh();
 })();
