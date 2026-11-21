@@ -6522,7 +6522,7 @@ for(let i=0;i<list.length;i++){
  for(const ref of pointerRefs){
   if(ref.mode==='character-card'){
    if(!importMissingCards)continue;
-   const source=sourceCharacters.find(item=>item.cardAssetId===a.id);
+   const sourceIndex=Number(ref.pointer.split('/').pop()),source=sourceCharacters.find(item=>Number(item.sourceIndex)===sourceIndex&&item.cardAssetId===a.id);
    if(!source||importedCardAvatars.has(Number(source.sourceIndex)))continue;
    msg.textContent='导入关联角色卡：'+(source.name||source.avatar);
    const blob=new Blob([bytes],{type:mime}),form=new FormData();
