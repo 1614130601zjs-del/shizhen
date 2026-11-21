@@ -34,8 +34,8 @@
   const safeName = name => String(name || 'asset').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '_');
   function updateFolderStatus(external) {
     folderStatus.textContent = external
-      ? '已连接你选择的手机文件夹。新导入的素材会写入这个位置。'
-      : '当前使用 App 私有存储。可在顶部选择一个手机文件夹作为长期素材库。';
+      ? '已选择外部文件夹；手动导入文件会写入这里，插件同步数据库仍保存在 App 私有目录。'
+      : '插件同步数据库当前保存在 App 私有目录。可在顶部选择另一个文件夹存放手动导入的文件。';
   }
   function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
