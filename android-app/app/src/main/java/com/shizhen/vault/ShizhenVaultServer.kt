@@ -89,6 +89,10 @@ class ShizhenVaultServer(
     private fun authorized(session: IHTTPSession): Boolean =
         session.headers["authorization"] == "Bearer $token"
 
+    fun stats(): JSONObject = JSONObject()
+        .put("assets", index.listAssets().getJSONArray("assets"))
+        .put("snapshots", index.listSnapshots())
+
     private fun bodyFile(session: IHTTPSession): File {
         val files = HashMap<String, String>()
         session.parseBody(files)
