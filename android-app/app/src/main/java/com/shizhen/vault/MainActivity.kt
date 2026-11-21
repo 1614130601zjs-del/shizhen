@@ -4,6 +4,13 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+import java.security.KeyStore
 import android.util.Base64
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
@@ -187,6 +194,46 @@ class MainActivity : Activity() {
         return result
     }
 
+    private fun importedSettingsKey(): SecretKey {
+        val alias = "shizhen-imported-settings-v1"
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (store.containsAlias(alias)) return store.getKey(alias, null) as SecretKey
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        generator.init(KeyGenParameterSpec.Builder(
+            alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        ).setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setRandomizedEncryptionRequired(true)
+            .build())
+        return generator.generateKey()
+    }
+
+    private fun saveImportedSettings(json: String): JSONObject {
+        val settings = JSONObject(json)
+        require(settings.length() > 0) { "拾帧设置为空" }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, importedSettingsKey())
+        val encrypted = cipher.doFinal(json.toByteArray(Charsets.UTF_8))
+        val packed = cipher.iv + encrypted
+        val encoded = Base64.encodeToString(packed, Base64.NO_WRAP)
+        val saved = getSharedPreferences("vault", MODE_PRIVATE).edit()
+            .putString("importedSettingsEncrypted", encoded).commit()
+        require(saved) { "无法写入本机加密设置存储" }
+        return JSONObject().put("ok", true).put("fieldCount", settings.length())
+    }
+
+    private fun getImportedSettings(): JSONObject {
+        val encoded = getSharedPreferences("vault", MODE_PRIVATE)
+            .getString("importedSettingsEncrypted", null) ?: return JSONObject()
+        val packed = Base64.decode(encoded, Base64.NO_WRAP)
+        require(packed.size > 12) { "加密设置数据损坏" }
+        val iv = packed.copyOfRange(0, 12)
+        val ciphertext = packed.copyOfRange(12, packed.size)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, importedSettingsKey(), GCMParameterSpec(128, iv))
+        return JSONObject(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
+    }
+
     private fun normalizedTavernBase(): String {
         val address = getSharedPreferences("vault", MODE_PRIVATE)
             .getString("tavernAddress", "http://127.0.0.1:8000") ?: "http://127.0.0.1:8000"
@@ -245,6 +292,16 @@ class MainActivity : Activity() {
             (vaultServer ?: throw IOException("本地数据库服务未启动")).saveLibrary(settingsJson).toString()
         } catch (error: Exception) {
             JSONObject().put("ok", false).put("error", error.message ?: "保存拾帧库失败").toString()
+        }
+        @JavascriptInterface fun saveImportedSettings(settingsJson: String): String = try {
+            saveImportedSettings(settingsJson).toString()
+        } catch (error: Exception) {
+            JSONObject().put("ok", false).put("error", error.message ?: "加密保存设置失败").toString()
+        }
+        @JavascriptInterface fun getImportedSettings(): String = try {
+            getImportedSettings().toString()
+        } catch (error: Exception) {
+            JSONObject().put("ok", false).put("error", error.message ?: "读取加密设置失败").toString()
         }
         @JavascriptInterface fun hasExternalFolder(): Boolean = treeUri != null
         @JavascriptInterface fun chooseExternalFolder() {
