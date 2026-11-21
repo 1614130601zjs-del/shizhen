@@ -157,16 +157,33 @@ class ShizhenVaultServer(
         .put("assets", index.listAssets().getJSONArray("assets"))
         .put("snapshots", index.listSnapshots())
 
-    private fun bodyFile(session: IHTTPSession): File {
-        val files = HashMap<String, String>()
-        session.parseBody(files)
-        // NanoHTTPD 2.3.1 stores raw POST bodies as "postData", but PUT bodies as "content".
-        // Asset uploads use PUT; looking only for postData made every non-empty upload look empty.
-        val key = if (session.method == Method.PUT) "content" else "postData"
-        val path = files[key] ?: throw IOException("请求体为空（" + session.method + "，已解析字段：" + files.keys.joinToString() + "）")
-        val file = File(path)
-        if (!file.isFile || file.length() == 0L) throw IOException("请求体为空（" + session.method + "，长度为 0）")
-        return file
+    private fun bodyBytes(session: IHTTPSession): ByteArray {
+        val fields = HashMap<String, String>()
+        session.parseBody(fields)
+        return when (session.method) {
+            Method.POST -> {
+                // NanoHTTPD 2.3.1 将原始 POST 正文直接放进 postData 字符串，
+                // 它不是临时文件路径。此前把它交给 File(path) 会把正常 JSON 误判为空文件。
+                val raw = fields["postData"] ?: throw IOException(
+                    "POST 请求体缺失（已解析字段：" + fields.keys.joinToString() +
+                        "，Content-Length：" + (session.headers["content-length"] ?: "未提供") + "）"
+                )
+                raw.toByteArray(Charsets.UTF_8).also {
+                    if (it.isEmpty()) throw IOException("POST 请求体为空（NanoHTTPD 已解析 postData，但内容长度为 0）")
+                }
+            }
+            Method.PUT -> {
+                // NanoHTTPD 2.3.1 将 PUT 正文写入临时文件，并把路径放在 content 字段。
+                val path = fields["content"] ?: throw IOException(
+                    "PUT 请求体缺失（已解析字段：" + fields.keys.joinToString() +
+                        "，Content-Length：" + (session.headers["content-length"] ?: "未提供") + "）"
+                )
+                val file = File(path)
+                if (!file.isFile || file.length() == 0L) throw IOException("PUT 请求体临时文件为空")
+                file.readBytes()
+            }
+            else -> throw IOException("不支持读取请求体的方法：" + session.method)
+        }
     }
 
     override fun serve(session: IHTTPSession): Response {
@@ -191,7 +208,7 @@ class ShizhenVaultServer(
                 session.uri == "/v1/assets" && session.method == Method.PUT -> {
                     val id = session.headers["x-asset-id"] ?: throw IllegalArgumentException("缺少资源 SHA-256 标识")
                     require(id.matches(Regex("[a-f0-9]{64}"))) { "资源 SHA-256 标识无效" }
-                    val bytes = bodyFile(session).readBytes()
+                    val bytes = bodyBytes(session)
                     require(digest(bytes) == id) { "资源 SHA-256 校验失败" }
                     File(assetDir, id).writeBytes(bytes)
                     val mime = session.headers["x-asset-mime"] ?: "application/octet-stream"
@@ -235,7 +252,7 @@ class ShizhenVaultServer(
                     newFixedLengthResponse(Response.Status.OK, "application/octet-stream", file.inputStream(), file.length()).withCors()
                 }
                 session.uri == "/v1/snapshot" && session.method == Method.POST -> {
-                    val payload = JSONObject(bodyFile(session).readText(Charsets.UTF_8))
+                    val payload = JSONObject(String(bodyBytes(session), Charsets.UTF_8))
                     require(payload.optString("format") == "shizhen-plugin-vault" && payload.optInt("version") == 1) { "不支持的拾帧数据库格式" }
                     val manifest = payload.getJSONObject("manifest")
                     val assets = manifest.getJSONArray("assets")
