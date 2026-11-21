@@ -133,8 +133,66 @@ async function renderCharacterRows(){
   list.append(row);
  }
 }
+
+let filmRows=[],filmOffset=0,galleryObjectUrls=[];
+function releaseGalleryUrls(){for(const url of galleryObjectUrls){try{URL.revokeObjectURL(url);}catch{}}galleryObjectUrls=[];}
+async function resolveLibraryImage(value){
+ const raw=String(value||'');
+ if(!raw)return '';
+ const match=raw.match(/^shizhen-asset:\/\/([a-f0-9]{64})$/i);
+ if(!match)return raw;
+ if(!assetServerInfo?.url||!assetServerInfo?.token)throw new Error('本地素材服务尚未就绪');
+ const response=await fetch(assetServerInfo.url.replace(/\/+$/,'')+'/v1/assets/'+match[1],{headers:{Authorization:'Bearer '+assetServerInfo.token}});
+ if(!response.ok)throw new Error('HTTP '+response.status);
+ const url=URL.createObjectURL(await response.blob());galleryObjectUrls.push(url);return url;
+}
+function filmRecords(){
+ return (Array.isArray(library.records)?library.records:[])
+  .map((record,index)=>({...record,_libraryIndex:index}))
+  .filter(record=>record?.dataUrl&&record.collection!=='deleted'&&!record.albumCharacterName&&record.collection!=='character-album'&&record.collection!=='prompt-gallery')
+  .sort((a,b)=>Number(b.at||0)-Number(a.at||0));
+}
+async function renderFilmBatch(reset=false){
+ const host=$('#ql-history'),more=$('#sz-film-more');if(!host)return;
+ if(reset){filmOffset=0;filmRows=filmRecords();releaseGalleryUrls();host.replaceChildren();}
+ if(!filmRows.length){host.textContent='本地底片相册暂无影像记录。';if(more)more.hidden=true;return;}
+ const batch=filmRows.slice(filmOffset,filmOffset+24);
+ for(const record of batch){
+  const tile=document.createElement('article');tile.className='ql-cache-tile';
+  const button=document.createElement('button');button.type='button';button.className='ql-cache-image';button.setAttribute('aria-label','底片影像 '+(record.prompt||record.basePrompt||''));
+  const image=document.createElement('img');image.loading='lazy';image.alt='底片影像';button.append(image);tile.append(button);
+  const caption=document.createElement('p');caption.className='ql-muted';caption.textContent=record.at?new Date(Number(record.at)).toLocaleString():(record.source||'拾帧影像');tile.append(caption);host.append(tile);
+  try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){image.alt='图片读取失败：'+(error.message||error);}
+ }
+ filmOffset+=batch.length;
+ if(more){more.hidden=filmOffset>=filmRows.length;more.textContent='继续显示底片（'+filmOffset+' / '+filmRows.length+'）';}
+}
+async function renderCharacterAlbums(){
+ const host=$('#ql-character-albums');if(!host)return;
+ host.replaceChildren();
+ const records=(Array.isArray(library.records)?library.records:[])
+  .map((record,index)=>({...record,_libraryIndex:index}))
+  .filter(record=>record?.dataUrl&&record.albumCharacterName&&record.collection!=='deleted'&&record.collection!=='prompt-gallery'&&record.collection!=='cache');
+ const groups=new Map();
+ for(const record of records){const key=String(record.albumCharacterKey??record.albumCharacterName);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(record);}
+ const names=library.albumNames&&typeof library.albumNames==='object'?library.albumNames:{};
+ for(const [key,items] of groups){
+  const section=document.createElement('section');section.className='ql-card ql-album-card';
+  const heading=document.createElement('h3');heading.textContent=String(names[key]||items[0]?.albumCharacterName||'未命名相册')+' · '+items.length+' 张';section.append(heading);
+  const grid=document.createElement('div');grid.className='ql-cache-grid';grid.dataset.columns='3';section.append(grid);host.append(section);
+  for(const record of items){
+   const tile=document.createElement('article');tile.className='ql-cache-tile ql-album-photo';
+   const button=document.createElement('button');button.type='button';button.className='ql-cache-image';button.setAttribute('aria-label','相册照片');
+   const image=document.createElement('img');image.loading='lazy';image.alt='相册照片';button.append(image);tile.append(button);grid.append(tile);
+   try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){image.alt='图片读取失败：'+(error.message||error);}
+  }
+ }
+ if(!groups.size)host.textContent='当前快照没有角色相册照片记录。';
+}
 function refresh(){
  if(!native){set('sz-vault-server','原生数据库服务不可用');return;}
+ const freshLibrary=native.getLibrary?parse(native.getLibrary()):null;
+ if(freshLibrary&&typeof freshLibrary==='object'&&!freshLibrary.error)library=freshLibrary;
  const info=parse(native.localServerInfo()),stats=parse(native.localDatabaseStats()),manifest=native.getVaultManifest?parse(native.getVaultManifest()):{},assets=stats.assets||[],snaps=stats.snapshots||[];characterRows=Array.isArray(manifest.characters)?manifest.characters:[];
  assetRows=assets.slice();assetServerInfo=info;
  set('sz-vault-server',info.running?'本地数据库服务运行中':'本地数据库服务未启动');
@@ -145,14 +203,69 @@ function refresh(){
  if(!snaps.length)list.textContent='暂无历史快照。完成首次插件同步后会在这里显示。';
  snaps.forEach(s=>{const row=document.createElement('div');row.className='ql-record';const title=document.createElement('strong'),meta=document.createElement('p');title.textContent=s.current?'当前版本':'历史版本';meta.className='ql-muted';meta.textContent=new Date(Number(s.createdAt)).toLocaleString()+' · '+s.id;row.append(title,meta);list.append(row);});
  renderAssetBatch(true).catch(error=>{const target=$('#sz-asset-list');if(target)target.textContent='读取图片列表失败：'+(error.message||error);});renderCharacterRows().catch(error=>{const target=$('#sz-character-list');if(target)target.textContent='读取角色卡清单失败：'+(error.message||error);});
+ renderFilmBatch(true).catch(error=>{const target=$('#ql-history');if(target)target.textContent='读取底片相册失败：'+(error.message||error);});
+ renderCharacterAlbums().catch(error=>{const target=$('#ql-character-albums');if(target)target.textContent='读取角色相册失败：'+(error.message||error);});
 }
 $('#sz-copy-url')?.addEventListener('click',()=>copy($('#sz-vault-url').value));
 $('#sz-copy-token')?.addEventListener('click',()=>copy($('#sz-vault-token').value));
+let importedSettings={};
+function setImportedControl(id,value){
+ const el=$('#'+id);if(!el||value===undefined||value===null)return;
+ if(el.type==='checkbox'){el.checked=Boolean(value);return;}
+ const text=String(value);
+ if(el.tagName==='SELECT'&&text!==''&&![...el.options].some(option=>option.value===text))el.add(new Option(text,text));
+ el.value=text;
+}
+function hydrateImportedSettings(config){
+ if(!config||typeof config!=='object')return;
+ importedSettings=config;
+ const fields=[
+  ['ql-fast-provider','provider'],['ql-provider','provider'],['ql-nai-key','naiApiKey'],
+  ['ql-nai-third-endpoint','naiThirdEndpoint'],['ql-nai-third-key','naiThirdKey'],
+  ['ql-endpoint','endpoint'],['ql-key','apiKey'],['ql-fast-model','model'],['ql-fast-size','size'],['ql-fast-quality','quality'],
+  ['ql-fast-nai-model','naiModel'],['ql-fast-nai-steps','naiSteps'],['ql-fast-nai-scale','naiScale'],
+  ['ql-fast-nai-sampler','naiSampler'],['ql-fast-nai-scheduler','naiScheduler'],['ql-fast-nai-quality','naiQualityMode'],
+  ['ql-fast-nai-uc','naiUcPreset'],['ql-fast-nai-seed','naiSeed'],['ql-fast-nai-normalize','naiNormalizeVibeStrengths'],
+  ['ql-llm-tag-mode','llmTagMode'],['ql-llm-tag-url','llmTagApiUrl'],['ql-llm-tag-key','llmTagApiKey'],
+  ['ql-llm-tag-model','llmTagModel'],['ql-llm-tag-temp','llmTagTemperature'],['ql-llm-tag-sys','llmTagSystemPrompt'],
+  ['ql-llm-tag-wi-on','llmTagUseWorldInfo'],['ql-prompt','prompt'],['ql-negative','negative'],
+  ['ql-download-format','downloadFormat'],['ql-history-columns','historyColumns'],['ql-record-limit','recordLimit']
+ ];
+ for(const [id,key] of fields)setImportedControl(id,config[key]);
+ const width=Number(config.naiWidth||832),height=Number(config.naiHeight||1216);
+ setImportedControl('ql-fast-nai-width',width);setImportedControl('ql-fast-nai-height',height);setImportedControl('ql-fast-nai-size-preset',width+'x'+height);
+ if($('#ql-llm-tag-custom-box'))$('#ql-llm-tag-custom-box').hidden=(config.llmTagMode||'main')!=='custom';
+ if($('#ql-fast-nai'))$('#ql-fast-nai').hidden=String(config.provider||'novelai')==='openai';
+ if($('#ql-fast-openai'))$('#ql-fast-openai').hidden=String(config.provider||'novelai')!=='openai';
+}
+function saveImportedSettingsFromControls(){
+ if(!native?.saveImportedSettings)return;
+ const fields=[
+  ['provider','ql-fast-provider'],['naiApiKey','ql-nai-key'],['naiThirdEndpoint','ql-nai-third-endpoint'],['naiThirdKey','ql-nai-third-key'],
+  ['endpoint','ql-endpoint'],['apiKey','ql-key'],['model','ql-fast-model'],['size','ql-fast-size'],['quality','ql-fast-quality'],
+  ['naiModel','ql-fast-nai-model'],['naiSteps','ql-fast-nai-steps'],['naiScale','ql-fast-nai-scale'],['naiSampler','ql-fast-nai-sampler'],
+  ['naiScheduler','ql-fast-nai-scheduler'],['naiQualityMode','ql-fast-nai-quality'],['naiUcPreset','ql-fast-nai-uc'],
+  ['naiSeed','ql-fast-nai-seed'],['llmTagMode','ql-llm-tag-mode'],['llmTagApiUrl','ql-llm-tag-url'],
+  ['llmTagApiKey','ql-llm-tag-key'],['llmTagModel','ql-llm-tag-model'],['llmTagTemperature','ql-llm-tag-temp'],
+  ['llmTagSystemPrompt','ql-llm-tag-sys'],['prompt','ql-prompt'],['negative','ql-negative']
+ ];
+ for(const [key,id] of fields){const el=$('#'+id);if(!el)continue;let value=el.value;if(['naiSteps','naiScale','naiUcPreset','naiSeed','llmTagTemperature'].includes(key))value=value===''?'':Number(value);importedSettings[key]=value;}
+ for(const [key,id] of [['naiNormalizeVibeStrengths','ql-fast-nai-normalize'],['llmTagUseWorldInfo','ql-llm-tag-wi-on']]){const el=$('#'+id);if(el)importedSettings[key]=el.checked;}
+ const dims=($('#ql-fast-nai-size-preset')?.value||'').match(/^(\d+)x(\d+)$/);if(dims){importedSettings.naiWidth=Number(dims[1]);importedSettings.naiHeight=Number(dims[2]);}
+ const result=parse(native.saveImportedSettings(JSON.stringify(importedSettings)));
+ if(!result?.ok)set('sz-import-settings-status','设置保存失败：'+(result?.error||'未知错误'));
+ else set('sz-import-settings-status','设置已安全保存到本机。');
+}
+function wireImportedSettings(){
+ const ids=['ql-fast-provider','ql-nai-key','ql-nai-third-endpoint','ql-nai-third-key','ql-endpoint','ql-key','ql-fast-model','ql-fast-size','ql-fast-quality','ql-fast-nai-model','ql-fast-nai-steps','ql-fast-nai-scale','ql-fast-nai-sampler','ql-fast-nai-scheduler','ql-fast-nai-quality','ql-fast-nai-uc','ql-fast-nai-seed','ql-fast-nai-normalize','ql-fast-nai-size-preset','ql-llm-tag-mode','ql-llm-tag-url','ql-llm-tag-key','ql-llm-tag-model','ql-llm-tag-temp','ql-llm-tag-sys','ql-llm-tag-wi-on','ql-prompt','ql-negative'];
+ for(const id of ids){const el=$('#'+id);if(!el)continue;el.addEventListener('change',()=>{if($('#ql-llm-tag-custom-box'))$('#ql-llm-tag-custom-box').hidden=$('#ql-llm-tag-mode')?.value!=='custom';saveImportedSettingsFromControls();});}
+}
 function importedSettingsStatus(){
  const target=$('#sz-import-settings-status');if(!target||!native?.getImportedSettings)return;
  const saved=parse(native.getImportedSettings());
  if(saved&&saved.ok===false){target.textContent='读取已移植设置失败：'+(saved.error||'未知错误');return;}
  if(!saved||!Object.keys(saved).length){target.textContent='尚未从拾帧插件移植设置。';return;}
+ hydrateImportedSettings(saved);
  const provider=saved.provider==='novelai-thirdparty'?'NovelAI 第三方':saved.provider==='novelai'?'NovelAI 官网':'OpenAI 兼容服务';
  const model=saved.provider==='novelai'||saved.provider==='novelai-thirdparty'?(saved.naiModel||'未设置模型'):(saved.model||'未设置模型');
  target.textContent='已保存设置：'+provider+' · '+model+'。API 凭据已保存在 App 私有加密存储中。';
@@ -165,7 +278,8 @@ $('#sz-import-settings')?.addEventListener('click',()=>{
   if(!Object.keys(config).length)throw new Error('尚未收到拾帧插件的设置快照，请先在插件中执行一次同步');
   const result=parse(native.saveImportedSettings(JSON.stringify(config)));
   if(!result?.ok)throw new Error(result?.error||'App 保存设置失败');
-  set('sz-import-settings-status','一键移植完成。已保存 '+Object.keys(config).length+' 项插件配置；API 凭据已加密保存在本机。');
+  hydrateImportedSettings(config);
+  set('sz-import-settings-status','已将生图后端、密钥、模型、采样参数与文本 API 等配置填入对应设置位置，并加密保存在本机。');
   importedSettingsStatus();
  }catch(error){set('sz-import-settings-status','移植失败：'+(error.message||error));}
 });
@@ -180,9 +294,11 @@ $('#sz-import-files')?.addEventListener('change',async e=>{
 });
 $('#sz-refresh-files')?.addEventListener('click',()=>{const r=parse(native.listFiles()),list=$('#sz-file-list');list.replaceChildren();if(!r.ok){list.textContent=r.error||'读取失败';return;}(r.files||[]).forEach(f=>{const p=document.createElement('p');p.className='ql-muted';p.textContent=f.path+' · '+bytes(Number(f.size||0));list.append(p);});if(!r.files?.length)list.textContent='暂无手动导入文件。';});
 $('#sz-asset-more')?.addEventListener('click',()=>renderAssetBatch(false).catch(error=>set('sz-vault-stats','读取图片失败：'+(error.message||error))));
+$('#sz-film-more')?.addEventListener('click',()=>renderFilmBatch(false).catch(error=>set('sz-vault-stats','读取底片失败：'+(error.message||error))));
 $('#sz-refresh-vault')?.addEventListener('click',()=>{try{refresh();set('sz-vault-stats','数据库索引已刷新。');}catch(error){set('sz-vault-stats','刷新失败：'+(error.message||error));}});
 window.ShizhenVault={folderChanged:ready=>set('sz-folder-status',ready?'已选择外部文件夹':'尚未选择外部文件夹')};
-if(native){set('sz-folder-status',native.hasExternalFolder()?'已选择外部文件夹':'尚未选择外部文件夹');refresh();loadAppearance();importedSettingsStatus();}
+if(native){set('sz-folder-status',native.hasExternalFolder()?'已选择外部文件夹':'尚未选择外部文件夹');loadAppearance();refresh();importedSettingsStatus();}
+wireImportedSettings();
 wireAppearance();
 showPage('generate');
 })();
