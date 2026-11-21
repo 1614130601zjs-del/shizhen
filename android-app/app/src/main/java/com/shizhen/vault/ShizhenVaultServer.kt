@@ -281,6 +281,12 @@ class ShizhenVaultServer(
                     if (!file.isFile) return json(Response.Status.NOT_FOUND, JSONObject().put("error", "资源不存在"))
                     newFixedLengthResponse(Response.Status.OK, "application/octet-stream", file.inputStream(), file.length()).withCors()
                 }
+                session.uri == "/v1/diagnostic-snapshot" && session.method == Method.POST -> {
+                    val bytes = bodyBytes(session)
+                    val probe = JSONObject(String(bytes, Charsets.UTF_8))
+                    require(probe.optString("probe") == "shizhen-post-check") { "POST 检测数据无效" }
+                    json(Response.Status.OK, JSONObject().put("ok", true).put("bytes", bytes.size))
+                }
                 session.uri == "/v1/snapshot" && session.method == Method.POST -> {
                     val payload = JSONObject(String(bodyBytes(session), Charsets.UTF_8))
                     require(payload.optString("format") == "shizhen-plugin-vault" && payload.optInt("version") == 1) { "不支持的拾帧数据库格式" }
