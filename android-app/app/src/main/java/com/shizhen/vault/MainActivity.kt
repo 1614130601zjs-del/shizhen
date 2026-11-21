@@ -18,6 +18,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.io.ByteArrayOutputStream
+import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -141,6 +145,105 @@ class MainActivity : Activity() {
         return result
     }
 
+    private fun normalizedTavernBase(): String {
+        val address = getSharedPreferences("vault", MODE_PRIVATE)
+            .getString("tavernAddress", "http://127.0.0.1:8000") ?: "http://127.0.0.1:8000"
+        val url = URL(address.trim().trimEnd('/'))
+        require(url.protocol == "http" && url.host in setOf("127.0.0.1", "localhost", "::1")) {
+            "只允许连接本机 SillyTavern"
+        }
+        return address.trim().trimEnd('/')
+    }
+
+    private fun postTavern(path: String, payload: JSONObject): ByteArray {
+        val connection = (URL("${normalizedTavernBase()}/api/${path.trimStart('/')}").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 8000
+            readTimeout = 30000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            setRequestProperty("Accept", "application/json, image/png, application/octet-stream")
+        }
+        try {
+            connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val bytes = stream?.use { it.readBytes() } ?: ByteArray(0)
+            if (status !in 200..299) {
+                val detail = String(bytes, Charsets.UTF_8).take(300)
+                throw IOException("酒馆 API 返回 HTTP $status：$detail")
+            }
+            return bytes
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun archiveSafeName(value: String): String {
+        val cleaned = value.replace(Regex("""[\\/:*?"<>|\u0000-\u001f]"""), "_")
+            .trim().trim('.').take(100)
+        return cleaned.ifBlank { "unnamed" }
+    }
+
+    private fun createTavernBackup(): JSONObject {
+        val assets = JSONArray()
+        val files = linkedMapOf<String, ByteArray>()
+        var totalBytes = 0L
+        fun addAsset(path: String, bytes: ByteArray, kind: String, displayName: String) {
+            totalBytes += bytes.size
+            require(totalBytes <= 512L * 1024L * 1024L) { "本次导出超过 512 MB 安全限制，请分批导出" }
+            require(path !in files) { "导出文件名冲突：$path" }
+            files[path] = bytes
+            val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
+                .joinToString("") { "%02x".format(it) }
+            assets.put(JSONObject().put("path", path).put("size", bytes.size)
+                .put("sha256", digest).put("type", kind).put("name", displayName))
+        }
+
+        val characters = JSONArray(String(postTavern("characters/all", JSONObject()), Charsets.UTF_8))
+        for (i in 0 until characters.length()) {
+            val character = characters.getJSONObject(i)
+            val avatar = character.optString("avatar")
+            if (avatar.isBlank() || !avatar.endsWith(".png", true)) continue
+            val png = postTavern("characters/export", JSONObject()
+                .put("avatar_url", avatar).put("format", "png"))
+            addAsset("characters/${archiveSafeName(avatar)}", png, "character", character.optString("name", avatar))
+        }
+
+        val worlds = JSONArray(String(postTavern("worldinfo/list", JSONObject()), Charsets.UTF_8))
+        for (i in 0 until worlds.length()) {
+            val world = worlds.getJSONObject(i)
+            val fileId = world.optString("file_id")
+            if (fileId.isBlank()) continue
+            val raw = postTavern("worldinfo/get", JSONObject().put("name", fileId))
+            val parsed = JSONObject(String(raw, Charsets.UTF_8))
+            val filename = archiveSafeName(fileId) + ".json"
+            addAsset("worldbooks/$filename", parsed.toString(2).toByteArray(Charsets.UTF_8),
+                "worldbook", world.optString("name", fileId))
+        }
+
+        require(files.isNotEmpty()) { "酒馆中没有找到可导出的角色卡或世界书" }
+        val manifest = JSONObject().put("format", "shizhen-vault-backup")
+            .put("version", 1).put("createdAt", System.currentTimeMillis())
+            .put("source", "SillyTavern local API").put("assets", assets)
+        val archiveBuffer = ByteArrayOutputStream()
+        ZipOutputStream(archiveBuffer).use { zip ->
+            files.forEach { (path, bytes) ->
+                zip.putNextEntry(ZipEntry(path)); zip.write(bytes); zip.closeEntry()
+            }
+            zip.putNextEntry(ZipEntry("manifest.json"))
+            zip.write(manifest.toString(2).toByteArray(Charsets.UTF_8))
+            zip.closeEntry()
+        }
+        val backupName = "tavern-${System.currentTimeMillis()}.zip"
+        val archive = archiveBuffer.toByteArray()
+        writeBytes("exports/$backupName", archive)
+        return JSONObject().put("ok", true).put("backupName", backupName)
+            .put("path", "exports/$backupName").put("characters", characters.length())
+            .put("worldbooks", worlds.length()).put("files", files.size)
+            .put("bytes", totalBytes).put("archiveBytes", archive.size)
+    }
+
     private fun probeLocalTavern(address: String): JSONObject {
         val url = URL(address.trim().trimEnd('/'))
         require(url.protocol == "http" && url.host in setOf("127.0.0.1", "localhost", "::1")) {
@@ -169,6 +272,11 @@ class MainActivity : Activity() {
             VaultBackupImporter.import(this@MainActivity, bytes, ::writeBytes).toString()
         } catch (error: Exception) {
             JSONObject().put("ok", false).put("error", error.message ?: "备份包导入失败").toString()
+        }
+        @JavascriptInterface fun exportTavernBackup(): String = try {
+            createTavernBackup().toString()
+        } catch (error: Exception) {
+            JSONObject().put("ok", false).put("error", error.message ?: "酒馆素材导出失败").toString()
         }
         @JavascriptInterface fun savedTavernAddress(): String =
             getSharedPreferences("vault", MODE_PRIVATE).getString("tavernAddress", "http://127.0.0.1:8000")!!
