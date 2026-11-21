@@ -1,10 +1,11 @@
 /**
- * 拾帧外接本地数据库适配层 v1
- * 只接收 extension_settings.shizhen；不读取酒馆角色卡、聊天或全局世界书。
- * 图片原始字节单独提取，设置快照只保留 shizhen-asset:// 引用。
+ * 拾帧外接本地数据库适配层
+ * 仅处理 extension_settings.shizhen，不接管酒馆缓存、素材读取或渲染。
+ * 快照保留拾帧数据结构；图片字节独立存储，引用通过 SHA-256 资源 ID 连接。
  */
 const FORMAT = 'shizhen-plugin-vault';
 const VERSION = 1;
+const SCHEMA_VERSION = 2;
 const IMAGE_REF_PREFIX = 'shizhen-asset://';
 const IMAGE_KEYS = new Set(['dataUrl', 'image', 'avatar', 'url', 'cover', 'thumbnail', 'thumb', 'characterAvatar']);
 
@@ -16,16 +17,25 @@ function isDataImage(value) {
     return typeof value === 'string' && /^data:image\/[a-z0-9.+-]+[;,]/i.test(value);
 }
 
+function rawImageInfo(value, key) {
+    if (typeof value !== 'string' || !IMAGE_KEYS.has(String(key || ''))) return null;
+    const raw = value.trim().replace(/^data:[^,]*,/i, '').replace(/\s+/g, '');
+    if (/^iVBOR/.test(raw)) return { mime: 'image/png', base64: raw, mode: 'raw-base64' };
+    if (/^\/9j\//.test(raw)) return { mime: 'image/jpeg', base64: raw, mode: 'raw-base64' };
+    if (/^UklGR/.test(raw)) return { mime: 'image/webp', base64: raw, mode: 'raw-base64' };
+    if (/^R0lGOD/.test(raw)) return { mime: 'image/gif', base64: raw, mode: 'raw-base64' };
+    return null;
+}
+
 function isLocalImagePath(value, key) {
     if (typeof value !== 'string' || !IMAGE_KEYS.has(String(key || ''))) return false;
-    if (!value.trim() || isDataImage(value) || value.startsWith(IMAGE_REF_PREFIX)) return false;
+    if (!value.trim() || isDataImage(value) || rawImageInfo(value, key) || value.startsWith(IMAGE_REF_PREFIX)) return false;
     if (/^(?:https?:)?\/\//i.test(value) || value.startsWith('blob:')) return false;
     const path = value.split(/[?#]/, 1)[0];
     return path.startsWith('/user/images/') || path.startsWith('user/images/') || path.startsWith('/user/files/') || path.startsWith('user/files/');
 }
 
 function safeFilename(path, mime) {
-    if (isDataImage(path)) return 'image.' + (({'image/jpeg':'jpg','image/png':'png','image/gif':'gif','image/webp':'webp','image/avif':'avif'})[mime] || 'img');
     const leaf = String(path || '').split(/[/?#]/).filter(Boolean).pop() || 'image';
     const cleaned = leaf.replace(/[^\w.\-一-龥]/g, '_').slice(-100);
     if (/\.[a-z0-9]{2,5}$/i.test(cleaned)) return cleaned;
@@ -38,7 +48,7 @@ async function sha256(bytes) {
     return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
 }
 
-async function readImageSource(source, { fetchImpl, origin }) {
+async function readImageSource(source, { fetchImpl, origin, mimeHint }) {
     let response;
     if (isDataImage(source)) {
         response = await fetchImpl(source);
@@ -51,13 +61,29 @@ async function readImageSource(source, { fetchImpl, origin }) {
     }
     if (!response.ok) throw new Error('读取拾帧图片失败：HTTP ' + response.status);
     const blob = await response.blob();
-    if (!String(blob.type || '').startsWith('image/')) throw new Error('拾帧资源不是图片文件');
-    return { bytes: new Uint8Array(await blob.arrayBuffer()), mime: blob.type || 'application/octet-stream' };
+    const mime = blob.type || mimeHint || 'application/octet-stream';
+    if (!String(mime).startsWith('image/')) throw new Error('拾帧资源不是图片文件');
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), mime };
+}
+
+function characterManifest(cards) {
+    if (!Array.isArray(cards)) return [];
+    return cards.map((card, sourceIndex) => {
+        const name = String(card?.name || '').trim();
+        const avatar = String(card?.avatar || '').trim();
+        return {
+            sourceIndex,
+            name,
+            avatar,
+            stableId: avatar ? 'avatar:' + avatar : (name ? 'name:' + name.normalize('NFKC').toLocaleLowerCase() : 'index:' + sourceIndex),
+        };
+    });
 }
 
 /**
- * 返回 { manifest, snapshot, assets }；assets 中的 bytes 是图片原始字节。
- * 可注入 fetchImpl/origin 供自动化测试使用。
+ * 返回 { manifest, snapshot, assets }。onAsset 可逐张上传原始字节以降低峰值内存。
+ * reference 记录精确 JSON Pointer 与原始存储形式，恢复时据此还原，不把 Data URL、
+ * 原始 Base64 和酒馆文件路径混成同一种格式。
  */
 export async function buildShizhenVaultSnapshot(config, options = {}) {
     if (!config || typeof config !== 'object' || Array.isArray(config)) throw new TypeError('拾帧设置对象无效');
@@ -66,32 +92,34 @@ export async function buildShizhenVaultSnapshot(config, options = {}) {
     if (typeof fetchImpl !== 'function' || !origin) throw new Error('当前环境无法读取拾帧图片资源');
 
     const snapshot = cloneJson(config);
-    // 配对地址与令牌属于当前设备连接信息，不属于可迁移的拾帧业务数据。
     delete snapshot.vaultEndpoint;
     delete snapshot.vaultToken;
     const assetsByHash = new Map();
     const seenObjects = new WeakSet();
 
     async function walk(value, key, pointer) {
-        if (typeof value === 'string' && (isDataImage(value) || isLocalImagePath(value, key))) {
-            const { bytes, mime } = await readImageSource(value, { fetchImpl, origin });
+        const rawInfo = rawImageInfo(value, key);
+        const localPath = isLocalImagePath(value, key);
+        if (typeof value === 'string' && (isDataImage(value) || rawInfo || localPath)) {
+            const mode = rawInfo ? 'raw-base64' : (isDataImage(value) ? 'data-url' : 'tavern-path');
+            const source = rawInfo ? 'data:' + rawInfo.mime + ';base64,' + rawInfo.base64 : value;
+            const { bytes, mime } = await readImageSource(source, { fetchImpl, origin, mimeHint: rawInfo?.mime });
             const hash = await sha256(bytes);
             let asset = assetsByHash.get(hash);
             if (!asset) {
                 asset = {
                     id: hash, sha256: hash, mime, filename: safeFilename(value, mime),
                     size: bytes.byteLength, bytes,
-                    source: isDataImage(value) ? 'data-url' : 'tavern-user-image',
+                    source: mode,
                     references: [],
                 };
                 assetsByHash.set(hash, asset);
                 if (typeof options.onAsset === 'function') {
-                    // Bulk sync streams one original image at a time; do not retain all image bytes in memory.
                     await options.onAsset({ ...asset }, assetsByHash.size);
                     delete asset.bytes;
                 }
             }
-            asset.references.push(pointer);
+            asset.references.push({ pointer, mode, key: String(key || '') });
             return IMAGE_REF_PREFIX + hash;
         }
         if (!value || typeof value !== 'object' || seenObjects.has(value)) return value;
@@ -112,9 +140,11 @@ export async function buildShizhenVaultSnapshot(config, options = {}) {
     await walk(snapshot, '', '');
     const assets = [...assetsByHash.values()];
     const manifest = {
-        format: FORMAT, version: VERSION, createdAt: new Date().toISOString(),
-        plugin: 'shizhen', assetCount: assets.length,
+        format: FORMAT, version: VERSION, schemaVersion: SCHEMA_VERSION,
+        createdAt: new Date().toISOString(), plugin: 'shizhen',
+        assetCount: assets.length,
         snapshotBytes: new TextEncoder().encode(JSON.stringify(snapshot)).byteLength,
+        characters: characterManifest(options.characterCards),
         assets: assets.map(({ bytes, ...metadata }) => metadata),
     };
     return { manifest, snapshot, assets };
@@ -129,3 +159,4 @@ export function validateShizhenVaultSnapshot(payload) {
 
 export const SHIZHEN_VAULT_FORMAT = FORMAT;
 export const SHIZHEN_VAULT_VERSION = VERSION;
+export const SHIZHEN_VAULT_SCHEMA_VERSION = SCHEMA_VERSION;
