@@ -201,6 +201,8 @@ class MainActivity : Activity() {
         @JavascriptInterface fun localServerInfo(): String =
             JSONObject().put("url", "http://127.0.0.1:8765")
                 .put("token", vaultToken).put("running", vaultServerStarted).toString()
+        @JavascriptInterface fun localDatabaseStats(): String =
+            (vaultServer?.stats() ?: JSONObject().put("assets", org.json.JSONArray()).put("snapshots", org.json.JSONArray())).toString()
         @JavascriptInterface fun hasExternalFolder(): Boolean = treeUri != null
         @JavascriptInterface fun importBackupZip(base64: String): String = try {
             val bytes = Base64.decode(base64, Base64.DEFAULT)
