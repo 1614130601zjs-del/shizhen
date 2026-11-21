@@ -77,6 +77,11 @@ class ShizhenVaultServer(
         return JSONObject(payload).optJSONObject("snapshot") ?: JSONObject()
     }
 
+    fun currentManifest(): JSONObject {
+        val payload = index.snapshot() ?: return JSONObject()
+        return JSONObject(payload).optJSONObject("manifest") ?: JSONObject()
+    }
+
     fun saveLibrary(settingsJson: String): JSONObject {
         val settings = JSONObject(settingsJson)
         // 连接凭据属于本机，不允许通过跨设备库编辑覆盖。
