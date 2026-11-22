@@ -402,6 +402,7 @@ function refresh(){
  // 果冻页不在这里跟着刷新：底片/相册数据变了，下次切进果冻 tab 时会重新解码，不用每次 refresh() 都多扛一轮。
  jellyPickerLoaded=false;
  populateAlbumTargetSelect();syncResultFavoriteButton();
+ populatePresetEditSelect();renderPresetsList();
 }
 // 「收藏目标相册」下拉框：选项来自推送时带过来的完整酒馆角色卡清单(characterRows)，
 // 外加 library.records 里已经存在、但角色卡清单里找不到对应项的老相册名(兼容老数据/角色卡已被删除的情况)。
@@ -455,6 +456,172 @@ function wireViewfinderResultActions(){
   library.viewfinderAlbumTargetKey=target;persist();
   set('ql-status','已保存默认收藏目标：「'+(select.selectedOptions[0]?.textContent||target)+'」。');
  });
+}
+// WebView 没接管 onJsConfirm，裸 window.confirm() 不会真的弹出来，直接静默当"取消"处理——
+// 删除这类操作不能指望它，这里自己拿个小弹窗顶上。
+function appConfirm(message){
+ return new Promise(resolve=>{
+  const overlay=document.createElement('div');overlay.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:20px';
+  const box=document.createElement('div');box.className='ql-card';box.style.cssText='max-width:320px;width:100%';
+  const text=document.createElement('p');text.textContent=message;text.style.margin='0 0 12px';
+  const row=document.createElement('div');row.className='ql-row';
+  const cancel=document.createElement('button');cancel.type='button';cancel.className='menu_button';cancel.textContent='取消';
+  const ok=document.createElement('button');ok.type='button';ok.className='menu_button ql-primary';ok.textContent='确定';
+  row.append(cancel,ok);box.append(text,row);overlay.append(box);document.body.append(overlay);
+  const finish=value=>{overlay.remove();resolve(value);};
+  cancel.addEventListener('click',()=>finish(false));
+  ok.addEventListener('click',()=>finish(true));
+  overlay.addEventListener('click',event=>{if(event.target===overlay)finish(false);});
+ });
+}
+// ———— 参数页·画师串编辑区：index.html 里这套"新建/编辑/批量/应用/复制/删除"markup 原来一行JS都没接，
+// 纯摆设，参数页唯一真正在工作的只有最上面原生JSON那张卡片。这里照着插件的同名逻辑搬过来(cfg()→library，
+// save()→persist())，但"一键迁移智绘姬/柏宝绘"那个功能不搬——那是扫描同一个酒馆页面里其他扩展的设置，
+// app是独立于酒馆运行的本机资料库，身边没有这些扩展可扫，对应UI直接隐藏，而不是留着点了没反应。
+let presetBatchMode=false;
+const selectedPresets=new Set();
+function renderPresetsList(){
+ const host=$('#ql-presets-list');if(!host)return;
+ const presets=Array.isArray(library.presets)?library.presets:[];
+ const countEl=$('#ql-presets-list-count');if(countEl)countEl.textContent='（共 '+presets.length+' 条）';
+ const batchBox=$('#ql-presets-batch');if(batchBox)batchBox.hidden=!presetBatchMode;
+ host.replaceChildren();
+ if(!presets.length){const empty=document.createElement('p');empty.className='ql-muted';empty.textContent='暂无画师串。';host.append(empty);return;}
+ presets.forEach((p,i)=>{
+  const card=document.createElement('div');
+  card.className='ql-record ql-preset-compact'+(presetBatchMode?' ql-preset-selectable':'')+(selectedPresets.has(i)?' is-selected':'');
+  if(presetBatchMode){card.setAttribute('role','button');card.tabIndex=0;card.setAttribute('aria-pressed',String(selectedPresets.has(i)));}
+  const info=document.createElement('div');info.className='ql-preset-compact-info';
+  const strong=document.createElement('strong');strong.textContent=p.name||('画师串 '+(i+1));
+  const desc=document.createElement('p');desc.className='ql-muted';desc.textContent='正向 '+(p.positive?'已设置':'空')+' · 负向 '+(p.negative?'已设置':'未设置');
+  info.append(strong,desc);card.append(info);
+  if(!presetBatchMode){
+   const actions=document.createElement('div');actions.className='ql-preset-compact-actions';
+   const apply=document.createElement('button');apply.type='button';apply.className='menu_button';apply.textContent='应用';
+   apply.addEventListener('click',()=>{
+    library.activeConfigMode='separate';library.activeComboIndex=-1;library.activePresetIndex=i;
+    syncGenerationConfigControls();saveGenerationSelection();
+    set('ql-status','已单独选中画师串：'+(p.name||'')+'。');
+   });
+   const edit=document.createElement('button');edit.type='button';edit.className='menu_button';edit.textContent='编辑';
+   edit.addEventListener('click',()=>loadPresetForEdit(i));
+   const duplicate=document.createElement('button');duplicate.type='button';duplicate.className='menu_button';duplicate.textContent='复制';
+   duplicate.addEventListener('click',()=>{
+    const label=p.name||('画师串 '+(i+1));
+    const clone={...p,id:'preset-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9),name:label+' 副本',updatedAt:Date.now()};
+    library.presets.push(clone);persist();renderPresetsList();populatePresetEditSelect();
+    set('ql-status','已复制画师串「'+label+'」，新的一份在列表末尾，放心改。');
+   });
+   const del=document.createElement('button');del.type='button';del.className='menu_button';del.textContent='删除';
+   del.addEventListener('click',async()=>{if(await appConfirm('确定删除这条画师串吗？'))deletePresetAt(i);});
+   actions.append(apply,edit,duplicate,del);card.append(actions);
+  }else{
+   card.addEventListener('click',event=>{if(event.target.closest('button'))return;togglePresetSelection(i);});
+   card.addEventListener('keydown',event=>{if(!['Enter',' '].includes(event.key))return;event.preventDefault();togglePresetSelection(i);});
+  }
+  host.append(card);
+ });
+}
+function togglePresetSelection(i){if(selectedPresets.has(i))selectedPresets.delete(i);else selectedPresets.add(i);renderPresetsList();}
+function deletePresetAt(i){
+ if(!Array.isArray(library.presets)||!library.presets[i])return;
+ library.presets.splice(i,1);
+ if(Number(library.activePresetIndex)===i)library.activePresetIndex=-1;
+ else if(Number(library.activePresetIndex)>i)library.activePresetIndex=Number(library.activePresetIndex)-1;
+ if(Array.isArray(library.combinations))for(const combo of library.combinations){
+  if(Number(combo.artistIndex)===i)combo.artistIndex=-1;
+  else if(Number(combo.artistIndex)>i)combo.artistIndex=Number(combo.artistIndex)-1;
+ }
+ persist();populatePresetEditSelect();renderPresetsList();syncGenerationConfigControls();
+ set('ql-status','已删除所选画师串。');
+}
+function populatePresetEditSelect(){
+ const select=$('#ql-preset-edit-select');if(!select)return;
+ const presets=Array.isArray(library.presets)?library.presets:[];
+ const previous=select.value;
+ select.replaceChildren(new Option('选择要编辑的画师串',''));
+ presets.forEach((p,i)=>select.add(new Option(p.name||('画师串 '+(i+1)),String(i))));
+ if(previous&&[...select.options].some(o=>o.value===previous))select.value=previous;
+}
+function loadPresetForEdit(index){
+ const p=Array.isArray(library.presets)?library.presets[index]:null;if(!p)return;
+ const editor=$('#ql-preset-editor');if(editor)editor.hidden=false;
+ const select=$('#ql-preset-edit-select');if(select)select.value=String(index);
+ const name=$('#ql-preset-name');if(name)name.value=p.name||'';
+ const positive=$('#ql-preset-positive');if(positive)positive.value=p.positive||'';
+ const negative=$('#ql-preset-negative');if(negative)negative.value=p.negative||'';
+ const save=$('#ql-preset-save');if(save){save.dataset.edit=String(index);save.textContent='保存修改';}
+}
+function resetPresetEditor(){
+ const save=$('#ql-preset-save');if(save){delete save.dataset.edit;save.textContent='保存画师串组合';}
+ const name=$('#ql-preset-name');if(name)name.value='';
+ const positive=$('#ql-preset-positive');if(positive)positive.value='';
+ const negative=$('#ql-preset-negative');if(negative)negative.value='';
+}
+function wirePresetsEditor(){
+ $('#ql-preset-new')?.addEventListener('click',()=>{
+  const editor=$('#ql-preset-editor');if(editor)editor.hidden=false;
+  const select=$('#ql-preset-edit-select');if(select)select.value='';
+  resetPresetEditor();
+  $('#ql-preset-name')?.focus();
+ });
+ $('#ql-preset-edit-select')?.addEventListener('change',function(){
+  const value=this.value;
+  if(value===''){resetPresetEditor();const editor=$('#ql-preset-editor');if(editor)editor.hidden=true;return;}
+  loadPresetForEdit(Number(value));
+ });
+ $('#ql-preset-save')?.addEventListener('click',()=>{
+  const name=String($('#ql-preset-name')?.value||'').trim();
+  const positive=String($('#ql-preset-positive')?.value||'').trim();
+  if(!name||!positive){set('ql-status','预设名称和正向画风串不能为空。');return;}
+  if(!Array.isArray(library.presets))library.presets=[];
+  const item={name,positive,negative:String($('#ql-preset-negative')?.value||'').trim(),updatedAt:Date.now()};
+  const save=$('#ql-preset-save'),edit=save?.dataset.edit;
+  if(edit!==undefined&&library.presets[Number(edit)]?.id)item.id=library.presets[Number(edit)].id;
+  if(edit!==undefined){library.presets[Number(edit)]=item;delete save.dataset.edit;}
+  else library.presets.unshift(item);
+  library.presets=library.presets.slice(0,100);
+  persist();
+  const savedIndex=library.presets.findIndex(x=>x.name===item.name&&x.positive===item.positive);
+  populatePresetEditSelect();renderPresetsList();syncGenerationConfigControls();
+  const select=$('#ql-preset-edit-select');
+  if(savedIndex>=0){if(select)select.value=String(savedIndex);if(save){save.dataset.edit=String(savedIndex);save.textContent='保存修改';}}
+  set('ql-status','画师串已保存，可通过上方下拉框切换编辑。');
+ });
+ $('#ql-preset-batch-toggle')?.addEventListener('click',function(){
+  presetBatchMode=!presetBatchMode;selectedPresets.clear();
+  this.textContent=presetBatchMode?'退出批量编辑':'批量编辑';
+  renderPresetsList();
+ });
+ $('#ql-preset-select-all')?.addEventListener('click',()=>{
+  selectedPresets.clear();(Array.isArray(library.presets)?library.presets:[]).forEach((_,i)=>selectedPresets.add(i));renderPresetsList();
+ });
+ $('#ql-preset-clear-all')?.addEventListener('click',()=>{selectedPresets.clear();renderPresetsList();});
+ $('#ql-preset-export')?.addEventListener('click',()=>{
+  const items=[...selectedPresets].sort((a,b)=>a-b).map(i=>library.presets?.[i]).filter(Boolean);
+  if(!items.length){set('ql-status','请先勾选要导出的画师串。');return;}
+  downloadText(JSON.stringify(items,null,2),'shizhen-artist-presets.json','application/json');
+ });
+ $('#ql-preset-bulk-delete')?.addEventListener('click',async()=>{
+  const indexes=[...selectedPresets].filter(i=>library.presets?.[i]);
+  if(!indexes.length){set('ql-status','请先勾选要删除的画师串。');return;}
+  if(!await appConfirm('确定删除选中的 '+indexes.length+' 条画师串？'))return;
+  const removed=indexes.sort((a,b)=>b-a);
+  for(const i of removed){
+   if(Number(library.activePresetIndex)===i)library.activePresetIndex=-1;
+   else if(Number(library.activePresetIndex)>i)library.activePresetIndex=Number(library.activePresetIndex)-1;
+   if(Array.isArray(library.combinations))for(const combo of library.combinations){
+    if(Number(combo.artistIndex)===i)combo.artistIndex=-1;
+    else if(Number(combo.artistIndex)>i)combo.artistIndex=Number(combo.artistIndex)-1;
+   }
+  }
+  library.presets=removed.reduce((arr,i)=>{arr.splice(i,1);return arr;},library.presets.slice());
+  selectedPresets.clear();persist();populatePresetEditSelect();renderPresetsList();syncGenerationConfigControls();
+  set('ql-status','已删除所选画师串。');
+ });
+ const migrateToggle=$('#ql-migrate-toggle');
+ if(migrateToggle){const row=migrateToggle.closest('.ql-artist-toolbar');if(row&&row.contains(migrateToggle))migrateToggle.remove();}
+ $('#ql-migrate-panel')?.remove();
 }
 $('#sz-copy-url')?.addEventListener('click',()=>copy($('#sz-vault-url').value));
 $('#sz-copy-token')?.addEventListener('click',()=>copy($('#sz-vault-token').value));
@@ -1190,6 +1357,7 @@ async function runStandaloneGeneration(){
 function wireStandaloneGeneration(){
  $('#ql-generate')?.addEventListener('click',runStandaloneGeneration);
  wireViewfinderResultActions();
+ wirePresetsEditor();
  renderAppCharacterChoices();
  $('#ql-fast-provider')?.addEventListener('change',()=>{
   const openai=$('#ql-fast-provider').value==='openai';
