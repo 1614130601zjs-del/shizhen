@@ -332,35 +332,56 @@ async function renderFilmBatch(reset=false){
   const caption=document.createElement('p');caption.className='ql-muted';caption.textContent=record.at?new Date(Number(record.at)).toLocaleString():(record.source||'拾帧影像');tile.append(caption);grid.append(tile);
   attachPendingCheckbox(tile,record,filmPendingBarText);
   button.addEventListener('click',()=>openRecordDetail(record));
-  try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){image.alt='图片读取失败：'+(error.message||error);}
+  // 缩略图字节在本机缺失(通常是跨设备互传时素材没同步全)时直接丢掉这块格子，不留"图片读取失败"的碎图占位。
+  try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){console.warn('[拾帧] 底片缩略图读取失败，已跳过',error);tile.remove();}
  }
  filmOffset+=batch.length;
  if(more){more.hidden=filmOffset>=filmRows.length;more.textContent='继续显示底片（'+filmOffset+' / '+filmRows.length+'）';}
 }
+// 两层结构，和插件一致：先是相册列表(封面+名字+张数)，点进去才展开那一个相册的照片网格——
+// 不是把所有角色的照片铺成一张大杂烩表。openAlbumKey 为空就是列表层，非空且还存在就是详情层。
+let openAlbumKey=null;
 async function renderCharacterAlbums(){
  const host=$('#ql-character-albums');if(!host)return;
  host.replaceChildren();
- const bar=buildPendingBar(()=>renderCharacterAlbums());host.before(bar);albumPendingBarText=bar._pendingText;
  const records=(Array.isArray(library.records)?library.records:[])
   .map((record,index)=>({...record,_libraryIndex:index}))
   .filter(record=>record?.dataUrl&&record.albumCharacterName&&record.collection!=='deleted'&&record.collection!=='prompt-gallery'&&record.collection!=='cache');
  const groups=new Map();
  for(const record of records){const key=String(record.albumCharacterKey??record.albumCharacterName);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(record);}
  const names=library.albumNames&&typeof library.albumNames==='object'?library.albumNames:{};
- for(const [key,items] of groups){
-  const section=document.createElement('section');section.className='ql-card ql-album-card';
-  const heading=document.createElement('h3');heading.textContent=String(names[key]||items[0]?.albumCharacterName||'未命名相册')+' · '+items.length+' 张';section.append(heading);
-  const grid=document.createElement('div');grid.className='ql-cache-grid';grid.dataset.columns='3';paintGridColumns(grid,3);section.append(grid);host.append(section);
-  for(const record of items){
-   const tile=document.createElement('article');tile.className='ql-cache-tile ql-album-photo';
-   const button=document.createElement('button');button.type='button';button.className='ql-cache-image';button.setAttribute('aria-label','相册照片');
-   const image=document.createElement('img');image.loading='lazy';image.alt='相册照片';button.append(image);tile.append(button);grid.append(tile);
-   attachPendingCheckbox(tile,record,albumPendingBarText);
-   button.addEventListener('click',()=>openRecordDetail(record));
-   try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){image.alt='图片读取失败：'+(error.message||error);}
+ if(!groups.size){openAlbumKey=null;host.textContent='当前快照没有角色相册照片记录。';return;}
+ if(!openAlbumKey||!groups.has(openAlbumKey)){
+  const grid=document.createElement('div');grid.className='ql-cache-grid';paintGridColumns(grid,2);host.append(grid);
+  for(const [key,items] of groups){
+   const card=document.createElement('button');card.type='button';card.className='ql-card ql-album-card';
+   card.style.cssText='text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;width:100%';
+   const cover=document.createElement('div');cover.style.cssText='aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center';
+   const img=document.createElement('img');img.loading='lazy';img.alt='';img.style.cssText='width:100%;height:100%;object-fit:cover';cover.append(img);
+   const heading=document.createElement('h3');heading.style.cssText='margin:0;font-size:14px';heading.textContent=String(names[key]||items[0]?.albumCharacterName||'未命名相册');
+   const count=document.createElement('p');count.className='ql-muted';count.style.margin='0';count.textContent=items.length+' 张';
+   card.append(cover,heading,count);grid.append(card);
+   card.addEventListener('click',()=>{openAlbumKey=key;renderCharacterAlbums();});
+   resolveLibraryImage(items[0]?.thumb||items[0]?.dataUrl).then(src=>{img.src=src;}).catch(()=>{cover.remove();});
   }
+  return;
  }
- if(!groups.size)host.textContent='当前快照没有角色相册照片记录。';
+ const items=groups.get(openAlbumKey);
+ const toolbar=document.createElement('div');toolbar.style.cssText='display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap';
+ const back=document.createElement('button');back.type='button';back.className='menu_button';back.textContent='← 返回相册列表';
+ back.addEventListener('click',()=>{openAlbumKey=null;renderCharacterAlbums();});
+ const title=document.createElement('strong');title.textContent=String(names[openAlbumKey]||items[0]?.albumCharacterName||'未命名相册')+' · '+items.length+' 张';
+ toolbar.append(back,title);host.append(toolbar);
+ const bar=buildPendingBar(()=>renderCharacterAlbums());host.append(bar);albumPendingBarText=bar._pendingText;
+ const grid=document.createElement('div');grid.className='ql-cache-grid';paintGridColumns(grid,3);host.append(grid);
+ for(const record of items){
+  const tile=document.createElement('article');tile.className='ql-cache-tile ql-album-photo';
+  const button=document.createElement('button');button.type='button';button.className='ql-cache-image';button.setAttribute('aria-label','相册照片');
+  const image=document.createElement('img');image.loading='lazy';image.alt='相册照片';button.append(image);tile.append(button);grid.append(tile);
+  attachPendingCheckbox(tile,record,albumPendingBarText);
+  button.addEventListener('click',()=>openRecordDetail(record));
+  try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){console.warn('[拾帧] 相册缩略图读取失败，已跳过',error);tile.remove();}
+ }
 }
 function refresh(){
  if(!native){set('sz-vault-server','原生数据库服务不可用');return;}
@@ -380,6 +401,60 @@ function refresh(){
  renderCharacterAlbums().catch(error=>{const target=$('#ql-character-albums');if(target)target.textContent='读取角色相册失败：'+(error.message||error);});
  // 果冻页不在这里跟着刷新：底片/相册数据变了，下次切进果冻 tab 时会重新解码，不用每次 refresh() 都多扛一轮。
  jellyPickerLoaded=false;
+ populateAlbumTargetSelect();syncResultFavoriteButton();
+}
+// 「收藏目标相册」下拉框：选项来自推送时带过来的完整酒馆角色卡清单(characterRows)，
+// 外加 library.records 里已经存在、但角色卡清单里找不到对应项的老相册名(兼容老数据/角色卡已被删除的情况)。
+// 选项 value 统一用角色名字本身(不用角色卡下标)，和 app 侧相册分组一直在用 albumCharacterName 文本分组的做法一致，
+// 避免重蹈"保存那一刻的下标，跨设备/跨时间点就对不上"的覆辙。
+function populateAlbumTargetSelect(){
+ const select=$('#ql-result-album-target');if(!select)return;
+ const albums=new Map();
+ for(const card of characterRows){const name=String(card?.name||card?.avatar||'').trim();if(name&&!albums.has(name))albums.set(name,name);}
+ for(const record of Array.isArray(library.records)?library.records:[]){
+  const name=String(record?.albumCharacterName||'').trim();
+  if(name&&!albums.has(name))albums.set(name,name);
+ }
+ const previous=select.value,savedTarget=String(library.viewfinderAlbumTargetKey||'');
+ select.replaceChildren(new Option('请选择角色卡相册',''));
+ for(const name of albums.keys())select.add(new Option(name,name));
+ if(previous&&[...select.options].some(option=>option.value===previous))select.value=previous;
+ else if(savedTarget&&[...select.options].some(option=>option.value===savedTarget))select.value=savedTarget;
+}
+// 当前生成结果是否已经收藏进角色相册，决定收藏按钮显示"收藏"还是"取消收藏"。
+function syncResultFavoriteButton(){
+ const favorite=$('#ql-result-favorite');if(!favorite)return;
+ const record=lastGeneratedAssetRef?(Array.isArray(library.records)?library.records:[]).find(r=>r?.dataUrl===lastGeneratedAssetRef):null;
+ const saved=Boolean(record?.albumCharacterName);
+ favorite.classList.toggle('is-favorite',saved);
+ const label=saved?'取消角色相册收藏':'收藏到角色相册';
+ favorite.setAttribute('aria-label',label);favorite.title=label;favorite.setAttribute('aria-pressed',String(saved));
+}
+function toggleResultFavorite(){
+ if(!lastGeneratedAssetRef){set('ql-status','请先生成一张图片。');return;}
+ const record=(Array.isArray(library.records)?library.records:[]).find(r=>r?.dataUrl===lastGeneratedAssetRef);
+ if(!record){set('ql-status','暂时找不到这张图片对应的记录。');return;}
+ if(record.albumCharacterName){
+  delete record.albumCharacterName;delete record.albumCharacterKey;record.collection='cache';
+  persist();syncResultFavoriteButton();renderFilmBatch(true);renderCharacterAlbums();
+  set('ql-status','已取消收藏，图片回到底片。');return;
+ }
+ const select=$('#ql-result-album-target'),target=String(select?.value||'');
+ if(!target){set('ql-status','请先在上面选择一个角色卡相册，再点收藏。');return;}
+ const name=select.selectedOptions[0]?.textContent||target;
+ record.albumCharacterName=name;record.albumCharacterKey=name;record.collection='character-album';
+ persist();syncResultFavoriteButton();renderFilmBatch(true);renderCharacterAlbums();
+ set('ql-status','已收藏到「'+name+'」相册。');
+}
+function wireViewfinderResultActions(){
+ $('#ql-result-favorite')?.addEventListener('click',toggleResultFavorite);
+ $('#ql-result-enlarge')?.addEventListener('click',()=>{const image=$('#ql-result img');if(image)openResultZoom(image.src);});
+ $('#ql-result-album-target-save')?.addEventListener('click',()=>{
+  const select=$('#ql-result-album-target'),target=String(select?.value||'');
+  if(!target){set('ql-status','请先选择要作为默认目标的相册。');return;}
+  library.viewfinderAlbumTargetKey=target;persist();
+  set('ql-status','已保存默认收藏目标：「'+(select.selectedOptions[0]?.textContent||target)+'」。');
+ });
 }
 $('#sz-copy-url')?.addEventListener('click',()=>copy($('#sz-vault-url').value));
 $('#sz-copy-token')?.addEventListener('click',()=>copy($('#sz-vault-token').value));
@@ -1057,11 +1132,21 @@ async function saveGeneratedAsset(dataUrl){
  const result=await response.json();if(!result.ok)throw new Error(result.error||'素材保存失败');
  return 'shizhen-asset://'+id;
 }
-function showGeneratedImage(dataUrl){
+function openResultZoom(dataUrl){
+ const overlay=document.createElement('div');overlay.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:12px';const full=document.createElement('img');full.src=dataUrl;full.alt='生成图片原图';full.style.cssText='max-width:100%;max-height:100%;object-fit:contain';overlay.append(full);overlay.addEventListener('click',()=>overlay.remove());document.body.append(overlay);
+}
+// 生成结果对应的 library.records 条目，用 assetRef(shizhen-asset://<hash>) 兜住——而不是记对象引用，
+// 因为 refresh() 会整个替换 library(从原生侧重新取一份)，旧对象引用会失效，但这个字符串引用始终有效。
+let lastGeneratedAssetRef=null;
+function showGeneratedImage(dataUrl,assetRef){
+ lastGeneratedAssetRef=assetRef||null;
  const host=$('#ql-result');if(!host)return;
  host.replaceChildren();const image=document.createElement('img');image.alt='拾帧生成结果';image.src=dataUrl;image.style.cssText='display:block;max-width:100%;max-height:70vh;object-fit:contain;margin:auto;border-radius:12px;cursor:zoom-in';
- image.addEventListener('click',()=>{const overlay=document.createElement('div');overlay.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:12px';const full=document.createElement('img');full.src=dataUrl;full.alt='生成图片原图';full.style.cssText='max-width:100%;max-height:100%;object-fit:contain';overlay.append(full);overlay.addEventListener('click',()=>overlay.remove());document.body.append(overlay);});
+ image.addEventListener('click',()=>openResultZoom(dataUrl));
  host.append(image);
+ const favorite=$('#ql-result-favorite'),enlarge=$('#ql-result-enlarge');
+ if(favorite)favorite.disabled=false;if(enlarge)enlarge.disabled=false;
+ syncResultFavoriteButton();
 }
 let appGenerationBusy=false;
 async function runStandaloneGeneration(){
@@ -1086,17 +1171,25 @@ async function runStandaloneGeneration(){
    characters:resolved.characters.map(x=>({name:x.name||x.characterName||'',characterKey:x.characterKey||''})),
    vibe:resolved.vibe?{name:resolved.vibe.name||'',entries:(resolved.vibe.entries||[]).map(x=>({strength:x.strength??0.6,informationExtracted:x.informationExtracted??1,identifier:x.identifier||x.raw?.identifier||'',type:x.type||x.raw?.type||'encoding'}))}:null};
   if(!Array.isArray(library.records))library.records=[];
+  const before=library.records.slice();
   library.records.unshift(record);
   const limit=Math.max(0,Number(c.recordLimit??800));if(limit)library.records=library.records.slice(0,limit);
   const saved=parse(native.saveLibrary(JSON.stringify(library)));
-  if(!saved?.ok)throw new Error('图片已生成并存入素材文件，但保存拾帧记录失败：'+(saved?.error||'未知错误'));
-  showGeneratedImage(image);refresh();
+  if(!saved?.ok){
+   // 原生那边拒绝落盘时不能让这条记录继续赖在内存里的 library.records 上——
+   // 之前这里没回滚，下一次任何无关操作触发 persist() 都会把这条"素材没登记"的坏记录
+   // 当真的存进去，表现为底片/相册里突然冒出一张读不出来的死图。
+   library.records=before;
+   throw new Error('图片已生成并存入素材文件，但保存拾帧记录失败：'+(saved?.error||'未知错误'));
+  }
+  showGeneratedImage(image,assetRef);refresh();
   set('ql-status','独立生图完成，结果已保存到本机底片。');
  }catch(error){set('ql-status','生图失败：'+(error?.message||String(error)));}
  finally{appGenerationBusy=false;if(button)button.disabled=false;if(indicator)indicator.hidden=true;}
 }
 function wireStandaloneGeneration(){
  $('#ql-generate')?.addEventListener('click',runStandaloneGeneration);
+ wireViewfinderResultActions();
  renderAppCharacterChoices();
  $('#ql-fast-provider')?.addEventListener('change',()=>{
   const openai=$('#ql-fast-provider').value==='openai';
@@ -1611,7 +1704,7 @@ async function renderJellyPicker(){
    try{openJellyViewer(await resolveLibraryImage(record.dataUrl||record.thumb));}
    catch(error){console.warn('[拾帧] 果冻取图失败',error);}
   });
-  try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){image.alt='图片读取失败：'+(error.message||error);}
+  try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){console.warn('[拾帧] 果冻选图缩略图读取失败，已跳过',error);tile.remove();}
  }
 }
 function wireJellyUpload(){

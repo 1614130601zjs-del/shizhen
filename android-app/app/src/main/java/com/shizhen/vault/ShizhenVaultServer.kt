@@ -29,6 +29,13 @@ private class VaultIndex(context: Context) : SQLiteOpenHelper(context, "shizhen-
         }, SQLiteDatabase.CONFLICT_REPLACE)
     }
     fun hasAsset(id: String): Boolean = readableDatabase.rawQuery("SELECT 1 FROM assets WHERE id=?", arrayOf(id)).use { it.moveToFirst() }
+    fun getAsset(id: String): JSONObject? = readableDatabase.rawQuery(
+        "SELECT id,mime,filename,size,updated_at FROM assets WHERE id=?", arrayOf(id)
+    ).use { c ->
+        if (!c.moveToFirst()) null
+        else JSONObject().put("id", c.getString(0)).put("mime", c.getString(1))
+            .put("filename", c.getString(2)).put("size", c.getLong(3)).put("updatedAt", c.getLong(4))
+    }
     fun putSnapshot(json: String): String {
         val id = java.util.UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
@@ -100,12 +107,6 @@ class ShizhenVaultServer(
         settings.remove("vaultToken")
         val current = currentSnapshotPayload() ?: JSONObject()
         val oldManifest = current.optJSONObject("manifest") ?: JSONObject()
-        val oldAssets = oldManifest.optJSONArray("assets") ?: org.json.JSONArray()
-        val available = HashMap<String, JSONObject>()
-        for (i in 0 until oldAssets.length()) {
-            val item = oldAssets.optJSONObject(i) ?: continue
-            available[item.optString("id")] = item
-        }
         val referenced = linkedSetOf<String>()
         fun collect(value: Any?) {
             when (value) {
@@ -136,11 +137,15 @@ class ShizhenVaultServer(
             }
             referenced.add(cardAssetId)
         }
+        // 素材元数据直接从 SQLite 资源索引取（index.getAsset），不再依赖"上一份快照的 manifest.assets"。
+        // 之前的写法只认旧 manifest 里登记过的素材：独立生图(saveGeneratedAsset)是先 PUT /v1/assets/<id>
+        // 把字节写进 index，再调 saveLibrary 存记录，这中间 index 早就有这条素材了，但旧 manifest 还没来得及
+        // 反映它，于是永远查不到、永远报"当前快照未登记该素材"——生图其实成功了，只是记录存不下来。
         val assets = org.json.JSONArray()
         for (id in referenced) {
-            val metadata = available[id]
+            val metadata = index.getAsset(id)
                 ?: throw IllegalArgumentException("当前快照未登记该素材：$id")
-            assets.put(JSONObject(metadata.toString()))
+            assets.put(metadata)
         }
         val manifest = JSONObject(oldManifest.toString())
             .put("format", "shizhen-plugin-vault")
