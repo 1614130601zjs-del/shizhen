@@ -187,17 +187,39 @@ function filmRecords(){
   .filter(record=>record?.dataUrl&&record.collection!=='deleted'&&!record.albumCharacterName&&record.collection!=='character-album'&&record.collection!=='prompt-gallery')
   .sort((a,b)=>Number(b.at||0)-Number(a.at||0));
 }
+// 不依赖酒馆那套按 #ql-history 作用域写死的 CSS 选择器（相册页的 .ql-cache-grid 并不在
+// #ql-history 底下，命中不了那条规则），直接用行内样式把列数定死，三处图片格子都走这一个函数。
+function paintGridColumns(grid,columns){
+ grid.style.display='grid';
+ grid.style.gridTemplateColumns='repeat('+Math.max(1,Math.min(5,Number(columns)||3))+',minmax(0,1fr))';
+ grid.style.gap='10px';
+}
+function filmColumns(){return Math.max(1,Math.min(5,Number(library.historyColumns)||3));}
+function bindHistoryColumns(){
+ const select=$('#ql-history-columns');if(!select)return;
+ select.value=String(filmColumns());
+ select.onchange=()=>{library.historyColumns=Math.max(1,Math.min(5,Number(select.value)||3));persist();renderFilmBatch(true);};
+}
+async function openRecordViewer(record){
+ try{openJellyViewer(await resolveLibraryImage(record.dataUrl||record.thumb));}
+ catch(error){console.warn('[拾帧] 打开大图失败',error);}
+}
 async function renderFilmBatch(reset=false){
  const host=$('#ql-history'),more=$('#sz-film-more');if(!host)return;
- if(reset){filmOffset=0;filmRows=filmRecords();releaseGalleryUrls();host.replaceChildren();const bar=buildPendingBar(()=>renderFilmBatch(true));filmPendingBarText=bar._pendingText;host.before(bar);}
+ bindHistoryColumns();
+ let grid=host.querySelector('.ql-cache-grid');
+ if(reset){filmOffset=0;filmRows=filmRecords();releaseGalleryUrls();host.replaceChildren();const bar=buildPendingBar(()=>renderFilmBatch(true));filmPendingBarText=bar._pendingText;host.before(bar);grid=null;}
  if(!filmRows.length){host.textContent='本地底片相册暂无影像记录。';if(more)more.hidden=true;return;}
+ if(!grid){grid=document.createElement('div');grid.className='ql-cache-grid';host.append(grid);}
+ paintGridColumns(grid,filmColumns());
  const batch=filmRows.slice(filmOffset,filmOffset+24);
  for(const record of batch){
   const tile=document.createElement('article');tile.className='ql-cache-tile';
   const button=document.createElement('button');button.type='button';button.className='ql-cache-image';button.setAttribute('aria-label','底片影像 '+(record.prompt||record.basePrompt||''));
   const image=document.createElement('img');image.loading='lazy';image.alt='底片影像';button.append(image);tile.append(button);
-  const caption=document.createElement('p');caption.className='ql-muted';caption.textContent=record.at?new Date(Number(record.at)).toLocaleString():(record.source||'拾帧影像');tile.append(caption);host.append(tile);
+  const caption=document.createElement('p');caption.className='ql-muted';caption.textContent=record.at?new Date(Number(record.at)).toLocaleString():(record.source||'拾帧影像');tile.append(caption);grid.append(tile);
   attachPendingCheckbox(tile,record,filmPendingBarText);
+  button.addEventListener('click',()=>openRecordViewer(record));
   try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){image.alt='图片读取失败：'+(error.message||error);}
  }
  filmOffset+=batch.length;
@@ -216,12 +238,13 @@ async function renderCharacterAlbums(){
  for(const [key,items] of groups){
   const section=document.createElement('section');section.className='ql-card ql-album-card';
   const heading=document.createElement('h3');heading.textContent=String(names[key]||items[0]?.albumCharacterName||'未命名相册')+' · '+items.length+' 张';section.append(heading);
-  const grid=document.createElement('div');grid.className='ql-cache-grid';grid.dataset.columns='3';section.append(grid);host.append(section);
+  const grid=document.createElement('div');grid.className='ql-cache-grid';grid.dataset.columns='3';paintGridColumns(grid,3);section.append(grid);host.append(section);
   for(const record of items){
    const tile=document.createElement('article');tile.className='ql-cache-tile ql-album-photo';
    const button=document.createElement('button');button.type='button';button.className='ql-cache-image';button.setAttribute('aria-label','相册照片');
    const image=document.createElement('img');image.loading='lazy';image.alt='相册照片';button.append(image);tile.append(button);grid.append(tile);
    attachPendingCheckbox(tile,record,albumPendingBarText);
+   button.addEventListener('click',()=>openRecordViewer(record));
    try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){image.alt='图片读取失败：'+(error.message||error);}
   }
  }
@@ -1462,6 +1485,7 @@ function bindJellySettings(){
 async function renderJellyPicker(){
  const host=$('#ql-jelly-picker-grid');if(!host)return;
  host.replaceChildren();
+ paintGridColumns(host,4);
  const records=(Array.isArray(library.records)?library.records:[])
   .filter(record=>record?.dataUrl&&record.collection!=='deleted'&&record.collection!=='prompt-gallery')
   .sort((a,b)=>Number(b.at||0)-Number(a.at||0))
