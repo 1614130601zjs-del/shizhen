@@ -150,7 +150,10 @@ async function buildCharacterManifest(cards, config, registerAsset, { fetchImpl,
             row.cardError = String(error?.message || error).slice(0, 180);
         }
     }
-    return rows.filter(row => row.linked);
+    // 以前只收录"已经被拾帧数据引用过"的角色卡(row.linked)，app 那边永远看不到完整的角色卡名单，
+    // 没法按真实角色卡去对拾帧相册的分组。现在整份清单都带过去（卡片原图只上传 linked 的，
+    // 避免每次推送都把整个角色卡库的图片全部上传一遍占满流量和本地数据库体积）。
+    return rows;
 }
 
 /**

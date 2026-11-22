@@ -123,7 +123,7 @@ async function renderAssetBatch(reset=false){
 }
 async function renderCharacterRows(){
  const list=$('#sz-character-list');if(!list)return;list.replaceChildren();
- if(!characterRows.length){list.textContent='当前快照没有拾帧关联角色卡清单。';return;}
+ if(!characterRows.length){list.textContent='当前快照没有角色卡数据，推送一次拾帧数据后会显示酒馆里的角色卡清单。';return;}
  for(const character of characterRows){
   const row=document.createElement('div');row.className='ql-record';row.style.cssText='display:flex;align-items:center;gap:12px';
   const info=document.createElement('div');info.style.cssText='min-width:0;flex:1';
