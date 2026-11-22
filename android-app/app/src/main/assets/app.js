@@ -13,9 +13,13 @@ const PALETTES={
 const STYLE_NAMES=['pixel','ccd','polaroid','scroll','cyber','win','crab','cat','news','purikura','receipt','comic'];
 const parse=v=>{try{return JSON.parse(v)}catch(e){return {ok:false,error:e.message}}};
 const set=(id,value)=>{const e=$('#'+id);if(e)e.textContent=value;};
+let jellyPickerLoaded=false;
 function showPage(page){
  $$('.ql-tab').forEach(b=>{const on=b.dataset.page===page;b.classList.toggle('active',on);b.setAttribute('aria-selected',String(on));});
  $$('.ql-page').forEach(p=>{const on=p.dataset.pagePanel===page;p.hidden=!on;p.classList.toggle('active',on);});
+ // 果冻的缩略图只在真正点进这个 tab 时才解码，不跟着其他 tab 的每次刷新一起重复解码，
+ // 避免每次生成图/推送/拉取都多扛一轮图片解码拖慢全局操作。
+ if(page==='jelly'&&!jellyPickerLoaded){jellyPickerLoaded=true;renderJellyPicker().catch(()=>{jellyPickerLoaded=false;});}
 }
 $$('.ql-tab').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)));
 $$('.ql-subtabs').forEach(nav=>nav.addEventListener('click',e=>{
@@ -239,7 +243,8 @@ function refresh(){
  renderAssetBatch(true).catch(error=>{const target=$('#sz-asset-list');if(target)target.textContent='读取图片列表失败：'+(error.message||error);});renderCharacterRows().catch(error=>{const target=$('#sz-character-list');if(target)target.textContent='读取角色卡清单失败：'+(error.message||error);});
  renderFilmBatch(true).catch(error=>{const target=$('#ql-history');if(target)target.textContent='读取底片相册失败：'+(error.message||error);});
  renderCharacterAlbums().catch(error=>{const target=$('#ql-character-albums');if(target)target.textContent='读取角色相册失败：'+(error.message||error);});
- renderJellyPicker().catch(()=>{});
+ // 果冻页不在这里跟着刷新：底片/相册数据变了，下次切进果冻 tab 时会重新解码，不用每次 refresh() 都多扛一轮。
+ jellyPickerLoaded=false;
 }
 $('#sz-copy-url')?.addEventListener('click',()=>copy($('#sz-vault-url').value));
 $('#sz-copy-token')?.addEventListener('click',()=>copy($('#sz-vault-token').value));
@@ -1485,6 +1490,6 @@ function wireJellyUpload(){
  });
  $('#ql-jelly-picker-refresh')?.addEventListener('click',()=>{renderJellyPicker().catch(()=>{});});
 }
-bindJellySettings();wireJellyUpload();renderJellyPicker().catch(()=>{});
+bindJellySettings();wireJellyUpload();
 wireDataWorkspace();
 })();
