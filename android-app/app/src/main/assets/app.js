@@ -200,9 +200,121 @@ function bindHistoryColumns(){
  select.value=String(filmColumns());
  select.onchange=()=>{library.historyColumns=Math.max(1,Math.min(5,Number(select.value)||3));persist();renderFilmBatch(true);};
 }
-async function openRecordViewer(record){
- try{openJellyViewer(await resolveLibraryImage(record.dataUrl||record.thumb));}
- catch(error){console.warn('[拾帧] 打开大图失败',error);}
+// 底片/相册点开照片时走详情面板（提示词/画师串/Vibe/生成参数），不是直接打开果冻弹窗——
+// app 定位是"资料库"，翻出来的信息就该比插件里跑图现场看到的更全；面板里图片本身还能点开
+// 再进果冻/放大查看，两件事不互相顶替。字段全部读现有 record 上已经有的数据，不额外采集。
+let recordDetailModal=null;
+function ensureRecordDetailModal(){
+ if(recordDetailModal)return recordDetailModal;
+ const modal=document.createElement('div');
+ modal.id='ql-image-cache-modal';modal.hidden=true;modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','图片详情');
+ const panel=document.createElement('div');panel.className='ql-cache-modal-panel';
+ const close=document.createElement('button');close.type='button';close.className='menu_button ql-cache-modal-close ql-universal-close';close.setAttribute('aria-label','关闭图片详情');close.title='关闭';
+ close.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
+ close.addEventListener('click',()=>{modal.hidden=true;});
+ modal.addEventListener('click',event=>{if(event.target===modal)modal.hidden=true;});
+ const content=document.createElement('div');content.className='ql-cache-modal-content';
+ panel.append(close,content);modal.append(panel);
+ // 插件里这个弹窗是挂在 #ql-overlay 下的，extension.css 也有专门 #ql-overlay #ql-image-cache-modal
+ // 的定位/层级规则；直接挂 document.body 不会报错，但少吃这层规则。跟插件一样优先找 #ql-overlay，
+ // app 的 index.html 确实有这个容器（包着 #shizhen-panel），找不到才退回 document.body。
+ (document.getElementById('ql-overlay')||document.body).append(modal);
+ recordDetailModal=modal;
+ return modal;
+}
+function buildStatEl(label,value){
+ const el=document.createElement('div');el.className='ql-cache-stat';
+ const span=document.createElement('span');span.textContent=label;
+ const strong=document.createElement('strong');strong.textContent=value;
+ el.append(span,strong);return el;
+}
+function buildAccordion(summaryText,smallText,bodyText){
+ const details=document.createElement('details');
+ const summary=document.createElement('summary');
+ const span=document.createElement('span');span.textContent=summaryText;
+ const small=document.createElement('small');small.textContent=smallText;
+ summary.append(span,small);details.append(summary);
+ const body=document.createElement('div');body.className='ql-cache-accordion-body';
+ const pre=document.createElement('pre');pre.textContent=bodyText||'未记录';body.append(pre);details.append(body);
+ return details;
+}
+async function copyText(value){
+ try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(value);return true;}}catch{}
+ try{const area=document.createElement('textarea');area.value=value;area.style.cssText='position:fixed;opacity:0';document.body.append(area);area.select();const ok=document.execCommand('copy');area.remove();return ok;}catch{return false;}
+}
+async function openRecordDetail(record){
+ const modal=ensureRecordDetailModal();
+ const content=modal.querySelector('.ql-cache-modal-content');
+ content.replaceChildren();
+ const preset=record.preset||null,vibe=record.vibe||null,meta=record.config||{};
+ const createdAt=new Date(Number(record.at)||Date.now());
+ const npd=record.naiPromptData&&Array.isArray(record.naiPromptData.characters)&&record.naiPromptData.characters.length?record.naiPromptData:null;
+ const promptSource=npd?'Base Prompt\n'+(npd.basePrompt||'（空）')+'\n\nCharacter Prompts\n'+npd.characters.map((x,i)=>(i+1)+'. '+x.prompt).join('\n'):String(record.prompt||record.basePrompt||'');
+ const artistPositive=String(preset?.positive||'').trim();
+ const promptText=String(record.basePrompt||'').trim()||(artistPositive&&promptSource.includes(artistPositive)
+  ?promptSource.split(artistPositive).join(' ').replace(/(?:\s*[,，、]\s*){2,}/g,', ').replace(/^[\s,，、]+|[\s,，、]+$/g,'').trim()
+  :promptSource);
+ const promptWords=promptText.split(/[,，\n]+/).map(x=>x.trim()).filter(Boolean).length;
+ const vibeCount=Array.isArray(vibe?.entries)?vibe.entries.length:0;
+
+ const hero=document.createElement('div');hero.className='ql-cache-detail-hero';
+ const imgWrap=document.createElement('div');imgWrap.className='ql-cache-detail-image-wrap';
+ const img=document.createElement('img');img.className='ql-cache-large';img.alt='生成结果';img.style.cursor='zoom-in';img.title='点击放大/果冻互动查看原图';
+ imgWrap.append(img);
+ const heading=document.createElement('div');heading.className='ql-cache-detail-heading';
+ const eyebrow=document.createElement('span');eyebrow.className='ql-cache-eyebrow';eyebrow.textContent='IMAGE ARCHIVE · 拾帧资料库';
+ const h3=document.createElement('h3');h3.textContent=record.albumCharacterName?'相册照片':'生成记录';
+ const timeP=document.createElement('p');timeP.textContent=createdAt.toLocaleString();
+ const badges=document.createElement('div');badges.className='ql-cache-badges';
+ for(const label of [record.provider||'未知后端',record.model||meta.model||'未知模型',record.size||meta.size||'尺寸未知']){const span=document.createElement('span');span.textContent=label;badges.append(span);}
+ heading.append(eyebrow,h3,timeP,badges);
+ hero.append(imgWrap,heading);
+
+ const statGrid=document.createElement('div');statGrid.className='ql-cache-stat-grid';
+ statGrid.append(buildStatEl('提示词条目',String(promptWords)),buildStatEl('Vibe 参考',String(vibeCount)),buildStatEl('画师串',preset?.name||'未使用'));
+
+ const promptSection=document.createElement('section');promptSection.className='ql-cache-prompt-section';
+ const sectionTitle=document.createElement('div');sectionTitle.className='ql-cache-section-title';
+ const titleInner=document.createElement('div');
+ const titleEyebrow=document.createElement('span');titleEyebrow.className='ql-cache-eyebrow';titleEyebrow.textContent='PROMPT';
+ const titleH4=document.createElement('h4');titleH4.textContent='画面提示词';
+ titleInner.append(titleEyebrow,titleH4);
+ const copyIcon=document.createElement('button');copyIcon.type='button';copyIcon.className='ql-cache-copy-icon ql-cache-copy-pill';copyIcon.setAttribute('aria-label','复制画面提示词');copyIcon.title='复制画面提示词';
+ copyIcon.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="11" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3"></path></svg>';
+ copyIcon.addEventListener('click',async()=>{const ok=await copyText(promptText);copyIcon.classList.toggle('is-copied',ok);setTimeout(()=>copyIcon.classList.remove('is-copied'),1300);});
+ sectionTitle.append(titleInner,copyIcon);
+ const promptBox=document.createElement('div');promptBox.className='ql-cache-prompt-box';
+ const pre=document.createElement('pre');pre.textContent=promptText||'此记录没有保存正向提示词';promptBox.append(pre);
+ promptSection.append(sectionTitle,promptBox);
+
+ const actions=document.createElement('div');actions.className='ql-cache-detail-actions';
+ const copyPromptBtn=document.createElement('button');copyPromptBtn.type='button';copyPromptBtn.className='menu_button ql-cache-action-primary';copyPromptBtn.textContent='复制画面提示词';
+ copyPromptBtn.addEventListener('click',async()=>{const ok=await copyText(promptText);copyPromptBtn.textContent=ok?'已复制':'复制失败，请长按选取';setTimeout(()=>{copyPromptBtn.textContent='复制画面提示词';},1300);});
+ const saveBtn=document.createElement('button');saveBtn.type='button';saveBtn.className='menu_button';saveBtn.textContent='保存图片';
+ saveBtn.addEventListener('click',async()=>{
+  try{
+   const src=await resolveLibraryImage(record.dataUrl||record.thumb);
+   const blob=await (await fetch(src)).blob();
+   const url=URL.createObjectURL(blob);
+   const a=document.createElement('a');a.href=url;a.download='shizhen-'+(record.at||Date.now())+'.png';document.body.append(a);a.click();a.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(error){console.warn('[拾帧] 保存图片失败',error);}
+ });
+ actions.append(copyPromptBtn,saveBtn);
+
+ const accordions=document.createElement('div');accordions.className='ql-cache-accordions';
+ accordions.append(
+  buildAccordion('最终提交给 NAI 的完整提示词','FINAL PROMPT',promptSource),
+  buildAccordion('画师串预设',preset?.name||'未使用','正文：\n'+(preset?.positive||'未记录')+'\n\n负向词：\n'+(preset?.negative||'未记录')),
+  buildAccordion('负向提示词','NEGATIVE PROMPT',record.negative||meta.negative||'未记录'),
+  buildAccordion('Vibe 参考',vibeCount+' 条参考',vibe?JSON.stringify(vibe,null,2):'未使用 Vibe'),
+  buildAccordion('完整生成参数','ADVANCED',JSON.stringify(meta,null,2))
+ );
+
+ content.append(hero,statGrid,promptSection,actions,accordions);
+ modal.hidden=false;
+ try{img.src=await resolveLibraryImage(record.dataUrl||record.thumb);}catch(error){img.alt='图片读取失败：'+(error.message||error);}
+ img.addEventListener('click',async()=>{try{openJellyViewer(await resolveLibraryImage(record.dataUrl||record.thumb));}catch{}});
 }
 async function renderFilmBatch(reset=false){
  const host=$('#ql-history'),more=$('#sz-film-more');if(!host)return;
@@ -219,7 +331,7 @@ async function renderFilmBatch(reset=false){
   const image=document.createElement('img');image.loading='lazy';image.alt='底片影像';button.append(image);tile.append(button);
   const caption=document.createElement('p');caption.className='ql-muted';caption.textContent=record.at?new Date(Number(record.at)).toLocaleString():(record.source||'拾帧影像');tile.append(caption);grid.append(tile);
   attachPendingCheckbox(tile,record,filmPendingBarText);
-  button.addEventListener('click',()=>openRecordViewer(record));
+  button.addEventListener('click',()=>openRecordDetail(record));
   try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){image.alt='图片读取失败：'+(error.message||error);}
  }
  filmOffset+=batch.length;
@@ -244,7 +356,7 @@ async function renderCharacterAlbums(){
    const button=document.createElement('button');button.type='button';button.className='ql-cache-image';button.setAttribute('aria-label','相册照片');
    const image=document.createElement('img');image.loading='lazy';image.alt='相册照片';button.append(image);tile.append(button);grid.append(tile);
    attachPendingCheckbox(tile,record,albumPendingBarText);
-   button.addEventListener('click',()=>openRecordViewer(record));
+   button.addEventListener('click',()=>openRecordDetail(record));
    try{image.src=await resolveLibraryImage(record.thumb||record.dataUrl);}catch(error){image.alt='图片读取失败：'+(error.message||error);}
   }
  }
