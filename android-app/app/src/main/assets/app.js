@@ -102,6 +102,9 @@ function wireAppearance(){
  $('#ql-cs-file')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{const text=await file.text();let data;if(file.name.toLowerCase().endsWith('.css'))data={name:file.name.replace(/\.css$/i,''),css:text};else data=JSON.parse(text);if(typeof data.css!=='string'||!data.css.trim())throw new Error('文件中没有 CSS');const item={id:'cs'+Date.now().toString(36),name:String(data.name||'导入风格'),css:data.css,updatedAt:Date.now()};library.customStyles.push(item);library.uiStyle='custom:'+item.id;renderCustomStyles();if(pick)pick.value=item.id;loadPick();applyAppearance();persist();set('ql-cs-status','导入并应用成功。');}catch(err){set('ql-cs-status','导入失败：'+err.message);}e.target.value='';});
 }
 function downloadText(text,filename,type){const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);}
+// Vibe 编辑区整段照搬插件原有的 innerHTML+esc() 拼接写法(而不是前面几处改用 createElement)——
+// 插件那边这块本来就是这个风格，量也大，原样抄最省事也最不容易漏字段。esc() 和插件里的定义完全一致。
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function copy(v){const t=document.createElement('textarea');t.value=v;document.body.append(t);t.select();try{document.execCommand('copy')}catch(e){}t.remove();}
 const bytes=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';
 let assetRows=[],assetOffset=0,assetServerInfo=null,characterRows=[];
@@ -403,6 +406,8 @@ function refresh(){
  jellyPickerLoaded=false;
  populateAlbumTargetSelect();syncResultFavoriteButton();
  populatePresetEditSelect();renderPresetsList();
+ if(!Array.isArray(library.vibes))library.vibes=[];if(!Array.isArray(library.vibePool))library.vibePool=[];
+ qlVibeAttach(library);qlRenderVibeArea();
 }
 // 「收藏目标相册」下拉框：选项来自推送时带过来的完整酒馆角色卡清单(characterRows)，
 // 外加 library.records 里已经存在、但角色卡清单里找不到对应项的老相册名(兼容老数据/角色卡已被删除的情况)。
@@ -472,6 +477,25 @@ function appConfirm(message){
   cancel.addEventListener('click',()=>finish(false));
   ok.addEventListener('click',()=>finish(true));
   overlay.addEventListener('click',event=>{if(event.target===overlay)finish(false);});
+ });
+}
+// appConfirm 的带输入框版本，对应插件里的 qlPrompt（同样绕开裸 prompt()，WebView 默认也不处理 onJsPrompt）。
+function appPrompt(message,defaultValue){
+ return new Promise(resolve=>{
+  const overlay=document.createElement('div');overlay.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:20px';
+  const box=document.createElement('div');box.className='ql-card';box.style.cssText='max-width:320px;width:100%';
+  const text=document.createElement('p');text.textContent=message;text.style.margin='0 0 10px';
+  const input=document.createElement('input');input.type='text';input.value=defaultValue||'';input.style.cssText='width:100%;box-sizing:border-box;margin-bottom:12px';
+  const row=document.createElement('div');row.className='ql-row';
+  const cancel=document.createElement('button');cancel.type='button';cancel.className='menu_button';cancel.textContent='取消';
+  const ok=document.createElement('button');ok.type='button';ok.className='menu_button ql-primary';ok.textContent='确定';
+  row.append(cancel,ok);box.append(text,input,row);overlay.append(box);document.body.append(overlay);
+  const finish=value=>{overlay.remove();resolve(value);};
+  cancel.addEventListener('click',()=>finish(null));
+  ok.addEventListener('click',()=>finish(input.value));
+  input.addEventListener('keydown',event=>{if(event.key==='Enter')finish(input.value);});
+  overlay.addEventListener('click',event=>{if(event.target===overlay)finish(null);});
+  setTimeout(()=>input.focus(),0);
  });
 }
 // ———— 参数页·画师串编辑区：index.html 里这套"新建/编辑/批量/应用/复制/删除"markup 原来一行JS都没接，
@@ -622,6 +646,389 @@ function wirePresetsEditor(){
  const migrateToggle=$('#ql-migrate-toggle');
  if(migrateToggle){const row=migrateToggle.closest('.ql-artist-toolbar');if(row&&row.contains(migrateToggle))migrateToggle.remove();}
  $('#ql-migrate-panel')?.remove();
+}
+// ———— 参数页·Vibe 编辑区：同样原来一行JS都没接。池(vibePool)+分组(vibes)两层结构、图片编码(NAI
+// /ai/encode-vibe)、文件导入(.naiv4vibe/.naiv4vibeBundle/旧版导出json)照插件逻辑搬(cfg→library，
+// save→persist，qlConfirm→appConfirm，qlPrompt→appPrompt)。渲染部分插件原本就是 innerHTML+esc()
+// 拼接，这里保持同样写法整段搬，不改成 createElement——这块量大，照抄最不容易漏字段。
+function qlUid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);}
+const QL_VIBE_ENCODE_MODELS=[['nai-diffusion-4-5-full','V4.5 Full'],['nai-diffusion-4-5-curated','V4.5 Curated'],['nai-diffusion-4-full','V4 Full'],['nai-diffusion-4-curated','V4 Curated']];
+// vibeModelKey/extractUsableVibe/safeMigrationStringify app.js 里独立生图那段代码已经搬过一份了（给生图请求用），
+// 这里直接复用，不重复定义。
+function qlVibeIsImageB64(v){return typeof v==='string'&&/^(?:iVBOR|\/9j\/|UklGR|R0lGOD)/.test(v.replace(/^data:[^,]*,/,'').slice(0,8));}
+function qlVibeImgUrl(b){
+ if(!b)return '';
+ if(/^data:/i.test(b))return b;
+ const h=b.slice(0,5);
+ return 'data:'+(h.startsWith('/9j/')?'image/jpeg':h.startsWith('UklGR')?'image/webp':h.startsWith('R0lGO')?'image/gif':'image/png')+';base64,'+b;
+}
+function qlVibeEntryHasEncoding(entry){
+ if(!entry)return false;
+ if(typeof entry.image==='string'&&entry.image.replace(/\s+/g,'').length>160&&!qlVibeIsImageB64(entry.image))return true;
+ try{return !!extractUsableVibe(entry.raw||entry)?.image;}catch{return false;}
+}
+function qlVibeMaterialize(group,s){
+ const pool=Array.isArray(s.vibePool)?s.vibePool:[];
+ return (group.refs||[]).map(ref=>{
+  const p=pool.find(x=>x&&x.id===ref.poolId);
+  if(!p)return null;
+  const {thumb,imageState,...rest}=p;
+  return {...rest,poolId:p.id,strength:Number(ref.strength??p.strength??0.6),informationExtracted:Number(ref.informationExtracted??p.informationExtracted??1)};
+ }).filter(Boolean);
+}
+function qlVibeAttach(s){
+ for(const g of s.vibes){
+  if(!g||typeof g!=='object'||!Array.isArray(g.refs))continue;
+  if(Object.getOwnPropertyDescriptor(g,'entries')?.get)continue;
+  delete g.entries;delete g.hasPayload;
+  Object.defineProperty(g,'entries',{configurable:true,enumerable:false,get(){return qlVibeMaterialize(g,library);}});
+  Object.defineProperty(g,'hasPayload',{configurable:true,enumerable:false,get(){return g.entries.some(qlVibeEntryHasEncoding);}});
+ }
+}
+function qlVibeEntryToPool(entry,source,sourceName){
+ const {strength,informationExtracted,thumb:oldThumb,thumbnail,...rest}=entry||{};
+ const item={...rest};
+ let thumb=typeof oldThumb==='string'&&oldThumb?oldThumb:(typeof thumbnail==='string'&&thumbnail?thumbnail:'');
+ if(qlVibeIsImageB64(item.image)){
+  if(!thumb)thumb=qlVibeImgUrl(item.image);
+  if(item.raw&&item.raw.encodings&&typeof item.raw.encodings==='object'&&Object.keys(item.raw.encodings).length)item.image='';
+ }
+ item.id=qlUid();
+ item.name=String(item.name||item.title||item.label||item.filename||item.raw?.name||item.raw?.title||item.raw?.label||'未命名 Vibe');
+ item.strength=Number.isFinite(Number(strength))?Number(strength):0.6;
+ item.informationExtracted=Number.isFinite(Number(informationExtracted))?Number(informationExtracted):1;
+ item.source=item.source||source||'import';
+ item.sourceName=item.sourceName||sourceName||'';
+ item.thumb=thumb;
+ item.imageState=thumb?'keep':'none';
+ item.createdAt=item.createdAt||Date.now();
+ return item;
+}
+function qlVibePoolKey(entry){
+ const img=String(entry?.image||''),enc=entry?.raw?.encodings?JSON.stringify(entry.raw.encodings).length+':'+JSON.stringify(entry.raw.encodings).slice(-80):'';
+ return img.length+':'+img.slice(-64)+'|'+enc;
+}
+function qlVibeDupGroups(s){const m=new Map();for(const p of s.vibePool||[]){const k=qlVibePoolKey(p);if(k.length<=8)continue;if(!m.has(k))m.set(k,[]);m.get(k).push(p);}return [...m.values()].filter(a=>a.length>1);}
+function qlVibeMergeDups(s){let removed=0;for(const arr of qlVibeDupGroups(s)){const keep=arr[0];for(const d of arr.slice(1)){for(const g of s.vibes||[]){const refs=g.refs||[];const hasKeep=refs.some(r=>r.poolId===keep.id);g.refs=hasKeep?refs.filter(r=>r.poolId!==d.id):refs.map(r=>r.poolId===d.id?{...r,poolId:keep.id}:r);}s.vibePool=s.vibePool.filter(x=>x.id!==d.id);removed++;}}return removed;}
+function qlVibeAddToPool(s,entry,source,sourceName,append=false){
+ if(!Array.isArray(s.vibePool))s.vibePool=[];
+ const key=qlVibePoolKey(entry);
+ if(key.length>8){const dup=s.vibePool.find(p=>qlVibePoolKey(p)===key);if(dup)return {item:dup,created:false};}
+ const item=qlVibeEntryToPool(entry,source,sourceName);
+ if(append)s.vibePool.push(item);else s.vibePool.unshift(item);
+ return {item,created:true};
+}
+function qlLoadImageSrc(src){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('无法读取这张图片'));img.src=src;});}
+function qlReadFileDataUrl(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(new Error('读取文件失败'));r.readAsDataURL(file);});}
+function qlImageToCanvas(img,maxSide){
+ const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,k=Math.min(1,maxSide/Math.max(w,h));
+ const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w*k));c.height=Math.max(1,Math.round(h*k));
+ const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);return c;
+}
+async function qlMakeThumbFromDataUrl(dataUrl){const img=await qlLoadImageSrc(dataUrl);return qlImageToCanvas(img,256).toDataURL('image/jpeg',0.8);}
+function qlBytesToB64(bytes){let out='';for(let i=0;i<bytes.length;i+=0x8000)out+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(out);}
+async function qlSha256Hex(text){try{const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,'0')).join('');}catch{return (qlUid()+qlUid()+qlUid()+qlUid()).padEnd(64,'0').slice(0,64);}}
+async function qlEncodeVibeRequest(imageB64,informationExtracted,model){
+ const c=library,third=c.provider==='novelai-thirdparty';
+ const key=third?(c.naiThirdKey||''):(c.naiApiKey||'');
+ if(!key)throw new Error(third?'请先填写 NAI 第三方 API Key。':'请先填写 NovelAI 官网 Key（偏好里的接口设置）。');
+ let base=third?String(c.naiThirdEndpoint||'').replace(/\/$/,''):'https://image.novelai.net';
+ if(third&&!base)throw new Error('请先填写 NAI 第三方 API 地址。');
+ base=base.replace(/\/ai\/generate-image$/i,'');
+ const res=await fetch(base+'/ai/encode-vibe',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({image:imageB64,information_extracted:informationExtracted,model})});
+ if(!res.ok){const t=await res.text().catch(()=> '');throw new Error('编码请求失败（HTTP '+res.status+'）：'+t.slice(0,200));}
+ const buf=new Uint8Array(await res.arrayBuffer());
+ let b64='';
+ const asText=new TextDecoder().decode(buf.subarray(0,Math.min(buf.length,200000))).trim();
+ if(buf.length&&(asText.startsWith('{')||asText.startsWith('"'))){
+  try{const j=JSON.parse(new TextDecoder().decode(buf));const v=typeof j==='string'?j:(j.encoding||j.vibe||j.data||j.image||'');if(typeof v==='string')b64=v.replace(/^data:[^,]*,/,'').replace(/\s+/g,'');}catch{}
+ }
+ if(!b64&&/^[A-Za-z0-9+/=\s]+$/.test(asText)&&asText.length>160&&asText.length===buf.length)b64=asText.replace(/\s+/g,'');
+ if(!b64)b64=qlBytesToB64(buf);
+ if(b64.length<160)throw new Error('编码结果过短，可能不是有效的 Vibe 编码。');
+ return b64;
+}
+async function qlEncodeFileToVibe(file,{name,model,informationExtracted,strength}){
+ const dataUrl=await qlReadFileDataUrl(file);
+ const img=await qlLoadImageSrc(dataUrl);
+ const png=qlImageToCanvas(img,1536).toDataURL('image/png');
+ const info=Math.max(0.01,Math.min(1,Number(informationExtracted)||1));
+ const enc=await qlEncodeVibeRequest(png.replace(/^data:[^,]*,/,''),info,model);
+ const hash=await qlSha256Hex(enc.slice(0,4096)+model+info);
+ const label=name||file.name.replace(/\.[^.]+$/,'')||'图片 Vibe';
+ const raw={identifier:'novelai-vibe-transfer',version:1,type:'encoding',id:qlUid(),name:label,createdAt:Math.floor(Date.now()/1000),importInfo:{model,information_extracted:info,strength:Number(strength)||0.6},encodings:{[vibeModelKey(model)]:{[hash]:{encoding:enc,params:{information_extracted:info}}}}};
+ const thumb=qlImageToCanvas(img,256).toDataURL('image/jpeg',0.8);
+ return {name:label,image:'',raw,identifier:'novelai-vibe-transfer',type:'encoding',strength:Number(strength)||0.6,informationExtracted:info,thumb,source:'encode',sourceName:file.name,encodeModel:model};
+}
+function qlVibeThumbHtml(p){
+ const st=p.imageState||(p.thumb?'keep':'delete');
+ if(st==='hide')return '<div class="ql-vthumb is-empty" title="原图已隐藏">原图已隐藏</div>';
+ if((st==='keep'||st==='replace')&&p.thumb)return '<div class="ql-vthumb"><img src="'+esc(p.thumb)+'" alt=""></div>';
+ return '<div class="ql-vthumb is-empty">'+(st==='delete'?'原图已删除':'无原图')+'</div>';
+}
+function qlVibeStateLabel(p){const st=p.imageState||(p.thumb?'keep':'delete');return {keep:'原图：保留',hide:'原图：隐藏',replace:'原图：已替换',delete:'原图：已删除',none:'原图：无'}[st]||'原图：无';}
+function qlVibeSourceLabel(p){return {import:'导入',encode:'图片编码',legacy:'旧数据迁移',manual:'手动'}[p.source]||'导入';}
+function qlVibeEncodeBadge(p){
+ const ok=qlVibeEntryHasEncoding(p);
+ const keys=p.raw?.encodings&&typeof p.raw.encodings==='object'?Object.keys(p.raw.encodings):[];
+ return '<span class="ql-vibe-state '+(ok?'is-ready':'is-missing')+'">'+(ok?'已编码'+(keys.length?' · '+esc(keys.join('/')):''):'缺少编码')+'</span>';
+}
+function qlVibeCardHtml(p,{actions='',extra=''}={}){
+ return '<div class="ql-vcard">'+qlVibeThumbHtml(p)+'<div class="ql-vcard-main"><strong class="ql-vcard-name">'+esc(p.name||'未命名 Vibe')+'</strong><div class="ql-vcard-badges">'+qlVibeEncodeBadge(p)+'<span class="ql-vibe-state">'+esc(qlVibeSourceLabel(p))+(p.sourceName?' · '+esc(String(p.sourceName).slice(0,24)):'')+'</span><span class="ql-vibe-state">'+esc(qlVibeStateLabel(p))+'</span></div>'+extra+'</div>'+(actions?'<div class="ql-vcard-actions">'+actions+'</div>':'')+'</div>';
+}
+function qlVibeDownload(groups,fileName){
+ const payload=exportVibeGroups(false,groups);
+ downloadText(JSON.stringify(payload,null,2),String(fileName||'vibe').replace(/[\\/:*?"<>|]+/g,'_').trim()+'.json','application/json');
+}
+function qlVibeExportGroupOf(items,name){
+ return {name,entries:items.map(({p,r})=>{
+  const m={...p,strength:Number(r?.strength??p.strength??0.6),informationExtracted:Number(r?.informationExtracted??p.informationExtracted??1)};
+  delete m.thumb;delete m.imageState;
+  if((p.imageState||'keep')==='keep'||p.imageState==='replace')if(p.thumb)m.thumbnail=p.thumb;
+  return m;
+ })};
+}
+function exportVibeGroups(hideOriginalImages=false,sourceGroups=library.vibes||[]){
+ const groups=(sourceGroups||[]).map(group=>{
+  const clone=JSON.parse(JSON.stringify({...group,entries:Array.isArray(group.entries)?group.entries:[]}));delete clone.refs;
+  return clone;
+ });
+ return {format:'shizhen-vibe-export',version:1,exportedAt:new Date().toISOString(),hideOriginalImages:!!hideOriginalImages,groups};
+}
+function qlShiftVibeComboRefs(s,mapFn){
+ const fix=o=>{if(!o||o.vibeIndex==null)return;const n=Number(o.vibeIndex);if(Number.isInteger(n)&&n>=0)o.vibeIndex=mapFn(n);};
+ for(const combo of s.combinations||[])fix(combo);
+ if(s.activeVibeIndex!=null){const n=Number(s.activeVibeIndex);if(Number.isInteger(n)&&n>=0)s.activeVibeIndex=mapFn(n);}
+}
+function qlVibeEntriesFromItem(item,naiModel){
+ const rawSource=item.raw||item;
+ const encoded=extractUsableVibe(rawSource,naiModel);
+ const entries=Array.isArray(item.entries)?item.entries.map(x=>{
+  const source=x.raw?{...x.raw,image:x.image||x.raw.image||''}:x;
+  const extracted=extractUsableVibe(source,naiModel);
+  const image=typeof x.image==='string'&&x.image.trim()?x.image.trim().replace(/^data:(?:application\/octet-stream|image\/[^;]+);base64,/i,'').replace(/\s+/g,''):extracted?.image||'';
+  return {...x,image,raw:x.raw||undefined,strength:Number(x.strength??extracted?.strength??0.6),informationExtracted:Number(x.informationExtracted??extracted?.informationExtracted??1)};
+ }):(encoded||(rawSource.identifier==='novelai-vibe-transfer'&&rawSource.encodings&&Object.keys(rawSource.encodings).length))?[...(encoded?[encoded]:[{image:typeof rawSource.image==='string'?rawSource.image:'',strength:Number(rawSource.importInfo?.strength??0.6),informationExtracted:1}]).map(entry=>({...entry,raw:(rawSource.identifier==='novelai-vibe-transfer'?(({image,thumbnail,...rest})=>rest)(rawSource):rawSource),image:typeof rawSource.image==='string'?rawSource.image:entry.image,thumbnail:typeof rawSource.thumbnail==='string'?rawSource.thumbnail:undefined,strength:Number(rawSource.importInfo?.strength??entry.strength??0.6),informationExtracted:Number(entry.informationExtracted??1)}))]:[];
+ return entries.filter(x=>x&&typeof x.image==='string'&&((x.image.length>160&&/^[A-Za-z0-9+/]+={0,2}$/.test(x.image))||(x.raw&&x.raw.encodings&&qlVibeEntryHasEncoding(x))));
+}
+function collectVibeItems(data,fileName='Vibe 导入',out=[],seen=new WeakSet()){
+ if(!data||typeof data!=='object'||seen.has(data))return out;
+ seen.add(data);
+ if(Array.isArray(data)){for(const item of data)collectVibeItems(item,fileName,out,seen);return out;}
+ const name=String(data.name||data.title||data.label||data.filename||fileName||'导入的 Vibe').trim();
+ const canonical=data.identifier==='novelai-vibe-transfer';
+ const directEntries=Array.isArray(data.entries)?data.entries:(Array.isArray(data.images)?data.images:(Array.isArray(data.references)?data.references:(Array.isArray(data.vibeData)?data.vibeData:(Array.isArray(data.vibes)?data.vibes:(Array.isArray(data.items)?data.items:null)))));
+ if(!canonical&&directEntries&&directEntries.length&&directEntries.some(x=>x&&typeof x==='object'&&('image' in x||'raw' in x||'encoding' in x||'identifier' in x||'encodings' in x))){out.push({name,raw:data,entries:directEntries,source:'group'});return out;}
+ if(canonical){out.push({name,raw:data,source:'novelai-vibe-transfer'});return out;}
+ const groupKeys=/^(?:vibes?|vibeGroups?|groups|参考图组|参考组|氛围转移)$/i;
+ for(const [key,value] of Object.entries(data)){
+  if(Array.isArray(value)&&groupKeys.test(key)){
+   for(const [index,item] of value.entries()){
+    if(!item||typeof item!=='object')continue;
+    const itemName=String(item.name||item.title||item.label||('Vibe '+(index+1))).trim();
+    const entries=Array.isArray(item.entries)?item.entries:(Array.isArray(item.images)?item.images:(Array.isArray(item.references)?item.references:(Array.isArray(item.vibeData)?item.vibeData:(Array.isArray(item.vibes)?item.vibes:(Array.isArray(item.items)?item.items:null)))));
+    if(entries){out.push({name:itemName,raw:item,entries,source:'group'});}
+    else{const before=out.length;collectVibeItems(item,itemName,out,seen);if(out.length===before&&extractUsableVibe(item))out.push({name:itemName,raw:item,source:'group-item'});}
+   }
+   continue;
+  }
+  if(value&&typeof value==='object')collectVibeItems(value,name,out,seen);
+ }
+ return out;
+}
+async function readVibeArchiveJson(file){const buffer=await file.arrayBuffer(),view=new DataView(buffer),bytes=new Uint8Array(buffer),out=[];const u16=o=>view.getUint16(o,true),u32=o=>view.getUint32(o,true);const decoder=new TextDecoder();for(let p=0;p+46<=bytes.length;){if(u32(p)!==0x02014b50){p++;continue;}const method=u16(p+10),compressed=u32(p+20),nameLen=u16(p+28),extraLen=u16(p+30),commentLen=u16(p+32),localOffset=u32(p+42);const name=decoder.decode(bytes.slice(p+46,p+46+nameLen));if(/\.(?:json|naiv4vibe|naiv4vibebundle)$/i.test(name)){if(u32(localOffset)!==0x04034b50)throw new Error('Vibe 压缩包中的文件头无法识别：'+name);const localName=u16(localOffset+26),localExtra=u16(localOffset+28),start=localOffset+30+localName+localExtra,packed=bytes.slice(start,start+compressed);let raw;if(method===0)raw=packed;else if(method===8&&typeof DecompressionStream!=='undefined'){const stream=new Blob([packed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));raw=new Uint8Array(await new Response(stream).arrayBuffer());}else throw new Error('当前浏览器不支持该 Vibe 压缩算法。');try{out.push(JSON.parse(decoder.decode(raw)));}catch{}}p+=46+nameLen+extraLen+commentLen;}return out;}
+async function qlVibeImportFile(file,mode){
+ const s=library,naiModel=s.naiModel||'nai-diffusion-4-5-full';
+ let data;
+ try{data=JSON.parse(await file.text());}catch{
+  const files=await readVibeArchiveJson(file);
+  if(!files.length)throw new Error('无法从该文件中读取 JSON 资源；该 Vibe 文件可能使用了当前浏览器不支持的打包格式。');
+  data=files;
+ }
+ if(!Array.isArray(s.vibes))s.vibes=[];if(!Array.isArray(s.vibePool))s.vibePool=[];
+ const candidates=collectVibeItems(data,file.name);
+ let pooledNew=0,pooledReused=0,groupsMade=0,refsAdded=0;
+ const targetGroup=mode&&mode!=='__new__'&&mode!=='__pool__'?s.vibes.find(g=>g.id===mode):null;
+ for(const item of candidates){
+  const entries=qlVibeEntriesFromItem(item,naiModel);
+  if(!entries.length)continue;
+  const refs=[];
+  for(const [j,entry] of entries.entries()){
+   const withName={...entry,name:entry.name||entry.title||entry.label||entry.filename||entry.raw?.name||entry.raw?.title||entry.raw?.label||(entries.length===1&&item.name?item.name:(item.name||'参考')+' '+(j+1))};
+   const r=qlVibeAddToPool(s,withName,'import',file.name);
+   if(r.created)pooledNew++;else pooledReused++;
+   refs.push({poolId:r.item.id,strength:Number(withName.strength??0.6),informationExtracted:Number(withName.informationExtracted??1)});
+  }
+  if(mode==='__pool__')continue;
+  if(targetGroup){for(const ref of refs)if(!targetGroup.refs.some(x=>x.poolId===ref.poolId)){targetGroup.refs.push(ref);refsAdded++;}}
+  else{
+   const g={id:qlUid(),name:String(item.name||file.name||'导入的 Vibe 组'),refs,source:'import',sourceName:file.name,importedAt:Date.now(),vibeVersion:2,_vibeMigrationVersion:1};
+   s.vibes.push(g);groupsMade++;
+  }
+ }
+ if(!pooledNew&&!pooledReused)throw new Error('没有识别到可用的 Vibe 编码。请确认文件内包含当前模型对应的 NovelAI Vibe 编码，或是带有 entries 的 Vibe 分组；普通图片请到「Vibe 生成」页用图片直接编码。');
+ qlVibeAttach(s);persist();
+ return {pooledNew,pooledReused,groupsMade,refsAdded};
+}
+function qlRenderVibeArea(){
+ const s=library;
+ if(!Array.isArray(s.vibes))s.vibes=[];if(!Array.isArray(s.vibePool))s.vibePool=[];
+ qlVibeAttach(s);
+ const poolHost=$('#ql-vibe-pool-list'),groupHost=$('#ql-vibe-groups-list');
+ if(poolHost){
+  {const cn=$('#ql-vibe-pool-count');if(cn)cn.textContent='（'+(s.vibePool||[]).length+' 条）';const dg=qlVibeDupGroups(s),n=dg.reduce((a,x)=>a+x.length-1,0),tip=$('#ql-vibe-pool-dup-tip'),btn=$('#ql-vibe-pool-dedupe');if(tip)tip.textContent=n?'发现 '+n+' 条重复的 Vibe（编码相同），点“合并重复”只保留一份，分组里的引用会自动指向保留的那条。':'没有重复的 Vibe。';if(btn)btn.disabled=!n;if(cn&&n)cn.textContent+=' · 有 '+n+' 条重复';}
+  const q=String($('#ql-vibe-pool-filter')?.value||'').trim().toLowerCase();
+  const items=(s.vibePool||[]).filter(p=>!q||String(p.name||'').toLowerCase().includes(q));
+  poolHost.innerHTML=items.map(p=>{
+   const used=s.vibes.filter(g=>(g.refs||[]).some(r=>r.poolId===p.id)).length;
+   const stateSel='<select data-vp-state="'+esc(p.id)+'" aria-label="原图状态"><option value="keep"'+((p.imageState||'keep')==='keep'?' selected':'')+'>保留原图</option><option value="hide"'+(p.imageState==='hide'?' selected':'')+'>隐藏原图</option><option value="replace">替换原图…</option><option value="delete"'+(p.imageState==='delete'?' selected':'')+'>删除原图</option></select>';
+   const body='<label>名称（同步到所有引用它的分组）</label><input data-vp-name="'+esc(p.id)+'" value="'+esc(p.name||'')+'"><label>原图</label>'+stateSel+'<p class="ql-muted">被 '+used+' 个分组引用。原图状态只影响显示与导出，不影响编码数据。</p>';
+   return qlVibeCardHtml(p,{extra:body,actions:'<button type="button" class="menu_button" data-vp-export="'+esc(p.id)+'">导出</button><button type="button" class="menu_button" data-vp-delete="'+esc(p.id)+'">删除</button>'});
+  }).join('')||'<p class="ql-muted">'+(q?'没有匹配的 Vibe。':'Vibe 池还是空的。可以在“新建与导入”导入文件，或在“Vibe 生成”用图片直接编码。')+'</p>';
+ }
+ if(groupHost){
+  const gq=String($('#ql-vibe-group-filter')?.value||'').trim().toLowerCase();
+  const poolName=id=>String((s.vibePool||[]).find(x=>x.id===id)?.name||'').toLowerCase();
+  const shownGroups=s.vibes.map((g,i)=>({g,i})).filter(({g})=>!gq||String(g.name||'').toLowerCase().includes(gq)||(g.refs||[]).some(r=>poolName(r.poolId).includes(gq)));
+  groupHost.innerHTML=shownGroups.map(({g,i})=>{
+   const active=Number(s.activeVibeIndex)===i;
+   const mats=(g.refs||[]).map((r,j)=>({r,j,p:(s.vibePool||[]).find(x=>x.id===r.poolId)}));
+   const usable=mats.filter(m=>m.p&&qlVibeEntryHasEncoding(m.p)).length;
+   const rows=mats.map(({r,j,p})=>p?('<div class="ql-vref">'+qlVibeThumbHtml(p)+'<div class="ql-vcard-main"><strong class="ql-vcard-name">'+esc(p.name||'未命名')+'</strong><div class="ql-vcard-badges">'+qlVibeEncodeBadge(p)+'</div><div class="ql-row"><div><label>参考强度</label><input type="number" min="0" max="1" step="0.05" data-vg-strength="'+esc(g.id)+'|'+j+'" value="'+Math.max(0,Math.min(1,Number(r.strength??0.6)))+'"></div><div><label>Information Extracted</label><input type="number" disabled title="编码时已固定；要改需重新用原图编码" value="'+Math.max(0,Math.min(1,Number(r.informationExtracted??p.informationExtracted??1)))+'"></div></div></div><div class="ql-vcard-actions"><button type="button" class="menu_button" data-vg-unref="'+esc(g.id)+'|'+j+'">移出分组</button></div></div>'):('<div class="ql-vref"><div class="ql-vthumb is-empty">缺失</div><div class="ql-vcard-main"><strong>引用的 Vibe 已不在池中</strong></div><div class="ql-vcard-actions"><button type="button" class="menu_button" data-vg-unref="'+esc(g.id)+'|'+j+'">移出分组</button></div></div>')).join('');
+   const addable=(s.vibePool||[]).filter(p=>!(g.refs||[]).some(r=>r.poolId===p.id));
+   const addSel='<div class="ql-row"><select data-vg-addsel="'+esc(g.id)+'"><option value="">从 Vibe 池添加…</option>'+addable.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name||'未命名')+'</option>').join('')+'</select><button type="button" class="menu_button" data-vg-add="'+esc(g.id)+'">添加</button></div>';
+   return '<div class="ql-record ql-vibe-group'+(active?' is-active':'')+'"><div class="ql-vibe-group-top"><div class="ql-vibe-group-info"><strong>'+esc(g.name||'未命名分组')+'</strong><p>'+usable+' / '+mats.length+' 条参考可用'+(active?' · 当前使用中':'')+'</p></div><button type="button" class="menu_button" data-vg-use="'+esc(g.id)+'">'+(active?'当前使用中':'整组使用')+'</button></div><label>分组名称</label><input data-vg-name="'+esc(g.id)+'" value="'+esc(g.name||'')+'"><details class="ql-vibe-details"'+(mats.length<=3?' open':'')+'><summary>组内参考（'+mats.length+'）</summary>'+(rows||'<p class="ql-muted">这个分组还没有引用任何 Vibe。</p>')+addSel+'</details><div class="ql-vibe-group-actions"><button type="button" class="menu_button" data-vg-export="'+esc(g.id)+'">导出本组</button><button type="button" class="menu_button" data-vg-delete="'+esc(g.id)+'">删除分组（不删池内 Vibe）</button></div></div>';
+  }).join('')||'<p class="ql-muted">'+(gq?'没有匹配的分组。':'暂无分组。分组只引用 Vibe 池里的条目，删除分组不会删掉池里的 Vibe。')+'</p>';
+ }
+ const sel=$('#ql-vibe-import-target');
+ if(sel){
+  const old=sel.value;
+  sel.innerHTML='<option value="__new__">新建分组并引用（保留文件里的分组结构）</option><option value="__pool__">仅放入 Vibe 池</option>'+s.vibes.map(g=>'<option value="'+esc(g.id)+'">追加到分组：'+esc(g.name||'未命名分组')+'</option>').join('');
+  if([...sel.options].some(o=>o.value===old))sel.value=old;
+ }
+ const gSel=$('#ql-vibe-encode-target');
+ if(gSel){
+  const old=gSel.value;
+  gSel.innerHTML='<option value="__pool__">仅放入 Vibe 池</option><option value="__new__">同时新建同名分组</option>'+s.vibes.map(g=>'<option value="'+esc(g.id)+'">同时加入分组：'+esc(g.name||'未命名分组')+'</option>').join('');
+  if([...gSel.options].some(o=>o.value===old))gSel.value=old;
+ }
+}
+function wireVibeEditor(){
+ const st=t=>{const el=$('#ql-vibe-status');if(el)el.textContent=t;};
+ $('#ql-vibe-create-group')?.addEventListener('click',async()=>{
+  const name=await appPrompt('给新 Vibe 分组起个名字：','我的 Vibe 组');if(name===null)return;
+  const clean=name.trim();if(!clean){st('分组名称不能为空。');return;}
+  const s=library;if(!Array.isArray(s.vibes))s.vibes=[];
+  s.vibes.push({id:qlUid(),name:clean,refs:[],source:'manual',createdAt:Date.now(),vibeVersion:2,_vibeMigrationVersion:1});
+  qlVibeAttach(s);persist();qlRenderVibeArea();syncGenerationConfigControls();st('已创建分组「'+clean+'」，到「Vibe 编辑」里从池中添加参考。');
+ });
+ $('#ql-vibe-pick')?.addEventListener('click',()=>$('#ql-vibe-import-file')?.click());
+ $('#ql-vibe-import-file')?.addEventListener('change',async e=>{
+  const file=e.target.files?.[0];if(!file)return;
+  try{
+   const r=await qlVibeImportFile(file,$('#ql-vibe-import-target')?.value);
+   qlRenderVibeArea();syncGenerationConfigControls();
+   st('导入完成：新增 '+r.pooledNew+' 条到 Vibe 池'+(r.pooledReused?'，'+r.pooledReused+' 条已存在（复用）':'')+(r.groupsMade?'，新建 '+r.groupsMade+' 个分组':'')+(r.refsAdded?'，追加 '+r.refsAdded+' 条引用':'')+'。');
+  }catch(err){st('导入失败：'+(err?.message||String(err)));}
+  finally{e.target.value='';}
+ });
+ let encodeFile=null;
+ const encStatus=t=>{const el=$('#ql-vibe-encode-status');if(el)el.textContent=t;};
+ $('#ql-vibe-encode-pick')?.addEventListener('click',()=>$('#ql-vibe-encode-file')?.click());
+ $('#ql-vibe-encode-file')?.addEventListener('change',async e=>{
+  const f=e.target.files?.[0];if(!f)return;encodeFile=f;
+  try{const url=await qlMakeThumbFromDataUrl(await qlReadFileDataUrl(f));const preview=$('#ql-vibe-encode-preview');if(preview)preview.innerHTML='<div class="ql-vthumb big"><img src="'+esc(url)+'" alt=""></div>';}catch(err){encStatus('读取图片失败：'+(err?.message||err));}
+  const nameInput=$('#ql-vibe-encode-name');if(nameInput&&!nameInput.value)nameInput.value=f.name.replace(/\.[^.]+$/,'');
+  encStatus('已选择：'+f.name);
+ });
+ const modelSelect=$('#ql-vibe-encode-model');
+ if(modelSelect){
+  modelSelect.innerHTML=QL_VIBE_ENCODE_MODELS.map(([v,l])=>'<option value="'+v+'">'+l+'</option>').join('');
+  modelSelect.value=QL_VIBE_ENCODE_MODELS.some(m=>m[0]===library.naiModel)?library.naiModel:'nai-diffusion-4-5-full';
+ }
+ const infoInput=$('#ql-vibe-encode-info'),infoOut=$('#ql-vibe-encode-info-out');
+ if(infoInput){infoInput.oninput=()=>{if(infoOut)infoOut.textContent=Number(infoInput.value).toFixed(2);};infoInput.oninput();}
+ $('#ql-vibe-encode-run')?.addEventListener('click',async()=>{
+  if(!encodeFile){encStatus('请先选择一张图片。');return;}
+  const btn=$('#ql-vibe-encode-run');if(btn)btn.disabled=true;encStatus('正在向 NovelAI 请求编码…（会消耗 Anlas，按官网规则计费）');
+  try{
+   const s=library;if(!Array.isArray(s.vibes))s.vibes=[];if(!Array.isArray(s.vibePool))s.vibePool=[];
+   const entry=await qlEncodeFileToVibe(encodeFile,{name:$('#ql-vibe-encode-name')?.value.trim(),model:$('#ql-vibe-encode-model')?.value,informationExtracted:$('#ql-vibe-encode-info')?.value,strength:$('#ql-vibe-encode-strength')?.value});
+   const r=qlVibeAddToPool(s,entry,'encode',entry.sourceName);
+   if(!r.created)encStatus('池里已经有完全相同的编码，已复用。');
+   const mode=$('#ql-vibe-encode-target')?.value;
+   let target=null;
+   if(mode==='__new__'){target={id:qlUid(),name:entry.name,refs:[],source:'encode',createdAt:Date.now(),vibeVersion:2,_vibeMigrationVersion:1};s.vibes.push(target);}
+   else if(mode!=='__pool__')target=s.vibes.find(g=>g.id===mode);
+   if(target&&!target.refs.some(x=>x.poolId===r.item.id))target.refs.push({poolId:r.item.id,strength:entry.strength,informationExtracted:entry.informationExtracted});
+   qlVibeAttach(s);persist();qlRenderVibeArea();syncGenerationConfigControls();
+   encStatus('编码完成：「'+r.item.name+'」已加入 Vibe 池'+(target?'，并加入分组「'+target.name+'」':'')+'。');
+  }catch(err){encStatus('编码失败：'+(err?.message||String(err)));}
+  finally{const runBtn=$('#ql-vibe-encode-run');if(runBtn)runBtn.disabled=false;}
+ });
+ const poolReplace=async(id)=>{
+  const input=document.createElement('input');input.type='file';input.accept='image/*';
+  input.onchange=async()=>{const f=input.files?.[0];if(!f)return;const s=library,p=s.vibePool.find(x=>x.id===id);if(!p)return;try{p.thumb=await qlMakeThumbFromDataUrl(await qlReadFileDataUrl(f));p.imageState='replace';persist();qlRenderVibeArea();}catch(err){st('替换原图失败：'+(err?.message||err));}};
+  input.click();
+ };
+ const vibeRoot=$('[data-subpage-panel="vibes"]');
+ if(vibeRoot&&!vibeRoot.dataset.qlVibeChangeBound){
+  vibeRoot.dataset.qlVibeChangeBound='1';
+  vibeRoot.addEventListener('change',async e=>{
+   const t=e.target,s=library;
+   if(t.dataset?.vpName!==undefined){const p=s.vibePool.find(x=>x.id===t.dataset.vpName);if(p){p.name=t.value.trim()||p.name||'未命名 Vibe';persist();qlRenderVibeArea();}}
+   else if(t.dataset?.vpState!==undefined){
+    const p=s.vibePool.find(x=>x.id===t.dataset.vpState);if(!p)return;
+    if(t.value==='replace'){await poolReplace(p.id);qlRenderVibeArea();return;}
+    if(t.value==='delete'){if(!await appConfirm('删除原图后无法恢复显示（编码数据不受影响，之后可以用"替换原图"换一张）。继续吗？')){qlRenderVibeArea();return;}p.thumb='';p.imageState='delete';}
+    else if(t.value==='hide'){p.imageState='hide';}
+    else {if(!p.thumb){qlRenderVibeArea();st('这条 Vibe 已没有原图，请选择"替换原图…"。');return;}p.imageState='keep';}
+    persist();qlRenderVibeArea();
+   }
+   else if(t.dataset?.vgName!==undefined){const g=s.vibes.find(x=>x.id===t.dataset.vgName);if(g){g.name=t.value.trim()||g.name||'未命名分组';persist();qlRenderVibeArea();}}
+   else if(t.dataset?.vgStrength!==undefined){const [gid,j]=t.dataset.vgStrength.split('|'),g=s.vibes.find(x=>x.id===gid),ref=g?.refs?.[Number(j)];if(ref){ref.strength=Math.max(0,Math.min(1,Number(t.value)||0));persist();st('已保存参考强度。');}}
+   else if(t.id==='ql-vibe-pool-filter'||t.id==='ql-vibe-group-filter'){qlRenderVibeArea();}
+  });
+  vibeRoot.addEventListener('input',e=>{if(e.target.id==='ql-vibe-pool-filter'||e.target.id==='ql-vibe-group-filter')qlRenderVibeArea();});
+  vibeRoot.addEventListener('click',async e=>{
+   const b=e.target.closest('button');if(!b)return;
+   const d=b.dataset,s=library;
+   if(b.id==='ql-vibe-pool-dedupe'){const n=qlVibeDupGroups(s).reduce((a,x)=>a+x.length-1,0);if(!n)return;if(!await appConfirm('合并 '+n+' 条重复的 Vibe？只保留每组里最靠前的一条，分组引用会改指向它。'))return;const r=qlVibeMergeDups(s);persist();qlRenderVibeArea();st('已合并，移除了 '+r+' 条重复。');return;}
+   if(d.vpDelete!==undefined){
+    const p=s.vibePool.find(x=>x.id===d.vpDelete);if(!p)return;
+    const users=s.vibes.filter(g=>(g.refs||[]).some(r=>r.poolId===p.id));
+    if(!await appConfirm('从 Vibe 池删除「'+(p.name||'未命名')+'」？'+(users.length?'它会同时从 '+users.length+' 个分组中移除。':'')+'此操作无法撤销。'))return;
+    s.vibePool=s.vibePool.filter(x=>x.id!==p.id);for(const g of s.vibes)g.refs=(g.refs||[]).filter(r=>r.poolId!==p.id);
+    persist();qlRenderVibeArea();st('已从 Vibe 池删除。');
+   }else if(d.vpExport!==undefined){
+    const p=s.vibePool.find(x=>x.id===d.vpExport);if(!p)return;
+    qlVibeDownload([qlVibeExportGroupOf([{p,r:null}],p.name||'vibe')],p.name||'vibe');st('已导出「'+(p.name||'Vibe')+'」。');
+   }else if(d.vgUse!==undefined){
+    const i=s.vibes.findIndex(g=>g.id===d.vgUse),g=s.vibes[i];if(!g)return;
+    if(!g.entries.some(qlVibeEntryHasEncoding)){st('这个分组里没有可用的预编码 Vibe。');return;}
+    s.activeConfigMode='separate';s.activeComboIndex=-1;s.activeVibeIndex=i;persist();syncGenerationConfigControls();saveGenerationSelection();qlRenderVibeArea();st('已整组启用：'+(g.name||'未命名分组'));
+   }else if(d.vgDelete!==undefined){
+    const i=s.vibes.findIndex(x=>x.id===d.vgDelete),g=s.vibes[i];if(!g)return;
+    if(!await appConfirm('删除分组「'+(g.name||'未命名')+'」？池里的 Vibe 不会被删除。'))return;
+    s.vibes=s.vibes.filter(x=>x!==g);
+    if(Number(s.activeVibeIndex)===i)s.activeVibeIndex=-1;
+    else if(Number(s.activeVibeIndex)>i)s.activeVibeIndex=Number(s.activeVibeIndex)-1;
+    qlShiftVibeComboRefs(s,n=>n===i?-1:n>i?n-1:n);
+    persist();qlRenderVibeArea();syncGenerationConfigControls();st('已删除分组（池里的 Vibe 保留）。');
+   }else if(d.vgUnref!==undefined){
+    const [gid,j]=d.vgUnref.split('|'),g=s.vibes.find(x=>x.id===gid);if(!g)return;
+    g.refs.splice(Number(j),1);persist();qlRenderVibeArea();st('已移出分组（池里的 Vibe 保留）。');
+   }else if(d.vgAdd!==undefined){
+    const g=s.vibes.find(x=>x.id===d.vgAdd),sel=b.parentElement.querySelector('[data-vg-addsel]');if(!g||!sel?.value){st('请先选择要添加的 Vibe。');return;}
+    const p=s.vibePool.find(x=>x.id===sel.value);if(!p)return;
+    g.refs.push({poolId:p.id,strength:p.strength??0.6,informationExtracted:p.informationExtracted??1});persist();qlRenderVibeArea();
+   }else if(d.vgExport!==undefined){
+    const g=s.vibes.find(x=>x.id===d.vgExport);if(!g)return;
+    const items=(g.refs||[]).map(r=>({p:s.vibePool.find(x=>x.id===r.poolId),r})).filter(x=>x.p);
+    qlVibeDownload([qlVibeExportGroupOf(items,g.name||'vibe')],g.name||'vibe');st('已导出分组「'+(g.name||'')+'」，仅含当前组。');
+   }
+  });
+ }
 }
 $('#sz-copy-url')?.addEventListener('click',()=>copy($('#sz-vault-url').value));
 $('#sz-copy-token')?.addEventListener('click',()=>copy($('#sz-vault-token').value));
@@ -1358,6 +1765,7 @@ function wireStandaloneGeneration(){
  $('#ql-generate')?.addEventListener('click',runStandaloneGeneration);
  wireViewfinderResultActions();
  wirePresetsEditor();
+ wireVibeEditor();
  renderAppCharacterChoices();
  $('#ql-fast-provider')?.addEventListener('change',()=>{
   const openai=$('#ql-fast-provider').value==='openai';
