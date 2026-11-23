@@ -1485,10 +1485,11 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
     // 留在公共提示词里，不会被错拆成单独的角色分区。
     const person={named:false,tags:[tag]};persons.push(person);
     inline.push(tag);restItems.push({t:tag,p:person});continue;
-   }else if(core&&hasCjk(core)&&!/\s/.test(core)){
-    missing.push(core);
-    if(strip){dropped++;continue;}
    }
+   // 注：这里原来还有一条"裸中文 tag（没有括号也没有权重，比如直接写 黑长直、校园泳装）一律当成
+   // 未登记人名砍掉"的规则，已经去掉——纯语法上根本分不出这是人名还是用户手打的中文外貌/场景词，
+   // 之前会把后者也一起误杀。人名检测只保留上面"(名字:权重, 其他词…)"这种带括号的明确写法；
+   // 裸打的中文词会落到下面 pushPlain，原样放进提示词，不再提示"缺词条"也不会被砍。
   }
   if(!hit){pushPlain(tag);continue;}
   if(used.has(hit.e))continue;

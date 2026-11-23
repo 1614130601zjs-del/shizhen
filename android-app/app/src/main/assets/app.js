@@ -729,7 +729,10 @@ async function qlMakeThumbFromDataUrl(dataUrl){const img=await qlLoadImageSrc(da
 function qlBytesToB64(bytes){let out='';for(let i=0;i<bytes.length;i+=0x8000)out+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(out);}
 async function qlSha256Hex(text){try{const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,'0')).join('');}catch{return (qlUid()+qlUid()+qlUid()+qlUid()).padEnd(64,'0').slice(0,64);}}
 async function qlEncodeVibeRequest(imageB64,informationExtracted,model){
- const c=library,third=c.provider==='novelai-thirdparty';
+ // 注意：NAI Key/第三方地址这些字段只存在 importedSettings 里（走 App 自己的"设置移植"安全存储，
+ // 不会被同步进 vault 快照），不在 library 本体上——这里必须用 cfg()（library+importedSettings
+ // 合并后的结果）取，直接读 library.naiApiKey 永远是空的。
+ const c=cfg(),third=c.provider==='novelai-thirdparty';
  const key=third?(c.naiThirdKey||''):(c.naiApiKey||'');
  if(!key)throw new Error(third?'请先填写 NAI 第三方 API Key。':'请先填写 NovelAI 官网 Key（偏好里的接口设置）。');
  let base=third?String(c.naiThirdEndpoint||'').replace(/\/$/,''):'https://image.novelai.net';
@@ -838,7 +841,7 @@ function collectVibeItems(data,fileName='Vibe 导入',out=[],seen=new WeakSet())
 }
 async function readVibeArchiveJson(file){const buffer=await file.arrayBuffer(),view=new DataView(buffer),bytes=new Uint8Array(buffer),out=[];const u16=o=>view.getUint16(o,true),u32=o=>view.getUint32(o,true);const decoder=new TextDecoder();for(let p=0;p+46<=bytes.length;){if(u32(p)!==0x02014b50){p++;continue;}const method=u16(p+10),compressed=u32(p+20),nameLen=u16(p+28),extraLen=u16(p+30),commentLen=u16(p+32),localOffset=u32(p+42);const name=decoder.decode(bytes.slice(p+46,p+46+nameLen));if(/\.(?:json|naiv4vibe|naiv4vibebundle)$/i.test(name)){if(u32(localOffset)!==0x04034b50)throw new Error('Vibe 压缩包中的文件头无法识别：'+name);const localName=u16(localOffset+26),localExtra=u16(localOffset+28),start=localOffset+30+localName+localExtra,packed=bytes.slice(start,start+compressed);let raw;if(method===0)raw=packed;else if(method===8&&typeof DecompressionStream!=='undefined'){const stream=new Blob([packed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));raw=new Uint8Array(await new Response(stream).arrayBuffer());}else throw new Error('当前浏览器不支持该 Vibe 压缩算法。');try{out.push(JSON.parse(decoder.decode(raw)));}catch{}}p+=46+nameLen+extraLen+commentLen;}return out;}
 async function qlVibeImportFile(file,mode){
- const s=library,naiModel=s.naiModel||'nai-diffusion-4-5-full';
+ const s=library,naiModel=cfg().naiModel||'nai-diffusion-4-5-full';
  let data;
  try{data=JSON.parse(await file.text());}catch{
   const files=await readVibeArchiveJson(file);
@@ -944,7 +947,7 @@ function wireVibeEditor(){
  const modelSelect=$('#ql-vibe-encode-model');
  if(modelSelect){
   modelSelect.innerHTML=QL_VIBE_ENCODE_MODELS.map(([v,l])=>'<option value="'+v+'">'+l+'</option>').join('');
-  modelSelect.value=QL_VIBE_ENCODE_MODELS.some(m=>m[0]===library.naiModel)?library.naiModel:'nai-diffusion-4-5-full';
+  modelSelect.value=QL_VIBE_ENCODE_MODELS.some(m=>m[0]===cfg().naiModel)?cfg().naiModel:'nai-diffusion-4-5-full';
  }
  const infoInput=$('#ql-vibe-encode-info'),infoOut=$('#ql-vibe-encode-info-out');
  if(infoInput){infoInput.oninput=()=>{if(infoOut)infoOut.textContent=Number(infoInput.value).toFixed(2);};infoInput.oninput();}
@@ -1094,6 +1097,54 @@ function importedSettingsStatus(){
  const model=saved.provider==='novelai'||saved.provider==='novelai-thirdparty'?(saved.naiModel||'未设置模型'):(saved.model||'未设置模型');
  target.textContent='已保存设置：'+provider+' · '+model+'。API 凭据已保存在 App 私有加密存储中。';
 }
+// ———— 偏好·NAI 官网账号信息：填好 Key 之后点一下就能看到月卡到期时间、剩余 Anlas 点数、
+// 当前的免费生成额度（usage，NAI 把 V4/V5 这类新模型的"每日限量"做成一个按百分比计费/回满的槽位，
+// 接口里统称 usage，没有再细分到具体某个模型版本，这里按"V5 额度"的叫法展示）。
+// 接口是 NovelAI 官网账号体系的 GET https://api.novelai.net/user/subscription（Bearer 官网 Key），
+// 第三方 NAI 兼容服务一般不提供这个账号接口，所以仅官网模式可用。
+function qlNaiTierLabel(tier){return {0:'Paper（免费）',1:'Tablet',2:'Scroll',3:'Opus'}[Number(tier)]||('未知档位 '+tier);}
+function qlFormatDuration(sec){
+ sec=Math.max(0,Math.round(Number(sec)||0));
+ if(!sec)return '随时';
+ const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+ const parts=[];if(h)parts.push(h+'小时');if(m)parts.push(m+'分钟');if(!h&&!m)parts.push(s+'秒');
+ return parts.join('');
+}
+async function qlFetchNaiSubscription(){
+ const c=cfg();
+ if(c.provider==='novelai-thirdparty')throw new Error('第三方 NAI 兼容服务一般不提供官网账号信息查询，该功能仅支持 NovelAI 官网模式。');
+ const key=String(c.naiApiKey||'').trim();
+ if(!key)throw new Error('请先在上方填写并保存 NovelAI 官网 Key。');
+ const res=await fetch('https://api.novelai.net/user/subscription',{headers:{Authorization:'Bearer '+key}});
+ if(!res.ok){
+  const text=await res.text().catch(()=>'');
+  if(res.status===401)throw new Error('Key 无效或已过期（HTTP 401），请重新填写并保存 NovelAI 官网 Key。');
+  throw new Error('查询失败（HTTP '+res.status+'）'+(text?('：'+text.slice(0,200)):''));
+ }
+ return res.json();
+}
+function qlRenderNaiSubscription(data){
+ const steps=data?.trainingStepsLeft||{},fixed=Number(steps.fixedTrainingStepsLeft)||0,purchased=Number(steps.purchasedTrainingSteps)||0;
+ const usage=data?.usage||null;
+ const expires=Number(data?.expiresAt)?new Date(Number(data.expiresAt)*1000).toLocaleString():'无到期时间';
+ const lines=[
+  '档位：'+esc(qlNaiTierLabel(data?.tier))+(data?.active?'（生效中）':'（未生效）'),
+  '到期时间：'+esc(expires),
+  '剩余点数（Anlas）：'+(fixed+purchased)+'（固定 '+fixed+' + 购买 '+purchased+'）',
+ ];
+ if(usage){
+  lines.push('免费生成额度（V5 等新模型用，按百分比回满）：'+Number(usage.percent||0)+'%'+(Number(usage.purchasedPercent)?'（另有购买加成 '+Number(usage.purchasedPercent)+'%）':'')+(usage.isNegative?'（当前不可用）':'')+'，距下一次 +1% 还需 '+esc(qlFormatDuration(usage.timeUntilNextPercent)));
+ }
+ return lines.map(l=>'<div>'+l+'</div>').join('');
+}
+function wireNaiSubscriptionCheck(){
+ $('#ql-nai-sub-check')?.addEventListener('click',async()=>{
+  const out=$('#ql-nai-sub-info');if(!out)return;
+  out.textContent='正在查询…';
+  try{const data=await qlFetchNaiSubscription();out.innerHTML=qlRenderNaiSubscription(data);}
+  catch(err){out.textContent='查询失败：'+(err?.message||String(err));}
+ });
+}
 $('#sz-import-settings')?.addEventListener('click',()=>{
  try{
   if(!native?.getLibrary||!native?.saveImportedSettings)throw new Error('当前 App 版本尚未提供安全设置移植接口');
@@ -1123,6 +1174,7 @@ $('#sz-refresh-vault')?.addEventListener('click',()=>{try{refresh();set('sz-vaul
 window.ShizhenVault={folderChanged:ready=>set('sz-folder-status',ready?'已选择外部文件夹':'尚未选择外部文件夹')};
 if(native){set('sz-folder-status',native.hasExternalFolder()?'已选择外部文件夹':'尚未选择外部文件夹');loadAppearance();refresh();importedSettingsStatus();}
 wireImportedSettings();
+wireNaiSubscriptionCheck();
 wireAppearance();
 showPage('generate');
 
