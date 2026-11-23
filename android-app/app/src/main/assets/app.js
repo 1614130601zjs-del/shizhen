@@ -1100,7 +1100,9 @@ function importedSettingsStatus(){
 // ———— 偏好·NAI 官网账号信息：填好 Key 之后点一下就能看到月卡到期时间、剩余 Anlas 点数、
 // 当前的免费生成额度（usage，NAI 把 V4/V5 这类新模型的"每日限量"做成一个按百分比计费/回满的槽位，
 // 接口里统称 usage，没有再细分到具体某个模型版本，这里按"V5 额度"的叫法展示）。
-// 接口是 NovelAI 官网账号体系的 GET https://api.novelai.net/user/subscription（Bearer 官网 Key），
+// 接口本来是 NovelAI 官网账号体系的 GET https://api.novelai.net/user/subscription（Bearer 官网 Key），
+// 但这个域名不允许网页跨域直接访问，会报 Failed to fetch；同一个账号接口在 image.novelai.net（生图用的
+// 域名，对第三方网页放开跨域）下也能查到，所以改成请求 image.novelai.net。
 // 第三方 NAI 兼容服务一般不提供这个账号接口，所以仅官网模式可用。
 function qlNaiTierLabel(tier){return {0:'Paper（免费）',1:'Tablet',2:'Scroll',3:'Opus'}[Number(tier)]||('未知档位 '+tier);}
 function qlFormatDuration(sec){
@@ -1115,7 +1117,7 @@ async function qlFetchNaiSubscription(){
  if(c.provider==='novelai-thirdparty')throw new Error('第三方 NAI 兼容服务一般不提供官网账号信息查询，该功能仅支持 NovelAI 官网模式。');
  const key=String(c.naiApiKey||'').trim();
  if(!key)throw new Error('请先在上方填写并保存 NovelAI 官网 Key。');
- const res=await fetch('https://api.novelai.net/user/subscription',{headers:{Authorization:'Bearer '+key}});
+ const res=await fetch('https://image.novelai.net/user/subscription',{headers:{Authorization:'Bearer '+key}});
  if(!res.ok){
   const text=await res.text().catch(()=>'');
   if(res.status===401)throw new Error('Key 无效或已过期（HTTP 401），请重新填写并保存 NovelAI 官网 Key。');

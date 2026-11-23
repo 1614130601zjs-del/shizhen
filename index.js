@@ -6687,8 +6687,11 @@ $('#ql-vault-pull-selected').onclick=async()=>{
 qlBindVibeArea();qlBindWorkshop();{const nr=$('#ql-name-replace');if(nr){nr.value=qlNameReplaceMode();nr.onchange=()=>{const c=cfg();c.nameReplaceEnabled=nr.value!=='off';if(nr.value!=='off')c.nameReplaceMode=nr.value;save();};}}try{renderActivePresets();renderActiveVibes();renderActiveArtists();renderActiveConfigMode();renderBindings();history();renderLibrary();qlVibeShrinkThumbs();}catch(error){console.error('[拾帧 Lite] 初始化列表失败',error);status('列表初始化失败：'+(error?.message||String(error))+'。其他按钮仍可使用，请检查控制台。')}try{renderWorkLibrary();}catch(error){console.error('[拾帧 Lite] 作品库初始化失败',error);}$('#ql-migrate-toggle').onclick=()=>{const panel=$('#ql-migrate-panel');panel.hidden=!panel.hidden;$('#ql-migrate-toggle').setAttribute('aria-expanded',String(!panel.hidden));$('#ql-migrate-toggle').textContent=panel.hidden?'一键迁移画师串':'收起迁移';if(!panel.hidden){$('#ql-migrate-preview').textContent='正在扫描智绘姬与柏宝绘设置，只提取画师串…';panel.scrollIntoView({behavior:'smooth',block:'nearest'});scanChatu8Settings();}};$('#ql-migrate-scan').onclick=scanChatu8Settings;$('#ql-migrate-file-btn').onclick=()=>$('#ql-migrate-file').click();$('#ql-migrate-file').onchange=e=>{const f=e.target.files?.[0];if(f)readMigrationFile(f);};$('#ql-migrate-import').onclick=importChatu8Candidate;
 $('#ql-save-nai').onclick=()=>{cfg().naiApiKey=$('#ql-nai-key').value.trim();save();status('NAI 官网 Key 已保存。');};$('#ql-save-nai-third').onclick=()=>{cfg().naiThirdEndpoint=$('#ql-nai-third-endpoint').value.trim().replace(/\/$/,'');cfg().naiThirdKey=$('#ql-nai-third-key').value.trim();save();status('NAI 第三方连接设置已保存。');};
 // 偏好·NAI 官网账号信息：到期时间/剩余 Anlas 点数/V4-V5 这类新模型的免费生成额度（usage，接口没有再
-// 细分到具体某个模型版本，统一叫"额度"展示）。接口是 NovelAI 官网账号体系自己的，Bearer 官网 Key；
-// 第三方 NAI 兼容服务一般不提供这个账号接口，仅官网模式可用。
+// 细分到具体某个模型版本，统一叫"额度"展示）。
+// 注意：api.novelai.net/user/subscription 不允许网页直接跨域访问，浏览器里 fetch 会被拦成
+// "Failed to fetch"。但这同一个账号接口在 image.novelai.net（就是生图用的那个域名，本来就对
+// 第三方网页放开跨域）下也能查到，所以改成请求 image.novelai.net/user/subscription，不用再经过
+// 酒馆后端转发，也不需要额外在酒馆本体里重复填一遍 Key。
 function qlNaiTierLabel(tier){return {0:'Paper（免费）',1:'Tablet',2:'Scroll',3:'Opus'}[Number(tier)]||('未知档位 '+tier);}
 function qlFormatDuration(sec){
  sec=Math.max(0,Math.round(Number(sec)||0));
@@ -6702,7 +6705,7 @@ async function qlFetchNaiSubscription(){
  if(c.provider==='novelai-thirdparty')throw new Error('第三方 NAI 兼容服务一般不提供官网账号信息查询，该功能仅支持 NovelAI 官网模式。');
  const key=String(c.naiApiKey||'').trim();
  if(!key)throw new Error('请先在上方填写并保存 NovelAI 官网 Key。');
- const res=await fetch('https://api.novelai.net/user/subscription',{headers:{Authorization:'Bearer '+key}});
+ const res=await fetch('https://image.novelai.net/user/subscription',{headers:{Authorization:'Bearer '+key}});
  if(!res.ok){
   const text=await res.text().catch(()=>'');
   if(res.status===401)throw new Error('Key 无效或已过期（HTTP 401），请重新填写并保存 NovelAI 官网 Key。');
