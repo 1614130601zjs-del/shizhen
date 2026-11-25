@@ -839,6 +839,15 @@ function qlNaiQualitySuffix(model,mode){
  if(/^nai-diffusion-3$/i.test(m))return 'best quality, amazing quality, very aesthetic, absurdres';
  return '';
 }
+// 条漫分镜台词 → NAI 官方 Text Rendering 语法（Text: "…"，每条之间空行分隔，
+// 必须整段放在 base prompt 最末尾；官方文档写明只有 V5 支持中文画字，V4/V4.5/V3 只支持英文，
+// 中文喂进去大概率画不出来，所以外层只在确认是 V5 模型时才会把这段塞进最终提示词）。
+function qlBuildNaiTextBlock(panelTexts){
+ const lines=(Array.isArray(panelTexts)?panelTexts:[]).map(t=>String(t||'').trim()).filter(Boolean);
+ if(!lines.length)return '';
+ const body=lines.map(t=>'Text: "'+t.replace(/"/g,'“').replace(/\n+/g,' ')+'"').join('\n\n');
+ return 'text, english text, speech bubble\n'+body;
+}
 function qlNaiAppendQualityTags(prompt,model,mode){
  // 官网「Add Quality Tags」由服务端在 qualityToggle=true 时自动追加；这里只在 V5 轻量模式（服务端无此档位）手动追加，避免重复注入。
  const base=String(prompt||'').trim();
@@ -865,14 +874,14 @@ function qlWithExtraNeg(negative,c){const extra=String((c||cfg()).extraNegative|
 // 生图请求：每个请求一个 AbortController；排队里的和正在跑的都能一起取消；开始执行后超过上限秒数自动中止。
 const qlActiveAborts=new Set();let qlCurSignal=null;
 function qlCancelAllImages(){const n=qlActiveAborts.size;for(const ac of [...qlActiveAborts]){try{ac._qlWhy='cancel';ac.abort();}catch{}}return n;}
-async function requestImage(prompt, negativeOverride, vibeItem=null, naiPromptData=null, edit=null, sizeOv=''){
+async function requestImage(prompt, negativeOverride, vibeItem=null, naiPromptData=null, edit=null, sizeOv='', extraTextBlock=''){
  const ac=new AbortController();qlActiveAborts.add(ac);
  const queued=qlImageRequestQueue.then(async()=>{
   if(ac.signal.aborted)throw new Error('已取消');
   const sec=Number(cfg().requestTimeoutSec??180);let timer=null;
   if(Number.isFinite(sec)&&sec>0)timer=setTimeout(()=>{ac._qlWhy='timeout';ac.abort();},sec*1000);
   qlCurSignal=ac.signal;
-  try{return await requestImageUnlocked(prompt,negativeOverride,vibeItem,naiPromptData,edit,sizeOv);}
+  try{return await requestImageUnlocked(prompt,negativeOverride,vibeItem,naiPromptData,edit,sizeOv,extraTextBlock);}
   catch(e){if(ac.signal.aborted||e?.name==='AbortError')throw new Error(ac._qlWhy==='timeout'?'请求超时（超过 '+sec+' 秒没有返回），请检查网络后重试。':'已取消');throw e;}
   finally{clearTimeout(timer);qlActiveAborts.delete(ac);if(qlCurSignal===ac.signal)qlCurSignal=null;}
  });
@@ -880,7 +889,7 @@ async function requestImage(prompt, negativeOverride, vibeItem=null, naiPromptDa
  queued.catch(()=>{}).finally(()=>qlActiveAborts.delete(ac));
  return queued;
 }
-async function requestImageUnlocked(prompt, negativeOverride, vibeItem=null, naiPromptData=null, edit=null, sizeOv=''){
+async function requestImageUnlocked(prompt, negativeOverride, vibeItem=null, naiPromptData=null, edit=null, sizeOv='', extraTextBlock=''){
  const signal=qlCurSignal||undefined;
  const c=cfg();
  const ov=String(sizeOv||'').split('x').map(Number),ovOk=!edit&&ov.length===2&&ov.every(n=>Number.isFinite(n)&&n>0);
@@ -936,7 +945,8 @@ async function requestImageUnlocked(prompt, negativeOverride, vibeItem=null, nai
    parameters.reference_image_multiple_cached=[];
    const structured= naiPromptData&&Array.isArray(naiPromptData.characters)&&naiPromptData.characters.length>0
     ?naiPromptData:null;
-   const baseCaption=qlNaiAppendQualityTags(structured?String(structured.basePrompt||prompt):prompt,naiModel,c.naiQualityMode||'standard');
+   let baseCaption=qlNaiAppendQualityTags(structured?String(structured.basePrompt||prompt):prompt,naiModel,c.naiQualityMode||'standard');
+   if(extraTextBlock&&isV5)baseCaption=baseCaption+'\n'+extraTextBlock;
    // 自动站位（设置里可选，默认关）：两个及以上角色时，按出现顺序从左到右排开，坐标吸附到 NAI 的 5×5 网格（0.1/0.3/0.5/0.7/0.9）。
    const coordsOn=!!c.naiAutoCoords&&!!structured&&structured.characters.length>=2;
    const centerOf=i=>coordsOn?{x:qlAutoCoordX(i,structured.characters.length),y:0.5}:{x:0.5,y:0.5};
@@ -1323,9 +1333,13 @@ function qlWorkLibraryIndex(s=cfg()){
  return map;
 }
 // ===== 通用词（质量 / 身体结构）自动注入 =====
-// 数据：s.genericWords={on,position,sets:[{id,name,gender:'female'|'male'|'any',text}],pick:{'*':{female,male,any},[角色卡key]:{…}}}
-// pick 的值：词组 id；'none'＝明确不用；缺省＝跟随全局默认。默认整体关闭。
-function qlGenericCfg(){const g=cfg().genericWords;return g&&typeof g==='object'?g:{};}
+// 数据：s.genericWords={on,anyOn,position,sets:[{id,name,gender:'female'|'male'|'any',text,negative}],pick:{female,male,any}}
+// pick 的值：词组 id；'none'＝明确不用；any 缺省＝自动挑第一套（常驻）；男/女缺省＝不用。全局生效，不再区分角色卡（旧版按角色卡分开的选择会自动迁移成全局一份）。
+function qlGenericCfg(){
+ const g=cfg().genericWords,o=g&&typeof g==='object'?g:{};
+ if(o.pick&&typeof o.pick==='object'&&o.pick['*']&&typeof o.pick['*']==='object')o.pick={...o.pick['*']};
+ return o;
+}
 function qlMergeWords(base,extra,position){
  const b=String(base||'').trim().replace(/[,，\s]+$/,''),x=String(extra||'').trim().replace(/[,，\s]+$/,'');
  if(!x)return b;if(!b)return x;
@@ -1343,64 +1357,74 @@ function qlDetectGender(entry){
  const ml=/\b(?:[1-9]boys?|boys?|males?|[1-9]?m[ae]n|guy)\b/.test(t)||/(?:男性|男生|少年|男孩|男人)/.test(t);
  if(f&&!ml)return 'female';if(ml&&!f)return 'male';return '';
 }
-function qlPickedWords(kind,cardKey){
- const g=qlGenericCfg();if(!g.on||!Array.isArray(g.sets))return '';
- const pick=g.pick||{};let id=pick[String(cardKey??'')]?.[kind];if(id==null||id==='')id=pick['*']?.[kind];
- if(!id||id==='none')return '';
- const set=g.sets.find(x=>x&&x.id===id&&x.gender===kind);return set?String(set.text||'').trim():'';
+function qlPickedSet(kind){
+ const g=qlGenericCfg();if(!g.on||!Array.isArray(g.sets))return null;
+ const pick=g.pick||{};let id=pick[kind];
+ if((id==null||id==='')&&kind==='any'){const first=g.sets.find(x=>x&&x.gender==='any');if(first)id=first.id;} // 通用画面默认常驻：没手动选过就自动用第一套
+ if(!id||id==='none')return null;
+ return g.sets.find(x=>x&&x.id===id&&x.gender===kind)||null;
 }
-function qlGenericStatusHtml(card){
+function qlPickedWords(kind){return String(qlPickedSet(kind)?.text||'').trim();}
+function qlPickedNegative(kind){return String(qlPickedSet(kind)?.negative||'').trim();}
+function qlGenericStatusHtml(){
  const g=qlGenericCfg();
  if(!g.on)return '<div class="ql-gw-status is-off">● 当前：<b>未启用</b>（上面的开关没打开，不会注入任何通用词）</div>';
- const pick=g.pick||{},sets=Array.isArray(g.sets)?g.sets:[];
- const nameOf=k=>{let id=pick[String(card??'')]?.[k];if(id==null||id==='')id=pick['*']?.[k];if(!id||id==='none')return '不使用';const x=sets.find(v=>v&&v.id===id&&v.gender===k);return x?esc(x.name||'未命名'):'不使用';};
- const warn=qlNameReplaceMode(cfg())==='off'?'<br>⚠ 「角色名处理」现在是关闭的，男 / 女词不会注入，只有「通用词（所有画面）」会生效。':'';
- return '<div class="ql-gw-status is-on">● 当前：<b>已启用</b>（'+(g.position==='front'?'放最前':'放最后')+'）<br>女：'+nameOf('female')+' ｜ 男：'+nameOf('male')+' ｜ 所有画面：'+nameOf('any')+warn+'<br><span class="ql-muted">验证：重新生成一张图，打开详情页看「最终提交给 NAI 的完整提示词」，末尾应有你选的词。</span></div>';
+ const nameOf=k=>{const x=qlPickedSet(k);return x?esc(x.name||'未命名'):'不使用';};
+ const warn=qlNameReplaceMode(cfg())==='off'?'<br>⚠ 「角色名处理」现在是关闭的，男 / 女词不会注入，只有「通用画面」会生效。':'';
+ const anyLine=g.anyOn===false?'已手动关闭':nameOf('any');
+ return '<div class="ql-gw-status is-on">● 当前：<b>已启用</b>（'+(g.position==='front'?'放最前':'放最后')+'）<br>女：'+nameOf('female')+' ｜ 男：'+nameOf('male')+' ｜ 通用画面：'+anyLine+warn+'<br><span class="ql-muted">验证：重新生成一张图，打开详情页看「最终提交给 NAI 的完整提示词」，末尾应有你选的词；配了负面的话，负面提示词里也会带上。</span></div>';
 }
-function qlWithGenderWords(body,gender,cardKey){
+function qlWithGenderWords(body,gender){
  if(gender!=='female'&&gender!=='male')return body;
- const text=qlPickedWords(gender,cardKey);if(!text)return body;
+ const text=qlPickedWords(gender);if(!text)return body;
  return qlMergeWords(body,text,qlGenericCfg().position==='front'?'front':'back');
 }
-function qlWithAnyWords(text,cardKey){
- const w=qlPickedWords('any',cardKey);if(!w)return text;
+function qlWithAnyWords(text){
+ if(qlGenericCfg().anyOn===false)return text;
+ const w=qlPickedWords('any');if(!w)return text;
  return qlMergeWords(text,w,qlGenericCfg().position==='front'?'front':'back');
+}
+// 把当前生效的通用词负面（通用画面 + 场景里用到的性别）合并进负面提示词；noGeneric（彩蛋 / Q 版）由调用方跳过。
+function qlGenericMergeNegative(negative,kinds){
+ const g=qlGenericCfg();if(!g.on)return String(negative||'');
+ let out=String(negative||'');
+ if(g.anyOn!==false){const n=qlPickedNegative('any');if(n)out=qlMergeWords(out,n,'back');}
+ for(const k of (Array.isArray(kinds)?kinds:[])){if(k!=='female'&&k!=='male')continue;const n=qlPickedNegative(k);if(n)out=qlMergeWords(out,n,'back');}
+ return out;
 }
 function qlBindGenericWordsUi(){
  const $q=id=>document.getElementById(id);const box=$q('ql-gw-box');if(!box)return;
- const g=()=>{const s=cfg();if(!s.genericWords||typeof s.genericWords!=='object')s.genericWords={};const o=s.genericWords;if(!Array.isArray(o.sets))o.sets=[];if(!o.pick||typeof o.pick!=='object')o.pick={};return o;};
- const KINDS=[['female','女性通用词'],['male','男性通用词'],['any','通用词（所有画面，加在主提示词）']];
+ const g=()=>{const s=cfg();if(!s.genericWords||typeof s.genericWords!=='object')s.genericWords={};const o=s.genericWords;if(!Array.isArray(o.sets))o.sets=[];if(!o.pick||typeof o.pick!=='object')o.pick={};if(o.pick['*']&&typeof o.pick['*']==='object'){o.pick={...o.pick['*']};}return o;};
+ const KINDS=[['female','女性通用词'],['male','男性通用词'],['any','通用画面（正向，加在主提示词）']];
  const editing={female:null,male:null,any:null};
- const curCard=()=>{const c=getContext();return c?.characterId==null?'':String(c.characterId);};
- const curCardName=()=>{const c=getContext();return String(c?.name2||'当前角色卡');};
  const paint=()=>{
-  const o=g(),card=curCard(),scope=$q('ql-gw-scope')?.value==='card'&&card!==''?card:'*';
-  box.innerHTML=qlGenericStatusHtml(card)+'<label class="ql-check"><input type="checkbox" id="ql-gw-on" '+(o.on?'checked':'')+'> 启用通用词注入（默认关闭）<b class="ql-check-state'+(o.on?' is-on':'')+'">'+(o.on?'　✓ 已开启':'　已关闭')+'</b></label>'
+  const o=g();
+  box.innerHTML=qlGenericStatusHtml()+'<label class="ql-check"><input type="checkbox" id="ql-gw-on" '+(o.on?'checked':'')+'> 启用通用词注入（默认关闭）<b class="ql-check-state'+(o.on?' is-on':'')+'">'+(o.on?'　✓ 已开启':'　已关闭')+'</b></label>'
+  +'<label class="ql-check"><input type="checkbox" id="ql-gw-any-on" '+(o.anyOn!==false?'checked':'')+'> 通用画面常驻生效（取消勾选则完全不注入，不影响男 / 女词）<b class="ql-check-state'+(o.anyOn!==false?' is-on':'')+'">'+(o.anyOn!==false?'　✓ 已开启':'　已关闭')+'</b></label>'
   +'<div class="ql-row"><label for="ql-gw-pos">位置</label><select id="ql-gw-pos"><option value="back">放在最后</option><option value="front">放在最前</option></select></div>'
-  +'<div class="ql-row"><label for="ql-gw-scope">选择生效范围</label><select id="ql-gw-scope"><option value="all">全局默认</option>'+(card!==''?'<option value="card"'+(scope!=='*'?' selected':'')+'>仅「'+esc(curCardName())+'」</option>':'')+'</select></div>'
   +KINDS.map(([k,label])=>{
-    const sets=o.sets.filter(x=>x&&x.gender===k),pk=o.pick[scope]?.[k];
+    const sets=o.sets.filter(x=>x&&x.gender===k),pk=o.pick[k];
     const e=editing[k],es=e&&e!=='new'?sets.find(x=>x.id===e):null;
     return '<div class="ql-gw-kind" data-kind="'+k+'"><strong>'+label+'</strong><div class="ql-row"><select data-gw-pick="'+k+'">'
-     +(scope!=='*'?'<option value="">跟随全局默认</option>':'')+'<option value="none"'+(pk==='none'?' selected':'')+'>不使用</option>'
+     +'<option value="none"'+(pk==='none'?' selected':'')+'>不使用</option>'
      +sets.map(x=>'<option value="'+esc(x.id)+'"'+(pk===x.id?' selected':'')+'>'+esc(x.name||'未命名')+'</option>').join('')+'</select>'
      +'<button type="button" class="menu_button" data-gw-new="'+k+'">＋新建</button>'+(pk&&pk!=='none'&&sets.some(x=>x.id===pk)?'<button type="button" class="menu_button" data-gw-edit="'+k+'">编辑</button>':'')+'</div>'
-     +(e?'<div class="ql-gw-editor"><input data-gw-name="'+k+'" placeholder="词组名称，例如：通用女 / 精致画风" value="'+esc(es?.name||'')+'"><textarea data-gw-text="'+k+'" placeholder="例如：slim waist, best quality">'+esc(es?.text||'')+'</textarea><div class="ql-row"><button type="button" class="menu_button ql-primary" data-gw-save="'+k+'">保存</button>'+(es?'<button type="button" class="menu_button" data-gw-del="'+k+'">删除</button>':'')+'<button type="button" class="menu_button" data-gw-cancel="'+k+'">取消</button></div></div>':'')
+     +(e?'<div class="ql-gw-editor"><input data-gw-name="'+k+'" placeholder="词组名称，例如：通用女 / 精致画风" value="'+esc(es?.name||'')+'"><textarea data-gw-text="'+k+'" placeholder="正面词，例如：slim waist, best quality">'+esc(es?.text||'')+'</textarea><textarea data-gw-neg="'+k+'" placeholder="负面词（可留空），例如：extra fingers, bad anatomy">'+esc(es?.negative||'')+'</textarea><div class="ql-row"><button type="button" class="menu_button ql-primary" data-gw-save="'+k+'">保存</button>'+(es?'<button type="button" class="menu_button" data-gw-del="'+k+'">删除</button>':'')+'<button type="button" class="menu_button" data-gw-cancel="'+k+'">取消</button></div></div>':'')
      +'</div>';}).join('');
   $q('ql-gw-pos').value=o.position==='front'?'front':'back';
   $q('ql-gw-on').onchange=()=>{g().on=$q('ql-gw-on').checked;save();paint();};
+  $q('ql-gw-any-on').onchange=()=>{g().anyOn=$q('ql-gw-any-on').checked;save();paint();};
   $q('ql-gw-pos').onchange=()=>{g().position=$q('ql-gw-pos').value==='front'?'front':'back';save();paint();};
-  $q('ql-gw-scope').onchange=paint;
-  box.querySelectorAll('[data-gw-pick]').forEach(sel=>sel.onchange=()=>{const o=g(),k=sel.dataset.gwPick;if(!o.pick[scope])o.pick[scope]={};if(sel.value==='')delete o.pick[scope][k];else o.pick[scope][k]=sel.value;save();paint();});
+  box.querySelectorAll('[data-gw-pick]').forEach(sel=>sel.onchange=()=>{const o=g(),k=sel.dataset.gwPick;o.pick[k]=sel.value;save();paint();});
   box.querySelectorAll('[data-gw-new]').forEach(b=>b.onclick=()=>{editing[b.dataset.gwNew]='new';paint();});
-  box.querySelectorAll('[data-gw-edit]').forEach(b=>b.onclick=()=>{const k=b.dataset.gwEdit;editing[k]=g().pick[scope]?.[k]||g().pick['*']?.[k]||'new';paint();});
+  box.querySelectorAll('[data-gw-edit]').forEach(b=>b.onclick=()=>{const k=b.dataset.gwEdit;editing[k]=g().pick[k]||'new';paint();});
   box.querySelectorAll('[data-gw-cancel]').forEach(b=>b.onclick=()=>{editing[b.dataset.gwCancel]=null;paint();});
   box.querySelectorAll('[data-gw-save]').forEach(b=>b.onclick=()=>{
-   const k=b.dataset.gwSave,o=g(),name=box.querySelector('[data-gw-name="'+k+'"]').value.trim()||'未命名',text=box.querySelector('[data-gw-text="'+k+'"]').value.trim();
+   const k=b.dataset.gwSave,o=g(),name=box.querySelector('[data-gw-name="'+k+'"]').value.trim()||'未命名',text=box.querySelector('[data-gw-text="'+k+'"]').value.trim(),neg=box.querySelector('[data-gw-neg="'+k+'"]').value.trim();
    if(!text)return;let item=editing[k]!=='new'?o.sets.find(x=>x.id===editing[k]):null;
-   if(item){item.name=name;item.text=text;}else{item={id:'gw-'+Math.random().toString(36).slice(2,9),name,gender:k,text};o.sets.push(item);if(!o.pick[scope])o.pick[scope]={};o.pick[scope][k]=item.id;}
+   if(item){item.name=name;item.text=text;item.negative=neg;}else{item={id:'gw-'+Math.random().toString(36).slice(2,9),name,gender:k,text,negative:neg};o.sets.push(item);o.pick[k]=item.id;}
    editing[k]=null;save();paint();});
-  box.querySelectorAll('[data-gw-del]').forEach(b=>b.onclick=()=>{const k=b.dataset.gwDel,o=g(),id=editing[k];o.sets=o.sets.filter(x=>x.id!==id);for(const sc of Object.values(o.pick))if(sc[k]===id)delete sc[k];editing[k]=null;save();paint();});
+  box.querySelectorAll('[data-gw-del]').forEach(b=>b.onclick=()=>{const k=b.dataset.gwDel,o=g(),id=editing[k];o.sets=o.sets.filter(x=>x.id!==id);if(o.pick[k]===id)delete o.pick[k];editing[k]=null;save();paint();});
  };
  paint();
 }
@@ -1541,13 +1565,13 @@ function qlReplaceCharacterNames(prompt,context=getContext(),opts={}){
  if(/\b(?:[1-9]girls?|girls?|females?|[1-9]?wom[ae]n)\b/i.test(restText))kinds.add('female');
  if(/\b(?:[1-9]boys?|boys?|males?|[1-9]?m[ae]n)\b/i.test(restText))kinds.add('male');
  let common='';
- if(kinds.size===1){common=qlPickedWords([...kinds][0],cardKey);}
+ if(kinds.size===1){common=qlPickedWords([...kinds][0]);}
  else if(kinds.size>1){
-  if(useChars){for(const c of characters)c.prompt=qlWithGenderWords(c.prompt,c.gender,cardKey);}
-  else{for(const c of named){c.body=qlWithGenderWords(c.body,c.gender,cardKey);inline[c.slot]=c.body;}}
-  return {text:inline.join(', '),rest:restText,characters,missing:missingUnique,common:''};
+  if(useChars){for(const c of characters)c.prompt=qlWithGenderWords(c.prompt,c.gender);}
+  else{for(const c of named){c.body=qlWithGenderWords(c.body,c.gender);inline[c.slot]=c.body;}}
+  return {text:inline.join(', '),rest:restText,characters,missing:missingUnique,common:'',kinds:[...kinds]};
  }
- return {text:inline.join(', '),rest:restText,characters,missing:missingUnique,common};
+ return {text:inline.join(', '),rest:restText,characters,missing:missingUnique,common,kinds:[...kinds]};
 }
 // NAI V4 角色提示词以 girl / boy / other 开头（不带数字）：1girl→girl、1boy→boy，保留权重；去掉 solo；开头词缺失且性别已知时补上。
 function qlNaiCharSplit(tags,gender){
@@ -1611,15 +1635,15 @@ function resolveChatImageGeneration(prompt, context=getContext(), kindHint=''){
 function qlResolveWithNames(prompt,context,resolveFn,opts={}){
  const sk0=qlSplitKind(prompt);prompt=sk0.prompt;const noGeneric=sk0.kind==='egg'||!!opts.noGeneric; // 彩蛋多是 Q 版 / 搞怪图：不注入体型通用词，否则容易被拉回正常比例
  const nr=qlReplaceCharacterNames(prompt,context);
- const cardK=context?.characterId==null?'':String(context.characterId);
- const withCommon=t=>noGeneric?t:qlMergeWords(qlWithAnyWords(t,cardK),nr.common||'',qlGenericCfg().position==='front'?'front':'back');
+ const withCommon=t=>noGeneric?t:qlMergeWords(qlWithAnyWords(t),nr.common||'',qlGenericCfg().position==='front'?'front':'back');
  const base=resolveFn(withCommon(nr.text));
  let naiPromptData=null;
  if(nr.characters.length&&qlNameReplaceMode(cfg())==='characters'){
   const split=resolveFn(withCommon(nr.rest));
   naiPromptData={basePrompt:split.prompt,characters:nr.characters};
  }
- return {...base,naiPromptData};
+ const negative=noGeneric?base.negative:qlGenericMergeNegative(base.negative,nr.kinds);
+ return {...base,negative,naiPromptData};
 }
 async function requestWithActiveSettings(prompt, negativeOverride){
  const resolved=resolveActiveGeneration(prompt,negativeOverride);
@@ -3921,7 +3945,7 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 <div class="ql-card ql-viewfinder-card"><div class="ql-viewfinder-heading"><h3>图片放置区</h3><div class="ql-viewfinder-actions" role="group" aria-label="图片操作"><span id="ql-gen-indicator" class="ql-gen-indicator" role="status" hidden>正在生图…</span><button id="ql-generate" class="menu_button ql-viewfinder-icon-button" type="button" aria-label="生成一张" title="生成一张"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 8.5h3l1.5-2h7l1.5 2h3A1.5 1.5 0 0 1 21.5 10v8A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5Z"/><circle cx="12" cy="13.5" r="3.2"/><path d="M17.5 11h.01"/></svg></button><button id="ql-result-favorite" class="menu_button ql-viewfinder-icon-button" type="button" aria-label="收藏到角色相册" title="收藏到角色相册" disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></svg></button><button id="ql-result-enlarge" class="menu_button ql-viewfinder-icon-button" type="button" aria-label="放大查看" title="放大查看" disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 5 5"/></svg></button></div></div><p class="ql-muted">生成后可收藏图片，或自适应屏幕查看大图。</p><div class="ql-viewfinder-album-target"><label for="ql-result-album-target">收藏目标相册</label><select id="ql-result-album-target"><option value="">请选择角色卡相册</option></select><button id="ql-result-album-target-save" class="menu_button" type="button">保存</button></div><div class="ql-viewfinder-layout"><div id="ql-result" class="ql-image-stage"><div class="ql-image-placeholder">等待生成图片</div></div></div></div>
 
 <div class="ql-card ql-llm-tag-box"><div class="ql-prompt-label-row"><label for="ql-prompt-zh">中文转Tag（可选）</label></div><textarea id="ql-prompt-zh" placeholder="用中文描述想要的画面，点「转换为Tag」会调用LLM转换成画面提示词（会整体替换下面的内容）"></textarea><div class="ql-row"><button id="ql-llm-tag-convert" type="button" class="menu_button ql-primary">转换为Tag</button><span id="ql-llm-tag-status" class="ql-muted"></span></div></div><div class="ql-card"><div class="ql-prompt-label-row"><label for="ql-prompt">画面提示词</label><button id="ql-prompt-clear" type="button" class="menu_button">清空</button></div><textarea id="ql-prompt" placeholder="画面提示词"></textarea></div>
-<div class="ql-card ql-viewfinder-roles-card"><div class="ql-section-heading"><div><h3>角色外貌</h3><p class="ql-muted">提示词里的 boy A / girl B / character A / char1 或 1girl / 2girls 等标记会自动生成对应的外貌栏位；外貌会作为 NAI 的「角色提示词」单独提交（不再插进正文里），也可以手动填写、清空或从角色词库导入。</p></div><button id="ql-role-add" type="button" class="menu_button">添加角色</button></div><label class="ql-check ql-vf-generic-row"><input type="checkbox" id="ql-vf-generic"> 取景区注入通用词（体型 / 质量，需先在「角色词条库」里启用）<b class="ql-check-state" id="ql-vf-generic-state"></b></label><p class="ql-muted">提示词里已经写了体型时，可以关掉这一项，避免重复。</p><div id="ql-viewfinder-roles"></div><details class="ql-final-preview"><summary>查看最终提交给 NAI 的完整提示词</summary><pre id="ql-final-prompt-text"></pre><div class="ql-row"><button id="ql-final-prompt-copy" type="button" class="menu_button">复制完整提示词</button></div><p class="ql-muted">有角色外貌时分成两块提交：Base Prompt 是画师串、质量词、动作与场景；Character Prompts 是各角色的外貌，按角色 1、2…顺序排列。没有角色外貌时只提交一整段。你输入的原始画面提示词不会被改写。</p></details></div>
+<div class="ql-card ql-viewfinder-roles-card"><div class="ql-section-heading"><div><h3>角色外貌</h3><p class="ql-muted">提示词里的 boy A / girl B / character A / char1 或 1girl / 2girls 等标记会自动生成对应的外貌栏位；外貌会作为 NAI 的「角色提示词」单独提交（不再插进正文里），也可以手动填写、清空或从角色词库导入。</p></div><button id="ql-role-add" type="button" class="menu_button">添加角色</button></div><label class="ql-check ql-vf-generic-row"><input type="checkbox" id="ql-vf-generic"> 取景区注入男 / 女体型词（需先在「预设 → 通用词」里启用并选好词组）<b class="ql-check-state" id="ql-vf-generic-state"></b></label><p class="ql-muted">只管男 / 女体型词；提示词里已经写了体型时可以关掉这一项，避免重复。「通用画面」不受这个开关影响，常驻生效，要关可以去「预设 → 通用词」里单独关。</p><div id="ql-viewfinder-roles"></div><details class="ql-final-preview"><summary>查看最终提交给 NAI 的完整提示词</summary><pre id="ql-final-prompt-text"></pre><div class="ql-row"><button id="ql-final-prompt-copy" type="button" class="menu_button">复制完整提示词</button></div><p class="ql-muted">有角色外貌时分成两块提交：Base Prompt 是画师串、质量词、动作与场景；Character Prompts 是各角色的外貌，按角色 1、2…顺序排列。没有角色外貌时只提交一整段。你输入的原始画面提示词不会被改写。</p></details></div>
 <div class="ql-card"><h3>影像配置</h3><label for="ql-active-config-mode">选择方式</label><select id="ql-active-config-mode"><option value="combo">选择组合（使用预设）</option><option value="separate">选择画师串 + 选择 Vibe</option></select><div id="ql-combo-config-row"><label for="ql-active-preset">选择预设组合</label><select id="ql-active-preset"><option value="-1">不使用组合</option></select></div><div id="ql-separate-config-row" hidden><label for="ql-active-artist">选择画师串</label><select id="ql-active-artist"><option value="-1">不使用画师串</option></select><label for="ql-active-vibe">选择 Vibe</label><select id="ql-active-vibe"><option value="-1">不使用 Vibe</option></select></div><div class="ql-row"><button id="ql-apply-preset" class="menu_button" type="button">应用组合</button><button id="ql-open-preset" class="menu_button" type="button">管理配置</button></div><p class="ql-muted">第一种直接使用已保存的预设组合；第二种分别选择画师串和 Vibe，两项可以独立设置。角色卡默认组合在「配置 → 预设」中管理。</p></div>
 <div class="ql-card"><h3>模型参数</h3><label for="ql-fast-provider">生图后端</label><select id="ql-fast-provider"><option value="novelai">NovelAI 官网</option><option value="novelai-thirdparty">NovelAI 第三方</option></select><div id="ql-fast-openai" hidden><input id="ql-fast-model" value="gpt-image-1"><select id="ql-fast-size"><option value="auto">auto</option><option>1024x1024</option></select><select id="ql-fast-quality"><option>medium</option></select></div><div id="ql-fast-nai" hidden><label>NovelAI 模型</label><select id="ql-fast-nai-model"><option value="nai-diffusion-5-full">V5 Full（5F）</option><option value="nai-diffusion-5-curated">V5 Curated（5C）</option><option value="nai-diffusion-4-5-full">V4.5 Full</option><option value="nai-diffusion-4-5-curated">V4.5 Curated</option><option value="nai-diffusion-4-full">V4 Full</option><option value="nai-diffusion-4-curated">V4 Curated</option><option value="nai-diffusion-3">Anime V3</option><option value="nai-diffusion-furry-3">Furry V3</option></select><div class="ql-row"><div><label>画面尺寸预设</label><select id="ql-fast-nai-size-preset"><option value="832x1216">竖版 · 832 × 1216</option><option value="768x1344">长竖版 · 768 × 1344</option><option value="1024x1024">正方形 · 1024 × 1024</option><option value="1216x832">横版 · 1216 × 832</option><option value="1344x768">宽横版 · 1344 × 768</option></select><input id="ql-fast-nai-width" type="hidden"><input id="ql-fast-nai-height" type="hidden"></div></div><details class="ql-nai-advanced"><summary>高级生成设置（不常调整）</summary><div class="ql-row"><div><label>步数</label><input id="ql-fast-nai-steps" type="number" min="1" max="50"></div><div><label>CFG Scale</label><input id="ql-fast-nai-scale" type="number" min="1" max="20" step="0.5"></div></div><div class="ql-row"><div><label>采样器</label><select id="ql-fast-nai-sampler"><option value="k_euler_ancestral">Euler Ancestral</option><option value="k_euler">Euler</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_2m">DPM++ 2M</option><option value="k_dpmpp_sde">DPM++ SDE</option><option value="k_dpmpp_2m_sde">DPM++ 2M SDE</option><option value="ddim_v3">DDIM（仅 V3 模型）</option></select></div><div><label>调度器</label><select id="ql-fast-nai-scheduler"><option value="karras">Karras</option><option value="native">Native</option><option value="exponential">Exponential</option><option value="polyexponential">Polyexponential</option></select></div></div><div class="ql-row"><div><label for="ql-fast-nai-quality">质量标签</label><select id="ql-fast-nai-quality"><option value="standard">标准</option><option value="light">轻量（仅 V5）</option><option value="off">关闭</option></select></div><div><label for="ql-fast-nai-uc">Undesired Content</label><select id="ql-fast-nai-uc"><option value="0">Heavy</option><option value="1">Light</option><option value="2">Furry</option><option value="3">Human</option><option value="4">None</option></select></div></div><label for="ql-fast-nai-seed">固定 Seed（留空则随机）</label><input id="ql-fast-nai-seed" type="number" min="0" max="2147483647" placeholder="随机 Seed"><label class="ql-inline-check"><input id="ql-fast-nai-normalize" type="checkbox"> 归一化 Vibe 参考强度</label><p class="ql-muted">开启后会自动归一化 V4/V4.5 多条 Vibe 的强度；关闭则按每条参考的原始强度发送。</p></details></div><p id="ql-status" class="ql-muted" role="status"></p></div>
 </section>
@@ -3933,17 +3957,18 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 <div class="ql-row"><button id="ql-ws-run" type="button" class="menu_button">开始重绘</button></div><p id="ql-ws-status" class="ql-muted" role="status"></p><div id="ql-ws-result"></div></div></section>
 </div>
 <div class="ql-page" data-page-panel="library" role="tabpanel" hidden>
-<nav class="ql-subtabs" role="tablist" aria-label="预设分区"><button type="button" class="ql-subtab active" data-subpage="artists" aria-selected="true">画师串</button><button type="button" class="ql-subtab" data-subpage="vibes" aria-selected="false">Vibe</button><button type="button" class="ql-subtab" data-subpage="bindings" aria-selected="false">预设</button></nav>
+<nav class="ql-subtabs" role="tablist" aria-label="预设分区"><button type="button" class="ql-subtab active" data-subpage="artists" aria-selected="true">画师串</button><button type="button" class="ql-subtab" data-subpage="vibes" aria-selected="false">Vibe</button><button type="button" class="ql-subtab" data-subpage="bindings" aria-selected="false">预设</button><button type="button" class="ql-subtab" data-subpage="generic" aria-selected="false">通用词</button></nav>
 <section class="ql-subpage active" data-subpage-panel="artists"><div class="ql-card"><h3>画师串编辑区</h3><p class="ql-muted">可从下方列表切换画师串编辑；保存时更新当前选中的组合，也可以新建组合。</p><div class="ql-row ql-artist-toolbar"><select id="ql-preset-edit-select" aria-label="画师串名称"><option value="">选择要编辑的画师串</option></select><button type="button" class="menu_button ql-artist-toolbar-button" id="ql-preset-new">新建</button><button type="button" class="menu_button ql-artist-toolbar-button" id="ql-migrate-toggle" aria-expanded="false">一键迁移</button></div><div id="ql-migrate-panel" hidden><p class="ql-muted">自动扫描智绘姬与柏宝绘在当前酒馆可读取的设置，只迁移画师串的正向/负向提示词，不迁移 Vibe、参考图或其他数据。已存在的画师串会自动跳过。</p><div class="ql-row ql-migrate-actions"><button id="ql-migrate-scan" class="menu_button">开始一键迁移</button><button id="ql-migrate-file-btn" class="menu_button">导入设置 JSON（备用）</button><input id="ql-migrate-file" type="file" accept=".json,.json5,.txt,application/json" hidden></div><div id="ql-migrate-preview" class="ql-muted" role="status">点击「开始一键迁移」自动扫描。</div><button id="ql-migrate-import" class="menu_button" disabled>导入预览结果</button><p class="ql-muted">仅迁移画师串；不会导入 Vibe。</p></div><div id="ql-preset-editor" hidden><input id="ql-preset-name" placeholder="组合名称"><label>正向画师串</label><textarea id="ql-preset-positive" placeholder="artist:xxx, style tags..."></textarea><label>负向画师串</label><textarea id="ql-preset-negative" placeholder="可选"></textarea><button id="ql-preset-save" class="menu_button">保存画师串组合</button></div><button type="button" id="ql-preset-batch-toggle" class="menu_button">批量编辑</button><div id="ql-presets-batch" hidden><div class="ql-row ql-library-tools ql-preset-bulk-tools"><button type="button" id="ql-preset-export" class="menu_button">导出所选</button><button type="button" id="ql-preset-bulk-delete" class="menu_button">删除所选</button><button type="button" id="ql-preset-select-all" class="menu_button">全部选择</button><button type="button" id="ql-preset-clear-all" class="menu_button">取消全选</button></div><p class="ql-muted">点击画师串卡片可多选；再次点击可取消。选好后再导出或删除。</p></div><details class="ql-custom-style-box"><summary>画师串列表 <span id="ql-presets-list-count" class="ql-muted"></span></summary><div id="ql-presets-list"></div></details></div></section><section class="ql-subpage" data-subpage-panel="vibes" hidden><nav class="ql-vsubtabs" role="tablist" aria-label="Vibe 分区"><button type="button" class="ql-vsubtab active" data-vsub="import" aria-selected="true">新建与导入</button><button type="button" class="ql-vsubtab" data-vsub="encode" aria-selected="false">Vibe 生成</button><button type="button" class="ql-vsubtab" data-vsub="edit" aria-selected="false">Vibe 编辑</button></nav><p id="ql-vibe-status" class="ql-muted" role="status"></p>
 <div data-vsub-panel="import"><div class="ql-card"><h3>新建与导入</h3><p class="ql-muted">导入的每条 Vibe 都会先进入「Vibe 池」，分组只是引用池里的条目。旧版导出的分组文件、官网 .naiv4vibe / bundle 都可以导入。</p><div class="ql-row"><button id="ql-vibe-create-group" type="button" class="menu_button">＋ 新建空分组</button><button id="ql-vibe-pick" type="button" class="menu_button ql-secondary">选择 Vibe 文件</button></div><label for="ql-vibe-import-target">导入到</label><select id="ql-vibe-import-target"><option value="__new__">新建分组并引用</option></select><input id="ql-vibe-import-file" type="file" accept=".json,.json5,.txt,.naiv4vibe,.naiv4vibeBundle" hidden></div></div>
 <div data-vsub-panel="encode" hidden><div class="ql-card"><h3>Vibe 生成（图片直接编码）</h3><p class="ql-muted">选一张图片，通过 NovelAI 官方编码接口得到 Vibe 编码并存入 Vibe 池。编码会消耗 Anlas；使用 NAI 官网 Key 或第三方 API 设置。编码对应所选模型，换模型生成时请用对应模型编码。</p><div class="ql-row"><button id="ql-vibe-encode-pick" type="button" class="menu_button">选择图片</button></div><input id="ql-vibe-encode-file" type="file" accept="image/*" hidden><div id="ql-vibe-encode-preview"></div><label for="ql-vibe-encode-name">名称</label><input id="ql-vibe-encode-name" placeholder="例如：柔和配色参考"><label for="ql-vibe-encode-model">编码模型</label><select id="ql-vibe-encode-model"></select><label for="ql-vibe-encode-info">Information Extracted：<span id="ql-vibe-encode-info-out">1.00</span></label><input id="ql-vibe-encode-info" type="range" min="0.01" max="1" step="0.01" value="1"><label for="ql-vibe-encode-strength">默认参考强度</label><input id="ql-vibe-encode-strength" type="number" min="0" max="1" step="0.05" value="0.6"><label for="ql-vibe-encode-target">编码后</label><select id="ql-vibe-encode-target"><option value="__pool__">仅放入 Vibe 池</option></select><div class="ql-row"><button id="ql-vibe-encode-run" type="button" class="menu_button">编码并加入 Vibe 池</button></div><p id="ql-vibe-encode-status" class="ql-muted" role="status">尚未选择图片。</p></div></div>
 <div data-vsub-panel="edit" hidden><div class="ql-card ql-vibe-pool-fold"><details id="ql-vibe-pool-details"><summary><h3 style="display:inline">Vibe 池</h3> <span class="ql-muted" id="ql-vibe-pool-count"></span> <span class="ql-muted">· 点开管理 / 筛选</span></summary><div class="ql-row"><input id="ql-vibe-pool-filter" type="search" placeholder="按名称筛选"><button type="button" class="menu_button" id="ql-vibe-pool-dedupe">合并重复</button></div><p class="ql-muted" id="ql-vibe-pool-dup-tip"></p><div id="ql-vibe-pool-list"></div></details></div><div class="ql-card"><h3>Vibe 分组</h3><input id="ql-vibe-group-filter" type="search" placeholder="搜索分组名，或分组里的 Vibe 名"><div id="ql-vibe-groups-list"></div></div></div></section>
 <section class="ql-subpage" data-subpage-panel="bindings" hidden><div class="ql-card ql-combo-editor-card"><div class="ql-section-heading"><div><h3>组合编辑器</h3><p class="ql-muted">先给组合命名，再分别选择画师串与 Vibe。两项都可以留空。</p></div><span class="ql-section-index">01</span></div><button type="button" id="ql-combo-new" class="menu_button ql-combo-new-button">＋ 新建组合</button><div id="ql-combo-editor" hidden><label for="ql-combo-name">组合名称</label><input id="ql-combo-name" placeholder="例如：柔和画风 + 氛围参考"><div class="ql-row ql-combo-pair"><div><label for="ql-combo-artist">画师串</label><select id="ql-combo-artist"><option value="-1">不使用画师串</option></select></div><div><label for="ql-combo-vibe">Vibe</label><select id="ql-combo-vibe"><option value="-1">不使用 Vibe</option></select></div></div><div class="ql-row"><button id="ql-combo-save" class="menu_button ql-primary">保存组合</button><button type="button" id="ql-combo-cancel" class="menu_button">取消</button></div></div></div><div class="ql-card ql-combo-list-card"><details id="ql-combos-details"><summary><div class="ql-section-heading"><div><h3>已保存组合</h3><p class="ql-muted">默认收起，点开查看、编辑或删除。</p></div><span class="ql-section-index">02</span></div></summary><div id="ql-combos-list"></div></details></div><label for="ql-preset-scope">配置范围</label><select id="ql-preset-scope"><option value="global">通用设置</option><option value="character">当前角色设置</option></select><div class="ql-card ql-global-default-card" id="ql-global-default-card"><div class="ql-section-heading"><div><h3>通用预设</h3><p class="ql-muted">正文、状态栏、彩蛋各选一个组合和尺寸。角色卡没有单独绑定时用这里；状态栏、彩蛋不设就跟随正文。切换后自动保存。</p></div><span class="ql-section-index">03</span></div><div class="ql-kind-row"><h4>正文</h4><label for="ql-global-combo-display">组合</label><select id="ql-global-combo-display"><option value="-1">不使用预设</option></select><label for="ql-body-size">尺寸</label><select id="ql-body-size"></select></div><div class="ql-kind-row"><h4>状态栏</h4><label for="ql-sb-combo">组合</label><select id="ql-sb-combo"><option value="-1">跟随正文</option></select><label for="ql-sb-size">尺寸</label><select id="ql-sb-size"></select></div><div class="ql-kind-row"><h4>彩蛋</h4><label for="ql-egg-combo">组合</label><select id="ql-egg-combo"><option value="-1">跟随正文</option></select><label for="ql-egg-size">尺寸</label><select id="ql-egg-size"></select></div><p class="ql-muted">彩蛋怎么标记：让世界书把彩蛋输出成 image###[彩蛋]提示词###，开头的 [彩蛋] 会被拾帧识别并去掉，不会进提示词。</p><div hidden aria-hidden="true"><select id="ql-global-combo"><option value="-1">不使用预设</option></select></div><div class="ql-card ql-extra-neg-card"><div class="ql-section-heading"><div><h3>附加负面词</h3><p class="ql-muted">不管用哪个组合/画师串，提交生图时都会自动追加到负面词后面（已有的不重复）。适合写通用的，比如 heavy blush, full-face blush, blush stickers。</p></div></div><textarea id="ql-extra-neg" rows="2" placeholder="heavy blush, full-face blush, blush stickers"></textarea></div><div class="ql-card ql-timeout-card"><div class="ql-section-heading"><div><h3>生图超时</h3><p class="ql-muted">网络不好时，请求超过这个时间没返回就自动中止，不再一直转圈。生成中也可以随时点“停止”。</p></div></div><select id="ql-timeout"><option value="60">60 秒</option><option value="120">120 秒</option><option value="180">180 秒（默认）</option><option value="300">300 秒</option><option value="0">不限制</option></select></div></div><div class="ql-card ql-binding-default-card" id="ql-binding-default-card" hidden><div class="ql-section-heading"><div><h3>角色卡绑定</h3><p class="ql-muted">给某张角色卡单独指定正文、状态栏、彩蛋的组合和尺寸。没填的项目回退到上面的通用预设。</p></div><span class="ql-section-index">04</span></div><label>角色卡</label><select id="ql-bind-character"><option value="">选择角色卡</option></select><div class="ql-kind-row"><h4>正文</h4><label for="ql-bind-preset">组合</label><select id="ql-bind-preset"><option value="-1">跟随通用预设</option></select><label for="ql-bind-body-size">尺寸</label><select id="ql-bind-body-size"></select></div><div class="ql-kind-row"><h4>状态栏</h4><label for="ql-bind-sb-combo">组合</label><select id="ql-bind-sb-combo"><option value="-1">跟随通用预设</option></select><label for="ql-bind-sb-size">尺寸</label><select id="ql-bind-sb-size"></select></div><div class="ql-kind-row"><h4>彩蛋</h4><label for="ql-bind-egg-combo">组合</label><select id="ql-bind-egg-combo"><option value="-1">跟随通用预设</option></select><label for="ql-bind-egg-size">尺寸</label><select id="ql-bind-egg-size"></select></div><select id="ql-bind-vibe" hidden><option value="-1">组合内 Vibe 自动绑定</option></select><button id="ql-bind-save" class="menu_button">保存这张角色卡的绑定</button><div id="ql-bindings-list"></div></div></section>
+<section class="ql-subpage" data-subpage-panel="generic" hidden><div class="ql-card"><h3>通用词自动注入</h3><p class="ql-muted">全局生效，不再区分角色卡。发图前由插件自动识别每个角色的性别（看词条里选的性别，没选就看外貌词里的 1girl / 1boy 等）。画面里全是男 → 只把你选好的男通用词在公共区写一遍；全是女同理；男女混合时，才分别写进各自角色的提示词。这样男通用词里放体型 / 骨相，角色词条里就只需要留发型发色和特殊标志。每一套词组都可以配一段负面，选中正面词时会自动把对应负面一起带上。「通用画面」默认常驻生效，不需要手动选择；留了多套时可以挑选用哪一套，也可以单独关掉。</p><div id="ql-gw-box"></div></div></section>
 </div>
 <div class="ql-page" data-page-panel="wordbank" role="tabpanel" hidden>
 <nav class="ql-subtabs" role="tablist" aria-label="词库分区"><button type="button" class="ql-subtab active" data-subpage="prompt-library" aria-selected="true">提示词库</button><button type="button" class="ql-subtab" data-subpage="character-library" aria-selected="false">角色词库</button><button type="button" class="ql-subtab" data-subpage="work-library" aria-selected="false">作品库</button></nav>
 <section class="ql-subpage active" data-subpage-panel="prompt-library"><div class="ql-card"><h3>提示词库</h3><p class="ql-muted">默认以小图网格浏览；点击某条才展开编辑区。</p><div id="ql-prompt-editor" hidden><section class="ql-library-prompt-field"><div class="ql-library-prompt-field-head"><label for="ql-library-prompt-en"><span class="ql-library-field-kicker">IMAGE PROMPT</span><span>画面提示词</span></label><button type="button" id="ql-library-prompt-copy" class="ql-library-copy-icon" aria-label="复制画面提示词" title="复制画面提示词"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><textarea id="ql-library-prompt-en" placeholder="English prompt tags / description"></textarea></section><div class="ql-row"><input id="ql-prompt-name" placeholder="名称"><select id="ql-prompt-category"><option value="单人">单人</option><option value="双人">双人</option><option value="BG">BG</option><option value="BL">BL</option><option value="GL">GL</option><option value="其他">其他</option><option value="自定义">自定义分类…</option></select><input id="ql-prompt-category-custom" placeholder="输入自定义分类" hidden></div><label>自定义 Tag（用逗号、顿号、斜杠、空格或换行分隔）</label><textarea id="ql-library-prompt-zh" placeholder="例如：年上/暧昧，温柔 眼镜"></textarea><div class="ql-row ql-prompt-source-row"><label for="ql-prompt-source">来源</label><select id="ql-prompt-source"><option value="original">原创</option><option value="other">他人的</option></select></div><textarea id="ql-prompt-source-note" class="ql-prompt-source-note" placeholder="原帖链接，或作者/出处说明（方便以后找回原作者）" hidden></textarea><div class="ql-image-reference-editor"><label for="ql-library-image-file">预览图片</label><input id="ql-library-image-file" type="file" accept="image/*"><div id="ql-library-image-preview" class="ql-library-image-preview" data-image="" role="button" tabindex="0" aria-label="点击添加预览图片" title="点击此处选择图片"><span class="ql-muted">尚未添加预览图</span></div><button type="button" id="ql-library-image-clear" class="menu_button">移除预览图</button></div><div class="ql-row"><button id="ql-prompt-save" class="menu_button">保存提示词</button><button type="button" id="ql-prompt-cancel" class="menu_button">取消</button></div></div><button type="button" id="ql-prompt-add" class="menu_button ql-primary">＋ 添加提示词</button><div class="ql-row ql-library-tools ql-prompt-toolbar"><select id="ql-prompt-filter" aria-label="筛选提示词分类"><option value="">全部分类</option></select><button type="button" id="ql-library-edit-mode" class="menu_button">编辑模式</button><button type="button" id="ql-prompt-bulk-delete" class="menu_button">批量删除</button></div><p class="ql-muted" id="ql-library-edit-hint">提示词可按分类筛选；Tag 自由填写并自动拆分；应用后生成的图片会收录到对应图集。</p><div id="ql-prompts-list"></div></div></section>
-<section class="ql-subpage" data-subpage-panel="character-library" hidden><div class="ql-card"><h3>角色词条库</h3><p class="ql-muted">选择角色卡管理对应的角色词条，或选择「用户外貌」保存自己的固定外貌词；用户外貌不绑定任何角色卡。</p><label for="ql-name-replace">正文 / 状态栏里的角色名处理（取决于你挂载的世界书是否输出角色名）</label><select id="ql-name-replace"><option value="off">关闭（世界书不输出角色名）</option><option value="inline">替换进主提示词</option><option value="characters">拆成 NAI 多角色提示词（V4 / V4.5 / V5，推荐）</option></select><label for="ql-missing-name-action">找不到角色名时</label><select id="ql-missing-name-action"><option value="ask">先弹窗询问（可去添加外貌）</option><option value="go">只提示，名字原样保留（不推荐）</option><option value="strip">去掉词库外的名字，继续生成（适合外貌世界书）</option></select><label class="ql-check"><input type="checkbox" id="ql-nai-auto-coords"> 多角色自动站位（按角色出现顺序从左到右排开，默认关闭）</label><p class="ql-muted">只对 NAI V4 / V4.5 / V5 的多角色提示词生效，单人或不拆角色时不起作用。开启后第一个角色在最左、最后一个在最右：两人是左 / 右，三人是左 / 中 / 右。想让谁站左边，就让他在提示词里排在前面。</p><p class="ql-muted">名字可写 克劳德:1.2、(克劳德:1.2)、1.2::克劳德::、$克劳德$。；也可以写成括号组 (克劳德:1.2, 表情, 服装, source#动作)，括号里的其他词会跟着这个角色走。</p><p class="ql-muted">世界书里写 {{拾帧角色列表}}，发送给模型前会自动换成这里的角色名单（当前角色卡的词条、未绑定词条、用户外貌），让模型直接写名字、不再自己编外貌。</p><p class="ql-muted">外貌词里可以写「条件词」：[吐舌|tongue out]tongue piercing，意思是画面提示词里出现 tongue out 才会带上舌钉，没出现就丢掉。适合舌钉、被衣服遮住的纹身这类不常露出的特征，例如 [shirtless|lifted shirt|nude]stomach tattoo。触发词用 | 分隔，英文不区分大小写。</p><p class="ql-muted">词条名称可用 | 分隔多个别名，例如「克劳德|Cloud」。优先匹配当前角色卡绑定的词条，其次未绑定角色卡的词条，最后才是其他角色卡的词条。</p><div class="ql-card-sub"><button type="button" id="ql-diag-restore" class="menu_button">排查：正文图片为什么没挂回</button></div><div class="ql-generic-words"><h4>通用词自动注入</h4><p class="ql-muted">默认关闭。发图前由插件自动识别每个角色的性别（看词条里选的性别，没选就看外貌词里的 1girl / 1boy 等）。画面里全是男 → 只把你选好的男通用词在公共区写一遍；全是女同理；男女混合时，才分别写进各自角色的提示词。这样男通用词里放体型 / 骨相，角色词条里就只需要留发型发色和特殊标志。不同角色卡可以各选各的词组，已有的同名 tag 不会重复。</p><div id="ql-gw-box"></div></div><label for="ql-character-card">选择角色卡或用户外貌</label><div class="ql-row"><select id="ql-character-card"><option value="">请选择角色卡</option></select><button type="button" id="ql-character-start" class="menu_button">开始编辑</button><button type="button" id="ql-character-view-all" class="menu_button">查看全部角色词条</button></div><div id="ql-character-editor" hidden><label for="ql-character-name">角色名称</label><input id="ql-character-name" placeholder="例如：克劳德|Cloud（| 分隔别名）"><label for="ql-character-gender">性别（用于自动注入男 / 女通用词）</label><select id="ql-character-gender"><option value="">自动识别（看外貌词里的 1girl / 1boy）</option><option value="female">女</option><option value="male">男</option></select><div class="ql-char-thumb-row"><img id="ql-char-thumb" alt="" hidden><div><button type="button" class="menu_button" id="ql-char-thumb-upload">上传词条头像</button><button type="button" class="menu_button" id="ql-char-thumb-clear" hidden>移除头像</button><input type="file" id="ql-char-thumb-file" accept="image/*" hidden><p class="ql-muted">词条头像只在这里给你看，记录“这套词跑出来长什么样”，不会进提示词，也不影响相册头像。</p></div></div><label for="ql-character-appearance">生图词 / 固定外貌词</label><textarea id="ql-character-appearance" placeholder="填写外貌、发色、瞳色等固定生图词（常驻不变的部分，服装放下面的服装库）"></textarea><div class="ql-outfit-library"><h4>服装库 <span class="ql-muted">（场景提示词里出现触发词才会追加，和上面的固定外貌词是分开管理的，增减不用去大段文字里找）</span></h4><div id="ql-outfit-list"></div><button type="button" class="menu_button" id="ql-outfit-add">＋ 新增服装</button></div><div class="ql-row"><button id="ql-character-save" class="menu_button">保存角色词条</button><button type="button" id="ql-character-cancel" class="menu_button">取消</button></div><div class="ql-card-sub ql-try-box"><label for="ql-try-scene">原地试画（不用先保存）</label><input id="ql-try-scene" value="upper body, looking at viewer, indoors, window, soft lighting" placeholder="试画用的场景/构图词"><label for="ql-try-config">试画配置</label><select id="ql-try-config"><option value="custom">自己搭配（画师串 + Vibe）</option><option value="">跟随取景区当前配置</option></select><div id="ql-try-custom" hidden><label for="ql-try-artist">画师串</label><select id="ql-try-artist"></select><label for="ql-try-vibe">Vibe 分组</label><select id="ql-try-vibe"></select></div><label for="ql-try-size">生成尺寸</label><select id="ql-try-size"><option value="">跟随当前尺寸</option></select><button type="button" id="ql-try-draw" class="menu_button">试画一张</button><p class="ql-muted" id="ql-try-status">用上面正在编辑的外貌词、性别和当前取景区的画师串/Vibe 出一张。走的和正文一样的注入流程（通用词、条件词都会生效），但不会存进底片。</p><img id="ql-try-img" alt="" hidden style="max-width:100%;border-radius:10px"><div class="ql-row" id="ql-try-actions" hidden><button type="button" class="menu_button" id="ql-try-save">存到底片</button><button type="button" class="menu_button" id="ql-try-avatar">设为词条头像</button></div></div></div><p class="ql-muted" id="ql-character-status" role="status"></p><div class="ql-row ql-library-tools"><button type="button" id="ql-character-export" class="menu_button">导出所选</button><button type="button" id="ql-character-bulk-delete" class="menu_button">批量删除</button></div><div id="ql-characters-list"></div></div></section>
+<section class="ql-subpage" data-subpage-panel="character-library" hidden><div class="ql-card"><h3>角色词条库</h3><p class="ql-muted">选择角色卡管理对应的角色词条，或选择「用户外貌」保存自己的固定外貌词；用户外貌不绑定任何角色卡。</p><label for="ql-name-replace">正文 / 状态栏里的角色名处理（取决于你挂载的世界书是否输出角色名）</label><select id="ql-name-replace"><option value="off">关闭（世界书不输出角色名）</option><option value="inline">替换进主提示词</option><option value="characters">拆成 NAI 多角色提示词（V4 / V4.5 / V5，推荐）</option></select><label for="ql-missing-name-action">找不到角色名时</label><select id="ql-missing-name-action"><option value="ask">先弹窗询问（可去添加外貌）</option><option value="go">只提示，名字原样保留（不推荐）</option><option value="strip">去掉词库外的名字，继续生成（适合外貌世界书）</option></select><label class="ql-check"><input type="checkbox" id="ql-nai-auto-coords"> 多角色自动站位（按角色出现顺序从左到右排开，默认关闭）</label><p class="ql-muted">只对 NAI V4 / V4.5 / V5 的多角色提示词生效，单人或不拆角色时不起作用。开启后第一个角色在最左、最后一个在最右：两人是左 / 右，三人是左 / 中 / 右。想让谁站左边，就让他在提示词里排在前面。</p><p class="ql-muted">名字可写 克劳德:1.2、(克劳德:1.2)、1.2::克劳德::、$克劳德$。；也可以写成括号组 (克劳德:1.2, 表情, 服装, source#动作)，括号里的其他词会跟着这个角色走。</p><p class="ql-muted">世界书里写 {{拾帧角色列表}}，发送给模型前会自动换成这里的角色名单（当前角色卡的词条、未绑定词条、用户外貌），让模型直接写名字、不再自己编外貌。</p><p class="ql-muted">外貌词里可以写「条件词」：[吐舌|tongue out]tongue piercing，意思是画面提示词里出现 tongue out 才会带上舌钉，没出现就丢掉。适合舌钉、被衣服遮住的纹身这类不常露出的特征，例如 [shirtless|lifted shirt|nude]stomach tattoo。触发词用 | 分隔，英文不区分大小写。</p><p class="ql-muted">词条名称可用 | 分隔多个别名，例如「克劳德|Cloud」。优先匹配当前角色卡绑定的词条，其次未绑定角色卡的词条，最后才是其他角色卡的词条。</p><div class="ql-card-sub"><button type="button" id="ql-diag-restore" class="menu_button">排查：正文图片为什么没挂回</button></div><label for="ql-character-card">选择角色卡或用户外貌</label><div class="ql-row"><select id="ql-character-card"><option value="">请选择角色卡</option></select><button type="button" id="ql-character-start" class="menu_button">开始编辑</button><button type="button" id="ql-character-view-all" class="menu_button">查看全部角色词条</button></div><div id="ql-character-editor" hidden><label for="ql-character-name">角色名称</label><input id="ql-character-name" placeholder="例如：克劳德|Cloud（| 分隔别名）"><label for="ql-character-gender">性别（用于自动注入男 / 女通用词）</label><select id="ql-character-gender"><option value="">自动识别（看外貌词里的 1girl / 1boy）</option><option value="female">女</option><option value="male">男</option></select><div class="ql-char-thumb-row"><img id="ql-char-thumb" alt="" hidden><div><button type="button" class="menu_button" id="ql-char-thumb-upload">上传词条头像</button><button type="button" class="menu_button" id="ql-char-thumb-clear" hidden>移除头像</button><input type="file" id="ql-char-thumb-file" accept="image/*" hidden><p class="ql-muted">词条头像只在这里给你看，记录“这套词跑出来长什么样”，不会进提示词，也不影响相册头像。</p></div></div><label for="ql-character-appearance">生图词 / 固定外貌词</label><textarea id="ql-character-appearance" placeholder="填写外貌、发色、瞳色等固定生图词（常驻不变的部分，服装放下面的服装库）"></textarea><div class="ql-outfit-library"><h4>服装库 <span class="ql-muted">（场景提示词里出现触发词才会追加，和上面的固定外貌词是分开管理的，增减不用去大段文字里找）</span></h4><div id="ql-outfit-list"></div><button type="button" class="menu_button" id="ql-outfit-add">＋ 新增服装</button></div><div class="ql-row"><button id="ql-character-save" class="menu_button">保存角色词条</button><button type="button" id="ql-character-cancel" class="menu_button">取消</button></div><div class="ql-card-sub ql-try-box"><label for="ql-try-scene">原地试画（不用先保存）</label><input id="ql-try-scene" value="upper body, looking at viewer, indoors, window, soft lighting" placeholder="试画用的场景/构图词"><label for="ql-try-config">试画配置</label><select id="ql-try-config"><option value="custom">自己搭配（画师串 + Vibe）</option><option value="">跟随取景区当前配置</option></select><div id="ql-try-custom" hidden><label for="ql-try-artist">画师串</label><select id="ql-try-artist"></select><label for="ql-try-vibe">Vibe 分组</label><select id="ql-try-vibe"></select></div><label for="ql-try-size">生成尺寸</label><select id="ql-try-size"><option value="">跟随当前尺寸</option></select><button type="button" id="ql-try-draw" class="menu_button">试画一张</button><p class="ql-muted" id="ql-try-status">用上面正在编辑的外貌词、性别和当前取景区的画师串/Vibe 出一张。走的和正文一样的注入流程（通用词、条件词都会生效），但不会存进底片。</p><img id="ql-try-img" alt="" hidden style="max-width:100%;border-radius:10px"><div class="ql-row" id="ql-try-actions" hidden><button type="button" class="menu_button" id="ql-try-save">存到底片</button><button type="button" class="menu_button" id="ql-try-avatar">设为词条头像</button></div></div></div><p class="ql-muted" id="ql-character-status" role="status"></p><div class="ql-row ql-library-tools"><button type="button" id="ql-character-export" class="menu_button">导出所选</button><button type="button" id="ql-character-bulk-delete" class="menu_button">批量删除</button></div><div id="ql-characters-list"></div></div></section>
 <section class="ql-subpage" data-subpage-panel="work-library" hidden><div class="ql-card"><h3>作品库</h3><p class="ql-muted">给同人角色（原著人物、别人的二创角色等）准备的兜底表：正文里出现「角色名:1.2」这种没按世界书格式写的同人角色名时，角色词库里查不到才会来这里查，查到就换成标准 1.2::英文名(作品名):: 格式。优先级低于角色词库，不会覆盖你自己建的角色词条。按作品分开导入和删除，自用，不内置任何数据。</p><label for="ql-wl-import-text">批量导入（文本）</label><textarea id="ql-wl-import-text" rows="6" placeholder="一行一条，格式：中文名=英文名(作品名)&#10;例如：伏黑惠=fushiguro megumi(jujutsu kaisen)&#10;# 开头的行和空行会被跳过"></textarea><div class="ql-row"><button type="button" id="ql-wl-import-text-btn" class="menu_button">导入上面的文本</button><button type="button" id="ql-wl-import-file-btn" class="menu_button">导入 txt / json 文件</button><input id="ql-wl-import-file" type="file" accept=".txt,.json,text/plain,application/json" hidden></div><p class="ql-muted" id="ql-wl-import-status" role="status"></p><label for="ql-wl-filter">按作品筛选</label><select id="ql-wl-filter"><option value="">全部作品</option></select><div class="ql-row ql-library-tools"><input type="text" id="ql-wl-rename" placeholder="给上面选中的作品改个中文名，比如：排球少年!!"><button type="button" id="ql-wl-rename-save" class="menu_button">保存中文名</button></div><p class="ql-muted">批量导入进来的作品，分类名默认是你写的英文/罗马音原文；在上面筛选框选中某个作品后，这里改一次中文名，以后筛选列表和删除确认都会显示这个名字，不用每次都等我改代码。</p><div class="ql-row ql-library-tools"><button type="button" id="ql-wl-export" class="menu_button">导出所选作品</button><button type="button" id="ql-wl-delete-work" class="menu_button">删除所选作品</button></div><div id="ql-wl-list"></div></div></section>
 </div>
 <div class="ql-page" data-page-panel="history" role="tabpanel" hidden><div class="ql-card"><h3>影像缓存</h3><p class="ql-muted">这里保存生成过的影像记录；点击缩略图可查看提示词、参考图与生成参数。</p><label for="ql-history-columns">每行影像数量</label><select id="ql-history-columns"><option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option><option value="5">5 张</option></select><label for="ql-history-kind">显示</label><select id="ql-history-kind"><option value="">全部</option><option value="normal">正文 / 状态栏</option><option value="egg">彩蛋</option></select><button type="button" class="ql-cache-footer-ball" id="ql-cache-footer-ball" aria-label="展开底片工具" aria-expanded="false" title="底片工具（可拖动）">⋮<span class="ql-cache-footer-ball-badge" data-ql-footer-ball-badge hidden>0</span></button><div id="ql-cache-footer" class="ql-cache-bulk-tools" hidden><div class="ql-cache-bar-row"><button type="button" class="menu_button" id="ql-cache-select-mode" aria-pressed="false">多选</button><label class="ql-cache-select-all" hidden><input type="checkbox" data-ql-select-all disabled> 全选</label><span class="ql-cache-selected-count" data-ql-selected-count hidden>已选 0 张</span><button type="button" class="menu_button" data-ql-bulk-download disabled hidden>逐张下载</button><button type="button" class="menu_button" data-ql-bulk-delete disabled hidden>删除所选</button></div><div class="ql-cache-bar-row ql-cache-clear-row"><select id="ql-clear-range" aria-label="清理范围"><option value="0">清理全部</option><option value="1">清理 1 天前</option><option value="3">清理 3 天前</option><option value="7">清理 7 天前</option><option value="30">清理 30 天前</option></select><button type="button" class="menu_button" id="ql-clear">清理缓存</button><button type="button" class="menu_button" id="ql-clear-all" title="连正文里每个格子当前的图也一起清掉">彻底清空</button><button type="button" class="menu_button" id="ql-dedupe" title="完全一样的图只留一张">合并重复</button></div><div class="ql-cache-bar-row"><label for="ql-record-limit">自动保留</label><select id="ql-record-limit"><option value="300">最近 300 条</option><option value="500">最近 500 条</option><option value="800">最近 800 条</option><option value="1500">最近 1500 条</option><option value="0">不限制</option></select><span class="ql-muted">超出时自动清掉最旧的缓存</span></div><p class="ql-muted ql-cache-bar-tip" id="ql-clear-tip"></p></div><div id="ql-history"></div></div></div>
@@ -3954,6 +3979,40 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 </section></div>`;}
 
 function syncFastControls(){if(!$('#ql-fast-provider'))return;$('#ql-provider').value=$('#ql-fast-provider').value;$('#ql-model').value=$('#ql-fast-model').value;$('#ql-size').value=$('#ql-fast-size').value;$('#ql-quality').value=$('#ql-fast-quality').value;$('#ql-nai-model').value=$('#ql-fast-nai-model').value;$('#ql-nai-steps').value=$('#ql-fast-nai-steps').value;$('#ql-nai-scale').value=$('#ql-fast-nai-scale').value;const dims=String($('#ql-fast-nai-size-preset').value||'832x1216').split('x').map(Number);$('#ql-fast-nai-width').value=dims[0]||832;$('#ql-fast-nai-height').value=dims[1]||1216;$('#ql-nai-width').value=$('#ql-fast-nai-width').value;$('#ql-nai-height').value=$('#ql-fast-nai-height').value;$('#ql-nai-sampler').value=$('#ql-fast-nai-sampler').value;$('#ql-nai-scheduler').value=$('#ql-fast-nai-scheduler').value;$('#ql-nai-normalize').checked=$('#ql-fast-nai-normalize').checked;$('#ql-nai-quality').value=$('#ql-fast-nai-quality').value;$('#ql-nai-uc').value=$('#ql-fast-nai-uc').value;$('#ql-nai-seed').value=$('#ql-fast-nai-seed').value;}
+// ===== NAI 生成参数按模型分别记忆（步数/CFG/采样器/调度器/质量标签/UC，不含宽高尺寸）=====
+// 数据：s.naiModelParams={[模型id]:{steps,scale,sampler,scheduler,qualityMode,ucPreset}}；切换模型时自动存旧的、取/建新的一套。
+function qlNaiModelFamilyDefaults(modelId){
+ const id=String(modelId||'');
+ if(/^nai-diffusion-5-/i.test(id))return {steps:28,scale:4,sampler:'k_euler_ancestral',scheduler:'karras',qualityMode:'standard',ucPreset:3};
+ if(/^nai-diffusion-3/i.test(id)||/furry-3/i.test(id))return {steps:28,scale:6,sampler:'k_euler_ancestral',scheduler:'karras',qualityMode:'standard',ucPreset:0};
+ return {steps:28,scale:5,sampler:'k_euler_ancestral',scheduler:'karras',qualityMode:'standard',ucPreset:3}; // V4 / V4.5
+}
+function qlReadNaiPanelParams(){
+ return {
+  steps:Number($('#ql-fast-nai-steps').value)||28,
+  scale:Number($('#ql-fast-nai-scale').value)||5,
+  sampler:$('#ql-fast-nai-sampler').value||'k_euler_ancestral',
+  scheduler:$('#ql-fast-nai-scheduler').value||'karras',
+  qualityMode:$('#ql-fast-nai-quality').value||'standard',
+  ucPreset:Number($('#ql-fast-nai-uc').value)||0
+ };
+}
+function qlWriteNaiPanelParams(p){
+ $('#ql-fast-nai-steps').value=p.steps;$('#ql-fast-nai-scale').value=p.scale;$('#ql-fast-nai-sampler').value=p.sampler;$('#ql-fast-nai-scheduler').value=p.scheduler;$('#ql-fast-nai-quality').value=p.qualityMode;$('#ql-fast-nai-uc').value=String(p.ucPreset);
+ $('#ql-nai-steps').value=p.steps;$('#ql-nai-scale').value=p.scale;$('#ql-nai-sampler').value=p.sampler;$('#ql-nai-scheduler').value=p.scheduler;$('#ql-nai-quality').value=p.qualityMode;$('#ql-nai-uc').value=String(p.ucPreset);
+}
+function qlSaveNaiModelParams(s,modelId){
+ if(!modelId)return;
+ if(!s.naiModelParams||typeof s.naiModelParams!=='object')s.naiModelParams={};
+ s.naiModelParams[modelId]=qlReadNaiPanelParams();
+}
+function qlApplyNaiModelParams(s,modelId){
+ if(!s.naiModelParams||typeof s.naiModelParams!=='object')s.naiModelParams={};
+ let p=s.naiModelParams[modelId];
+ if(!p){p=qlNaiModelFamilyDefaults(modelId);s.naiModelParams[modelId]=p;}
+ qlWriteNaiPanelParams(p);
+ s.naiSteps=p.steps;s.naiScale=p.scale;s.naiSampler=p.sampler;s.naiScheduler=p.scheduler;s.naiQualityMode=p.qualityMode;s.naiUcPreset=p.ucPreset;
+}
 function syncViewfinderSizeToConfig(){const preset=$('#ql-fast-nai-size-preset');if(!preset)return;const dims=String(preset.value||'').split('x').map(Number);if(dims.length!==2||!dims.every(n=>Number.isFinite(n)&&n>0))return;const c=cfg();c.naiWidth=dims[0];c.naiHeight=dims[1];$('#ql-fast-nai-width').value=String(dims[0]);$('#ql-fast-nai-height').value=String(dims[1]);$('#ql-nai-width').value=String(dims[0]);$('#ql-nai-height').value=String(dims[1]);save();}
 function read(){syncFastControls();const s=cfg();s.provider=$('#ql-provider').value;s.endpoint=$('#ql-endpoint').value.trim().replace(/\/$/,'');s.apiKey=$('#ql-key').value.trim();s.model=$('#ql-model').value.trim()||'gpt-image-1';s.size=$('#ql-size').value;s.quality=$('#ql-quality').value;s.naiModel=$('#ql-nai-model').value.trim()||'nai-diffusion-4-5-full';s.naiSteps=Number($('#ql-nai-steps').value)||28;s.naiScale=Number($('#ql-nai-scale').value)||5;s.naiWidth=Number($('#ql-nai-width').value)||832;s.naiHeight=Number($('#ql-nai-height').value)||1216;s.naiSampler=$('#ql-nai-sampler').value;s.naiScheduler=$('#ql-nai-scheduler').value;s.naiNormalizeVibeStrengths=$('#ql-nai-normalize').checked;s.naiQualityMode=$('#ql-nai-quality').value;s.naiUcPreset=Number($('#ql-nai-uc').value);s.naiSeed=$('#ql-nai-seed').value.trim()===''?-1:Number($('#ql-nai-seed').value);s.prompt=$('#ql-prompt').value;save();}
 function status(t){$('#ql-status').textContent=t;}
@@ -4470,20 +4529,24 @@ function qlReconcileRoles(prompt){
 // 原始提示词文本不被改写，只在拼装时重排并插入外貌。
 // 取景区通用词：同性别画面只在公共区写一遍，男女混合才各自附在角色外貌后。
 function qlVfGenericPlan(parsed,list){
- const out={on:false,common:'',any:'',per:()=>''};
- if(cfg().viewfinderGeneric===false||!qlGenericCfg().on)return out;
+ const out={on:false,anyOn:false,common:'',any:'',negative:'',per:()=>''};
+ const g=qlGenericCfg();if(!g.on)return out;
+ // 通用画面（any）常驻生效，不受「取景区注入通用词」这个开关影响；该开关现在只管男 / 女体型词。
+ out.anyOn=g.anyOn!==false;
+ if(out.anyOn){out.any=qlPickedWords('any');const n=qlPickedNegative('any');if(n)out.negative=qlMergeWords(out.negative,n,'back');}
+ if(cfg().viewfinderGeneric===false)return out;
  out.on=true;
- const cardKey=getContext()?.characterId==null?'':String(getContext().characterId);
  const gOf=t=>t==='girl'?'female':t==='boy'?'male':'';
  const kinds=new Set();
  for(const c of parsed.counts){const g=gOf(c.type);if(g)kinds.add(g);}
  for(const m of parsed.markers){const g=gOf(/^(girl|boy|other)/i.exec(m.key)?.[1]?.toLowerCase());if(g)kinds.add(g);}
  for(const r of (Array.isArray(list)?list:[])){if(r&&!r.key){const g=qlDetectGender({appearance:r.appearance});if(g)kinds.add(g);}}
- out.any=qlPickedWords('any',cardKey);
- if(kinds.size===1)out.common=qlPickedWords([...kinds][0],cardKey);
- else if(kinds.size>1)out.per=g=>qlPickedWords(g,cardKey);
+ if(kinds.size===1){const k=[...kinds][0];out.common=qlPickedWords(k);const n=qlPickedNegative(k);if(n)out.negative=qlMergeWords(out.negative,n,'back');}
+ else if(kinds.size>1){out.per=k=>qlPickedWords(k);for(const k of kinds){const n=qlPickedNegative(k);if(n)out.negative=qlMergeWords(out.negative,n,'back');}}
  return out;
 }
+// 取景区没走「角色名替换」这条路（qlVfApplyNames 返回 null）时，单独算一下通用词负面要不要带上。
+function qlVfGenericNegative(prompt,roles){return qlVfGenericPlan(qlClassifyPrompt(prompt),Array.isArray(roles)?roles:[]).negative||'';}
 function qlComposeViewfinderPrompt(artistPositive,prompt,roles){
  const parsed=qlClassifyPrompt(prompt);
  const list=(Array.isArray(roles)?roles:[]);
@@ -4513,20 +4576,22 @@ function qlComposeViewfinderPrompt(artistPositive,prompt,roles){
  for(const role of list){if(role&&!role.key&&appearanceOf(role))out.push(withG(appearanceOf(role),qlDetectGender({appearance:role.appearance})));}
  out.push(...parsed.rest);
  let text=out.filter(Boolean).join(', ');
- if(plan.on)text=qlMergeWords(qlMergeWords(text,plan.any,gpos),plan.common,gpos);
+ if(plan.anyOn)text=qlMergeWords(text,plan.any,gpos);
+ if(plan.on)text=qlMergeWords(text,plan.common,gpos);
  return text;
 }
 // 取景区生成前也做一遍「角色名 → 词库外貌」替换和多人物拆分（和正文 / 状态栏图一致）。没有变化时返回 null，走原来的栏位逻辑。
 function qlVfApplyNames(prompt){
  let nr;try{nr=qlReplaceCharacterNames(prompt,getContext());}catch{return null;}
  if(!nr||(!nr.characters.length&&nr.text===prompt))return null;
- const ctx=getContext(),cardK=ctx?.characterId==null?'':String(ctx.characterId),pos=qlGenericCfg().position==='front'?'front':'back';
- const withCommon=t=>qlMergeWords(qlWithAnyWords(t,cardK),nr.common||'',pos);
+ const pos=qlGenericCfg().position==='front'?'front':'back';
+ const withCommon=t=>qlMergeWords(qlWithAnyWords(t),nr.common||'',pos);
  const art=a=>String(a||'').trim();
  const join=(a,t)=>[art(a),t].filter(Boolean).join(', ');
  return {
   finalPrompt:a=>join(a,withCommon(nr.text)),
-  structured:a=>nr.characters.length?{basePrompt:join(a,withCommon(nr.rest)),characters:nr.characters.map(c=>({key:c.key,prompt:c.prompt}))}:{basePrompt:'',characters:[]}
+  structured:a=>nr.characters.length?{basePrompt:join(a,withCommon(nr.rest)),characters:nr.characters.map(c=>({key:c.key,prompt:c.prompt}))}:{basePrompt:'',characters:[]},
+  negative:qlGenericMergeNegative('',nr.kinds)
  };
 }
 function qlBuildStructuredViewfinderPrompt(artistPositive,prompt,roles){
@@ -4556,9 +4621,10 @@ function qlBuildStructuredViewfinderPrompt(artistPositive,prompt,roles){
  }
  const plan=qlVfGenericPlan(parsed,list);
  let basePrompt=base;
+ const pos=qlGenericCfg().position==='front'?'front':'back';
+ if(plan.anyOn)basePrompt=qlMergeWords(basePrompt,plan.any,pos);
  if(plan.on){
-  const pos=qlGenericCfg().position==='front'?'front':'back';
-  basePrompt=qlMergeWords(qlMergeWords(basePrompt,plan.any,pos),plan.common,pos);
+  basePrompt=qlMergeWords(basePrompt,plan.common,pos);
   for(const c of characters){const g=/^girl/i.test(c.key)?'female':/^boy/i.test(c.key)?'male':qlDetectGender({appearance:c.prompt});if(g)c.prompt=qlMergeWords(c.prompt,plan.per(g),pos);}
  }
  return {basePrompt,characters};
@@ -4667,6 +4733,16 @@ function qlTcBuildQuietPrompt(mode,text,styleValue){
   'comic, '+panelCount+'koma, Qiao:1.2, character A, character B, (1boy:1.2, black coat, silver hair, red eyes), indoor, warm lighting, Panel 1: character A kneeling, character B leaning closer, reaching out, Panel 2: character A side profile, character B looking down, blushing'+(panelCount>2?', Panel 3: …, Panel 4: …':''),
   '用户在「画风」里已经手动选了'+panelCount+'格分镜，这是明确的选择，不是默认值，必须老老实实按上面的结构画满 '+panelCount+' 个 Panel，不能因为觉得"这段剧情就一个画面/不适合分镜"而跳过整个分镜结构、只画一张不分 Panel 的完整画面——那样等于用户选的分镜设置被无视了。先想清楚这 '+panelCount+' 个瞬间分别是什么画面；如果剧情本身只有一个连续动作、想不出'+panelCount+'个明显不同的瞬间，就把这同一个动作拆成不同的阶段/角度/距离（比如：动作前的蓄势、动作进行中的特写、动作结束后的反应、更远或更近的构图），也要凑够'+panelCount+'个 Panel，不能用"不适合分镜"当理由只画一张。'
  ]:[];
+ // 条漫气泡台词（仅条漫模式要求）：聊天室对话原样保留不动，这是额外加的一份「每格台词」，
+ // 用来给生成完的图叠气泡用——V5 会顺手拼进画面提示词的 Text: 段落让模型自己画出来，
+ // V4.5 不支持中文画字，这份台词只用来预填气泡文字框，由用户自己拖到图上。
+ // 没人说话的格子要求留空而不是瞎编，拖气泡的时候空的就不会自动摆出来。
+ const panelTextLines=isComic?[
+  '',
+  '【分镜台词】',
+  '只输出一条 paneltext###…### 口令，里面按 Panel 1/Panel 2/…依次写这一格要配的台词（用「|」分隔，哪怕只有 1 格也要写），格式固定为「Panel 1: 台词内容|Panel 2: 台词内容'+(panelCount>2?'|Panel 3: 台词内容|Panel 4: 台词内容':'')+'」。台词用中文、符合角色口吻，不署名、不加引号；这一格没有人说话或不适合配台词就写「Panel N: 」（冒号后面留空），不要为了凑数瞎编台词。',
+  '例：paneltext###Panel 1: 你终于舍得回来了|Panel 2: ###'
+ ]:[];
  return [
   '【小剧场创作任务】',
   '这次不是续写正文，而是单独写一段“小剧场”：一张画面 + 一段聊天室对话。忽略预设里关于字数、状态栏、正文格式、必须续写剧情之类的要求。',
@@ -4677,24 +4753,31 @@ function qlTcBuildQuietPrompt(mode,text,styleValue){
   '只输出下面这几种口令，其余一律不要写（不要正文、旁白、解释、分析、代码块）：',
   '1. title###小剧场标题###',
   '2. image###画面提示词###',
-  '3. eggroom###群聊名字|人数|群主|解说员|解说员吐槽###',
-  '4. eggmsg###left或right|说话人|对话内容###（可以有多条；side 只写 left 或 right）',
-  '5. eggend###',
-  '顺序：先 title，再 image，再 eggroom、若干条 eggmsg、最后 eggend。只出一张图、一份聊天室。',
+  isComic?'3. paneltext###分镜台词，见下方【分镜台词】说明###':'',
+  (isComic?'4':'3')+'. eggroom###群聊名字|人数|群主|解说员|解说员吐槽###',
+  (isComic?'5':'4')+'. eggmsg###left或right|说话人|对话内容###（可以有多条；side 只写 left 或 right）',
+  (isComic?'6':'5')+'. eggend###',
+  '顺序：先 title，再 image'+(isComic?'，再 paneltext':'')+'，再 eggroom、若干条 eggmsg、最后 eggend。只出一张图、一份聊天室。',
   '',
   imagePromptRuleBase,
   ...panelLines,
+  ...panelTextLines,
   modeRule,
   '聊天室里说话人的称呼要和当前角色、用户的称呼一致。'
- ].join('\n');
+ ].filter(Boolean).join('\n');
 }
-function qlTcParse(raw){
+function qlTcParsePanelTexts(raw,panelCount){
+ const m=String(raw||'').match(/paneltext###([\s\S]*?)###/);
+ if(!m)return [];
+ return m[1].split('|').slice(0,panelCount).map(piece=>String(piece||'').replace(/^\s*Panel\s*\d+\s*[:：]\s*/i,'').trim());
+}
+function qlTcParse(raw,panelCount=1){
  const text=String(raw||'');
  const tm=text.match(new RegExp(QL_TITLE_MARKER_SRC));
  const title=tm?String(tm[1]||'').replace(/\s+/g,' ').trim():'';
  // 小剧场单独使用正则字面量，避免 QL_MARKER_SRC 的字符串转义漏掉空格和换行。
  const images=[...text.matchAll(/image###([\s\S]*?)###/g)].map(m=>qlNormalizePrompt(m[1])).filter(Boolean);
- return {title,prompt:images[0]||'',extraImages:Math.max(0,images.length-1),eggBlocks:qlParseEggBlocks(text)};
+ return {title,prompt:images[0]||'',extraImages:Math.max(0,images.length-1),eggBlocks:qlParseEggBlocks(text),panelTexts:qlTcParsePanelTexts(text,panelCount)};
 }
 function qlTcRefreshCombos(){
  const sel=document.querySelector('#ql-tc-combo');if(!sel)return;
@@ -4719,7 +4802,11 @@ async function qlTcMakeImage(st){
  }
  const sizeSel=String(document.querySelector('#ql-tc-size')?.value||'');
  const sizeOv=(Array.isArray(st._editRecords)&&st._editRecords.length?st.sizeOverride||sizeSel:sizeSel)||generation.sizeOverride||'';
- const url=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null,null,sizeOv);
+ // 条漫气泡台词：只有 V5 才会自动拼进画面提示词让模型自己画字（V4/V4.5/V3 画不了中文，
+ // 这份台词只会在生成完之后用来预填手动气泡，不会进提示词——qlBuildNaiTextBlock 内部
+ // 自己会再判一次模型是不是 V5，这里即使传了也不会被用在非 V5 模型上）。
+ const extraTextBlock=isComic?qlBuildNaiTextBlock(st.panelTexts):'';
+ const url=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null,null,sizeOv,extraTextBlock);
  const candidate={url,prompt,generation,renderedPrompt:prompt,at:Date.now()};
  if(!Array.isArray(st._qlCandidates))st._qlCandidates=[];
  if(!st._qlCandidates.some(item=>sameImageSource(item.url,url)))st._qlCandidates.push(candidate);
@@ -4900,7 +4987,7 @@ async function qlTcGenerate(){
   if(statusEl)statusEl.textContent='正在让模型写小剧场…（'+llmMode+'；会带上预设、聊天上下文、角色卡和世界书）';
   const raw=await qlTcGenerateText(mode,input,ctx,styleValue);
   if(!raw)throw new Error('模型返回空内容');
-  const parsed=qlTcParse(raw);
+  const parsed=qlTcParse(raw,qlTcPanelCount(styleValue));
   if(!parsed.prompt||!parsed.eggBlocks.length){
    // 不再直接吞掉 raw：解析失败多半是输出被截断，把原始文字摆出来方便判断，
    // 并留一个「重新生成文字」按钮，不用用户重新手打一遍画面词/剧情词。
@@ -4912,7 +4999,7 @@ async function qlTcGenerate(){
   // 条漫要的是正常比例，所以这里不能像彩蛋那样无条件补前缀。
   if(styleMode!=='comic'&&!/^\s*[\[【]\s*彩蛋/.test(prompt))prompt='[彩蛋]'+prompt;
   if(!await qlGuardMissingNames(prompt,ctx)){if(statusEl)statusEl.textContent='已取消。';return;}
-  qlTcState={title:parsed.title,eggBlocks:parsed.eggBlocks,prompt,raw,url:'',generation:null,renderedPrompt:'',styleMode,_qlCandidates:[],_qlIndex:-1};
+  qlTcState={title:parsed.title,eggBlocks:parsed.eggBlocks,panelTexts:parsed.panelTexts||[],prompt,raw,url:'',generation:null,renderedPrompt:'',styleMode,_qlCandidates:[],_qlIndex:-1};
   if(statusEl)statusEl.textContent='文字已写好，正在出图…'+(parsed.extraImages?'（模型多写了 '+parsed.extraImages+' 张图的口令，只画第一张）':'');
   await qlTcMakeImage(qlTcState);
   qlTcRenderResult();
@@ -4970,7 +5057,7 @@ function qlTcSave(){
   record.naiPromptData=generation.naiPromptData&&Array.isArray(generation.naiPromptData.characters)&&generation.naiPromptData.characters.length?{basePrompt:String(generation.naiPromptData.basePrompt||''),characters:generation.naiPromptData.characters.map(x=>({key:x.key,prompt:x.prompt}))}:null;
   record.preset=preset?{name:preset.name||'',positive:preset.positive||'',negative:preset.negative||'',index:presetIndex,source:preset.source||'local'}:null;
   record.vibe=vibe?{name:vibe.name||'',entries:(vibe.entries||[]).map(entry=>({strength:entry.strength??0.6,informationExtracted:entry.informationExtracted??1,identifier:entry.identifier||entry.raw?.identifier||'',type:entry.type||entry.raw?.type||'image'}))}:null;
-  record.config=snapshotConfig(candidate.prompt,generation.negative);record.updatedAt=Date.now();record.dataUrl=candidate.url;record.theaterStyleMode=st.styleMode==='comic'?'comic':'egg';
+  record.config=snapshotConfig(candidate.prompt,generation.negative);record.updatedAt=Date.now();record.dataUrl=candidate.url;record.theaterStyleMode=st.styleMode==='comic'?'comic':'egg';record.panelTexts=Array.isArray(st.panelTexts)?st.panelTexts:(record.panelTexts||[]);
   save();history();renderTheater();
   if(typeof candidate.url==='string'&&/^data:image\//i.test(candidate.url))persistImageToTavern(candidate.url,record.taskKey||('theater-edit-'+Date.now())).then(path=>{if(record.dataUrl===candidate.url){record.dataUrl=path;save();history();renderTheater();}}).catch(error=>console.warn('[拾帧] 小剧场重绘图转存失败，原图仍保留。',error));
   if(st._renderHost)st._renderHost.innerHTML='';qlTcState=null;const statusEl=document.querySelector('#ql-tc-status');if(statusEl)statusEl.textContent='已保存修改；原小剧场分组、聊天室和角色相册归属均已保留。';return;
@@ -4985,7 +5072,7 @@ function qlTcSave(){
   const candidateKey=taskKey+':'+String(i+1);
   const rec=storeChatRecord(candidate.url,candidate.prompt,candidateKey,meta,candidate.generation);
   rec.albumCharacterName=name;rec.albumCharacterKey=cur.id||'';rec.collection='character-album';
-  rec.eggTitle=st.title||null;rec.eggBlocks=st.eggBlocks;rec.eggAlbumStyle=cfg().chatAlbumStyle||'follow';rec.theaterGroupId=taskKey;rec.theaterStyleMode=styleMode;
+  rec.eggTitle=st.title||null;rec.eggBlocks=st.eggBlocks;rec.eggAlbumStyle=cfg().chatAlbumStyle||'follow';rec.theaterGroupId=taskKey;rec.theaterStyleMode=styleMode;rec.panelTexts=Array.isArray(st.panelTexts)?st.panelTexts:[];
  }
  save();history();
  const savedCount=st._qlCandidates.length;
@@ -4993,6 +5080,128 @@ function qlTcSave(){
  const statusEl=document.querySelector('#ql-tc-status');
  if(statusEl)statusEl.textContent='已收入小剧场：'+savedCount+' 张图片均已保存到「'+name+'」角色相册。';
  renderTheater();
+}
+// ===== 条漫气泡（叠在已收藏条漫图片上的可拖拽台词气泡；跟聊天室各自独立，互不影响）=====
+// 气泡数据存在 record.bubbles=[{id,shape,x,y,w,h,text}]，x/y/w/h 都是百分比(0-100)，不管显示
+// 多大、导出多大分辨率都不用换算。只在条漫(theaterStyleMode==='comic')图片上挂这一层。
+function qlBubbleId(){return 'b'+Math.random().toString(36).slice(2,9);}
+function qlBubbleClearLayer(figure){figure.querySelectorAll('.ql-bubble-layer,.ql-bubble-toolbar').forEach(n=>n.remove());}
+function qlAttachBubbleLayer(figure,img,record){
+ if(!figure||!img||!record)return;
+ qlBubbleClearLayer(figure);
+ if(!Array.isArray(record.bubbles))record.bubbles=[];
+ // 自动预填：只在这张图从没手动加过气泡、且模型给了分镜台词时做一次；之后哪怕用户删光了也不会再自动补。
+ if(!record.bubbles.length&&!record._bubblesAutoFilled&&Array.isArray(record.panelTexts)&&record.panelTexts.some(t=>String(t||'').trim())){
+  const texts=record.panelTexts.map(t=>String(t||'').trim()).filter(Boolean);
+  texts.forEach((t,i)=>record.bubbles.push({id:qlBubbleId(),shape:'speech',x:8+((i%2)*46),y:6+Math.floor(i/2)*30+(i%2)*10,w:40,h:22,text:t}));
+ }
+ record._bubblesAutoFilled=true;
+ const layer=document.createElement('div');layer.className='ql-bubble-layer';figure.append(layer);
+ const persist=()=>{try{save();}catch(error){console.warn('[拾帧] 气泡保存失败',error);}};
+ const renderOne=bubble=>{
+  const el=document.createElement('div');el.className='ql-bubble ql-bubble-'+(bubble.shape==='thought'?'thought':'speech');
+  el.style.left=bubble.x+'%';el.style.top=bubble.y+'%';el.style.width=bubble.w+'%';el.style.height=bubble.h+'%';
+  const shape=document.createElement('div');shape.className='ql-bubble-shape';
+  const ta=document.createElement('textarea');ta.className='ql-bubble-text';ta.value=bubble.text||'';ta.placeholder='台词…';
+  const del=document.createElement('button');del.type='button';del.className='ql-bubble-del';del.setAttribute('aria-label','删除气泡');del.textContent='×';
+  const handle=document.createElement('div');handle.className='ql-bubble-handle';
+  el.append(shape,ta,del,handle);
+  ta.addEventListener('pointerdown',e=>e.stopPropagation());
+  ta.addEventListener('input',()=>{bubble.text=ta.value;persist();});
+  del.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const idx=record.bubbles.indexOf(bubble);if(idx>=0)record.bubbles.splice(idx,1);el.remove();persist();});
+  let dragging=null;
+  shape.addEventListener('pointerdown',e=>{e.preventDefault();dragging={startX:e.clientX,startY:e.clientY,startLeft:bubble.x,startTop:bubble.y,rect:layer.getBoundingClientRect()};shape.setPointerCapture(e.pointerId);});
+  shape.addEventListener('pointermove',e=>{
+   if(!dragging)return;
+   const dxPct=(e.clientX-dragging.startX)/dragging.rect.width*100,dyPct=(e.clientY-dragging.startY)/dragging.rect.height*100;
+   bubble.x=Math.max(0,Math.min(100-bubble.w,dragging.startLeft+dxPct));bubble.y=Math.max(0,Math.min(100-bubble.h,dragging.startTop+dyPct));
+   el.style.left=bubble.x+'%';el.style.top=bubble.y+'%';
+  });
+  const endDrag=()=>{if(dragging){dragging=null;persist();}};
+  shape.addEventListener('pointerup',endDrag);shape.addEventListener('pointercancel',endDrag);
+  let resizing=null;
+  handle.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();resizing={startX:e.clientX,startY:e.clientY,startW:bubble.w,startH:bubble.h,rect:layer.getBoundingClientRect()};handle.setPointerCapture(e.pointerId);});
+  handle.addEventListener('pointermove',e=>{
+   if(!resizing)return;
+   const dwPct=(e.clientX-resizing.startX)/resizing.rect.width*100,dhPct=(e.clientY-resizing.startY)/resizing.rect.height*100;
+   bubble.w=Math.max(10,Math.min(100-bubble.x,resizing.startW+dwPct));bubble.h=Math.max(8,Math.min(100-bubble.y,resizing.startH+dhPct));
+   el.style.width=bubble.w+'%';el.style.height=bubble.h+'%';
+  });
+  const endResize=()=>{if(resizing){resizing=null;persist();}};
+  handle.addEventListener('pointerup',endResize);handle.addEventListener('pointercancel',endResize);
+  return el;
+ };
+ const redraw=()=>{layer.querySelectorAll('.ql-bubble').forEach(n=>n.remove());record.bubbles.forEach(b=>layer.append(renderOne(b)));};
+ redraw();
+ const toolbar=document.createElement('div');toolbar.className='ql-bubble-toolbar';
+ const addSpeech=document.createElement('button');addSpeech.type='button';addSpeech.className='menu_button';addSpeech.textContent='+ 对话气泡';
+ const addThought=document.createElement('button');addThought.type='button';addThought.className='menu_button';addThought.textContent='+ 心理气泡';
+ const exportBtn=document.createElement('button');exportBtn.type='button';exportBtn.className='menu_button ql-primary';exportBtn.textContent='合成导出';
+ addSpeech.addEventListener('click',()=>{record.bubbles.push({id:qlBubbleId(),shape:'speech',x:20,y:20,w:40,h:20,text:''});persist();redraw();});
+ addThought.addEventListener('click',()=>{record.bubbles.push({id:qlBubbleId(),shape:'thought',x:20,y:20,w:40,h:20,text:''});persist();redraw();});
+ exportBtn.addEventListener('click',()=>qlBubbleExport(img,record));
+ toolbar.append(addSpeech,addThought,exportBtn);
+ figure.after(toolbar);
+}
+function qlWrapCanvasText(ctx,text,maxWidth){
+ const out=[];
+ for(const para of String(text||'').split(/\n+/)){
+  let line='';
+  for(const ch of para){const test=line+ch;if(ctx.measureText(test).width>maxWidth&&line){out.push(line);line=ch;}else line=test;}
+  if(line)out.push(line);
+ }
+ return out;
+}
+function qlBubbleDrawOnCanvas(ctx,bubble,imgW,imgH){
+ const x=bubble.x/100*imgW,y=bubble.y/100*imgH,w=bubble.w/100*imgW,h=bubble.h/100*imgH;
+ const r=Math.min(w,h)*(bubble.shape==='thought'?0.5:0.22);
+ ctx.save();
+ ctx.fillStyle='#ffffff';ctx.strokeStyle='#1a1a1a';ctx.lineWidth=Math.max(2,Math.min(w,h)*0.02);
+ ctx.beginPath();
+ if(typeof ctx.roundRect==='function')ctx.roundRect(x,y,w,h,r);
+ else{ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);}
+ ctx.closePath();ctx.fill();ctx.stroke();
+ if(bubble.shape==='thought'){
+  let cx=x+w*0.22,cy=y+h,rr=Math.min(w,h)*0.09;
+  for(let i=0;i<3;i++){cx-=rr*1.6;cy+=rr*1.4;rr*=0.7;ctx.beginPath();ctx.arc(cx,cy,Math.max(1.5,rr),0,Math.PI*2);ctx.fill();ctx.stroke();}
+ }else{
+  const tailX=x+w*0.28,tailBaseW=Math.min(w,h)*0.18;
+  ctx.beginPath();ctx.moveTo(tailX,y+h-2);ctx.lineTo(tailX-tailBaseW*0.4,y+h+tailBaseW);ctx.lineTo(tailX+tailBaseW*0.6,y+h-2);ctx.closePath();ctx.fill();ctx.stroke();
+ }
+ const text=String(bubble.text||'').trim();
+ if(text){
+  const padY=h*0.16,boxW=w-w*0.12*2;
+  let fontSize=Math.max(12,Math.min(h*0.22,w*0.12)),lines=[];
+  ctx.fillStyle='#1a1a1a';ctx.textBaseline='middle';ctx.textAlign='center';
+  for(let attempt=0;attempt<3;attempt++){
+   ctx.font=fontSize+'px sans-serif';
+   lines=qlWrapCanvasText(ctx,text,boxW);
+   if(lines.length*fontSize*1.25<=h-padY*2||fontSize<=11)break;
+   fontSize*=0.8;
+  }
+  ctx.font=fontSize+'px sans-serif';
+  const lineH=fontSize*1.25,totalH=lines.length*lineH,startY=y+h/2-totalH/2+lineH/2;
+  lines.forEach((line,i)=>ctx.fillText(line,x+w/2,startY+i*lineH));
+ }
+ ctx.restore();
+}
+async function qlBubbleExport(img,record){
+ try{
+  const src=img.currentSrc||img.src;
+  let bitmap=null;
+  if(typeof createImageBitmap==='function'){try{const res=await fetch(src);bitmap=await createImageBitmap(await res.blob());}catch{bitmap=null;}}
+  const width=bitmap?bitmap.width:img.naturalWidth,height=bitmap?bitmap.height:img.naturalHeight;
+  if(!width||!height)throw new Error('无法读取图片尺寸');
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+  const ctx=canvas.getContext('2d');
+  if(bitmap)ctx.drawImage(bitmap,0,0,width,height);else ctx.drawImage(img,0,0,width,height);
+  (record.bubbles||[]).forEach(b=>qlBubbleDrawOnCanvas(ctx,b,width,height));
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+  if(!blob)throw new Error('合成失败');
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='shizhen-comic-'+Date.now()+'.png';document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+ }catch(error){console.error('[拾帧] 气泡合成导出失败',error);alert('合成导出失败：'+(error?.message||String(error)));}
 }
 function qlTcBind(){
  const box=document.querySelector('#ql-theater-compose');if(!box)return;
@@ -5133,7 +5342,7 @@ function renderTheater(){
      const generation=resolveChatImageGeneration(prompt,getContext(),styleMode==='comic'?'':'egg');
      rerollStatus.hidden=false;rerollStatus.classList.add('is-loading');rerollStatus.textContent='正在重 Roll 中…';
      rerollBtn.disabled=true;
-     qlTcState={title:item.eggTitle||'',eggBlocks:[],prompt,renderedPrompt:String(record.basePrompt||record.prompt||prompt),url:record.dataUrl,generation,raw:'',sizeOverride:item.size||'',styleMode,_qlCandidates:[{url:record.dataUrl,prompt,renderedPrompt:String(record.basePrompt||record.prompt||prompt),generation,_editRecord:record}],_qlIndex:0,_editRecords:[record],_renderHost:tagEditor,_inlineTheater:true,_inlineStatusEl:rerollStatus,_inlineRerollButton:rerollBtn};
+     qlTcState={title:item.eggTitle||'',eggBlocks:[],panelTexts:Array.isArray(record.panelTexts)?record.panelTexts:[],prompt,renderedPrompt:String(record.basePrompt||record.prompt||prompt),url:record.dataUrl,generation,raw:'',sizeOverride:item.size||'',styleMode,_qlCandidates:[{url:record.dataUrl,prompt,renderedPrompt:String(record.basePrompt||record.prompt||prompt),generation,_editRecord:record}],_qlIndex:0,_editRecords:[record],_renderHost:tagEditor,_inlineTheater:true,_inlineStatusEl:rerollStatus,_inlineRerollButton:rerollBtn};
      await qlTcReroll();
     });
     deleteBtn.addEventListener('click',event=>{
@@ -5153,14 +5362,16 @@ function renderTheater(){
      status('图片已从小剧场移除，并转入底片缓存。');
     });
     figure.append(controls,tagEditor,rerollStatus);
+    const refreshBubbles=()=>{const record=currentRecord();if(record?.theaterStyleMode==='comic')qlAttachBubbleLayer(figure,img,record);else qlBubbleClearLayer(figure);};
     if(images.length>1){
      const prev=qlCreateChatImageArrow('prev'),next=qlCreateChatImageArrow('next');
-     const stepImage=delta=>{imageIndex=(imageIndex+delta+images.length)%images.length;img.src=images[imageIndex].dataUrl;if(!tagEditor.hidden)loadCurrentTag();};
+     const stepImage=delta=>{imageIndex=(imageIndex+delta+images.length)%images.length;img.src=images[imageIndex].dataUrl;if(!tagEditor.hidden)loadCurrentTag();refreshBubbles();};
      prev.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();stepImage(-1);});
      next.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();stepImage(1);});
      figure.append(prev,next);
     }
     applyChatTheme(figure);card.append(figure);
+    refreshBubbles();
    }
    (item.eggBlocks||[]).forEach(block=>{card.append(qlBuildEggChat(block.room,block.messages,undefined,false,style));});
    const footerActions=document.createElement('div');footerActions.className='ql-theater-footer-actions';
@@ -6453,7 +6664,17 @@ async function qlConvertZhToTag(){
   if(btn)btn.disabled=false;
  }
 }
-function init(){const root=$('#shizhen-panel');if(!root||root.dataset.ready)return;root.dataset.ready='1';const promptGalleryBack=$('#ql-prompt-gallery-back');if(promptGalleryBack)promptGalleryBack.onclick=()=>{const root=$('#shizhen-panel');if(!root)return;const wordbank=root.querySelector('button.ql-tab[data-page="wordbank"]');if(wordbank){root.querySelectorAll('button.ql-tab').forEach(item=>{const active=item===wordbank;item.classList.toggle('active',active);item.setAttribute('aria-selected',String(active));});root.querySelectorAll('[data-page-panel]').forEach(pageNode=>{const active=pageNode.dataset.pagePanel==='wordbank';pageNode.hidden=!active;pageNode.classList.toggle('active',active);});}const promptTab=root.querySelector('button.ql-subtab[data-subpage="prompt-library"]');if(promptTab){const scope=promptTab.closest('.ql-page')||root;scope.querySelectorAll('button.ql-subtab').forEach(item=>{const active=item===promptTab;item.classList.toggle('active',active);item.setAttribute('aria-selected',String(active));});scope.querySelectorAll('[data-subpage-panel]').forEach(pageNode=>{const active=pageNode.dataset.subpagePanel==='prompt-library';pageNode.hidden=!active;pageNode.classList.toggle('active',active);});}};const s=cfg();initWorldbookModeManager({root,cfg});const viewfinderResult=$('#ql-result');if(viewfinderResult&&!viewfinderResult.dataset.qlViewfinderBound){viewfinderResult.dataset.qlViewfinderBound='1';viewfinderResult.addEventListener('click',event=>{if(event.target.closest('button'))return;const image=event.target.closest('img');if(image)openViewfinderImage(image.src);});new MutationObserver(()=>syncViewfinderActions()).observe(viewfinderResult,{childList:true,subtree:true});}$('#ql-result-enlarge').onclick=()=>{const image=$('#ql-result img');if(image){openViewfinderImage(image.src);status('已打开原图预览。点击图片外侧或右上角关闭。');}};const favoriteButton=$('#ql-result-favorite');if(favoriteButton){favoriteButton.onclick=null;if(favoriteButton.dataset.qlFavoriteBound!=='1'){favoriteButton.dataset.qlFavoriteBound='1';favoriteButton.addEventListener('click',event=>{event.preventDefault();toggleViewfinderFavorite();setTimeout(()=>syncViewfinderActions(),0);});}}$('#ql-prompt-clear').onclick=()=>{const field=$('#ql-prompt');if(field)field.value='';const settings=cfg();settings.prompt='';delete settings.activePromptEntryId;delete settings.activePromptEntryAppliedAt;settings.viewfinderPromptUnlinked=true;save();read();syncViewfinderAlbumTargets();status('正向提示词已清空；接下来生成的图片不会自动归入原提示词图集，可选择收藏目标相册。');};$('#ql-result-album-target-save')?.addEventListener('click',()=>{const select=$('#ql-result-album-target'),target=String(select?.value||'');if(!target){status('请先选择要作为默认目标的相册。');return;}const settings=cfg();settings.viewfinderAlbumTargetKey=target;save();syncViewfinderAlbumTargets();const name=select?.selectedOptions[0]?.textContent||target;status('已保存默认收藏目标：「'+name+'」。保存键已启用，之后收藏的图片会进入该角色卡相册。');});$('#ql-result-album-target')?.addEventListener('focus',()=>syncViewfinderAlbumTargets());$('#ql-result-album-target')?.addEventListener('pointerdown',()=>syncViewfinderAlbumTargets());$('#ql-result-album-target')?.addEventListener('change',()=>{const select=$('#ql-result-album-target'),settings=cfg();qlPendingAlbumTarget=null;syncViewfinderAlbumTargets();if(select?.value&&select.value!==String(settings.viewfinderAlbumTargetKey||''))status('目标已更改但尚未保存；点击「保存」后才会启用该收藏目标。');});syncViewfinderAlbumTargets();syncViewfinderActions();const pluginToggle=$('#ql-plugin-toggle');const syncPluginToggle=()=>{const enabled=cfg().enabled!==false;pluginToggle.textContent=enabled?'插件：已启用':'插件：已停用';pluginToggle.setAttribute('aria-pressed',String(enabled));pluginToggle.classList.toggle('ql-plugin-disabled',!enabled);pluginToggle.title=enabled?'点击暂停自动扫描与自动生图':'点击恢复自动扫描与自动生图';};pluginToggle.onclick=()=>{const settings=cfg();settings.enabled=settings.enabled===false;saveSettingsDebounced();syncPluginToggle();};syncPluginToggle();if(s.provider==='openai'||!['novelai','novelai-thirdparty'].includes(s.provider)){s.provider='novelai';saveSettingsDebounced();}$('#ql-provider').value=s.provider;$('#ql-endpoint').value=s.endpoint;$('#ql-key').value=s.apiKey;$('#ql-gpt-endpoint').value='';$('#ql-gpt-key').value='';$('#ql-nai-key').value=s.naiApiKey||'';$('#ql-nai-third-endpoint').value=s.naiThirdEndpoint||'';$('#ql-nai-third-key').value=s.naiThirdKey||'';$('#ql-model').value=s.model;$('#ql-size').value=s.size;$('#ql-quality').value=s.quality;$('#ql-nai-model').value=s.naiModel||'nai-diffusion-4-5-full';$('#ql-nai-steps').value=s.naiSteps||28;$('#ql-nai-scale').value=s.naiScale||5;$('#ql-nai-width').value=s.naiWidth||832;$('#ql-nai-height').value=s.naiHeight||1216;$('#ql-fast-nai-size-preset').value=(s.naiWidth||832)+'x'+(s.naiHeight||1216);if(!$('#ql-fast-nai-size-preset').querySelector('option:checked'))$('#ql-fast-nai-size-preset').value='832x1216';$('#ql-nai-sampler').value=s.naiSampler||'k_euler_ancestral';$('#ql-nai-scheduler').value=s.naiScheduler||'karras';$('#ql-prompt').value='';s.prompt='';delete s.activePromptEntryId;delete s.activePromptEntryAppliedAt;s.viewfinderPromptUnlinked=false;save();const toggleProvider=()=>{const nai=$('#ql-provider').value!=='openai';$('#ql-openai-settings').hidden=nai;$('#ql-nai-settings').hidden=!nai;};$('#ql-provider').onchange=toggleProvider;toggleProvider();$('#ql-fast-provider').value=s.provider==='novelai-thirdparty'?'novelai-thirdparty':'novelai';$('#ql-fast-model').value=s.model||'gpt-image-1';$('#ql-fast-size').value=s.size||'1024x1024';$('#ql-fast-quality').value=s.quality||'medium';$('#ql-fast-nai-model').value=s.naiModel||'nai-diffusion-4-5-full';$('#ql-fast-nai-steps').value=s.naiSteps||28;$('#ql-fast-nai-scale').value=s.naiScale||5;$('#ql-fast-nai-width').value=s.naiWidth||832;$('#ql-fast-nai-height').value=s.naiHeight||1216;$('#ql-fast-nai-size-preset').value=(s.naiWidth||832)+'x'+(s.naiHeight||1216);if(!$('#ql-fast-nai-size-preset').querySelector('option:checked'))$('#ql-fast-nai-size-preset').value='832x1216';$('#ql-fast-nai-sampler').value=s.naiSampler||'k_euler_ancestral';$('#ql-fast-nai-scheduler').value=s.naiScheduler||'karras';$('#ql-fast-nai-normalize').checked=s.naiNormalizeVibeStrengths!==false;$('#ql-fast-nai-quality').value=s.naiQualityMode||'standard';$('#ql-fast-nai-uc').value=String(s.naiUcPreset??3);$('#ql-fast-nai-seed').value=Number(s.naiSeed)>=0?String(s.naiSeed):'';const toggleFast=()=>{const nai=true;$('#ql-fast-openai').hidden=nai;$('#ql-fast-nai').hidden=!nai;syncFastControls();$('#ql-provider').value=$('#ql-fast-provider').value;toggleProvider();};$('#ql-fast-provider').onchange=toggleFast;toggleFast();$('#ql-prompt').addEventListener('input',()=>{const settings=cfg();settings.prompt=$('#ql-prompt').value;if(String(settings.prompt||'').trim())settings.viewfinderPromptUnlinked=false;syncViewfinderAlbumTargets();save();});$('#ql-active-config-mode').onchange=()=>{const s=cfg();s.activeConfigMode=$('#ql-active-config-mode').value;if(s.activeConfigMode==='separate')s.activeComboIndex=-1;renderActiveConfigMode();renderActiveArtists();renderActiveVibes();save();qlUpdateFinalPreview();};$('#ql-active-preset').onchange=()=>{const c=cfg(),i=Number($('#ql-active-preset').value),combo=c.combinations[i];c.activeConfigMode='combo';c.activeComboIndex=i;c.activePresetIndex=combo?Number(combo.artistIndex??-1):-1;c.activeVibeIndex=combo?Number(combo.vibeIndex??-1):-1;renderActiveConfigMode();renderActiveArtists();renderActiveVibes();syncViewfinderNegativeFromActiveArtist();save();qlUpdateFinalPreview();};$('#ql-active-artist').onchange=()=>{const c=cfg();c.activeConfigMode='separate';c.activeComboIndex=-1;c.activePresetIndex=Number($('#ql-active-artist').value);renderActiveConfigMode();syncViewfinderNegativeFromActiveArtist();save();qlUpdateFinalPreview();};$('#ql-active-vibe').onchange=()=>{const c=cfg();c.activeConfigMode='separate';c.activeComboIndex=-1;c.activeVibeIndex=Number($('#ql-active-vibe').value);renderActiveConfigMode();save();qlUpdateFinalPreview();};$('#ql-apply-preset').onclick=()=>{const s=cfg();if(s.activeConfigMode==='separate'){s.activeComboIndex=-1;s.activePresetIndex=Number($('#ql-active-artist').value);s.activeVibeIndex=Number($('#ql-active-vibe').value);syncViewfinderNegativeFromActiveArtist();save();status('已应用独立配置：'+(s.presets[s.activePresetIndex]?.name||'不使用画师串')+' / '+(s.vibes[s.activeVibeIndex]?.name||'不使用 Vibe'));return;}const i=Number($('#ql-active-preset').value),c=s.combinations[i];if(!c){status('请先在配置中创建组合。');return;}s.activeComboIndex=i;s.activePresetIndex=Number(c.artistIndex??-1);s.activeVibeIndex=Number(c.vibeIndex??-1);syncViewfinderNegativeFromActiveArtist();save();renderActiveArtists();renderActiveVibes();status('已应用组合：'+c.name);};$('#ql-open-preset').onclick=()=>{root.querySelector('.ql-tab[data-page="library"]')?.click();root.querySelector('.ql-subtab[data-subpage="bindings"]')?.click();};const saveGlobalCombo=value=>{const index=Number(value);cfg().globalComboIndex=Number.isInteger(index)&&index>=0&&cfg().combinations[index]?index:-1;const selected=String(cfg().globalComboIndex);const legacy=$('#ql-global-combo'),display=$('#ql-global-combo-display');if(legacy)legacy.value=selected;if(display)display.value=selected;save();status('已保存全局通用预设：'+(cfg().combinations[cfg().globalComboIndex]?.name||'不使用预设'));};$('#ql-global-combo').onchange=()=>saveGlobalCombo($('#ql-global-combo').value);$('#ql-global-combo-display').onchange=()=>saveGlobalCombo($('#ql-global-combo-display').value);
+function init(){const root=$('#shizhen-panel');if(!root||root.dataset.ready)return;root.dataset.ready='1';const promptGalleryBack=$('#ql-prompt-gallery-back');if(promptGalleryBack)promptGalleryBack.onclick=()=>{const root=$('#shizhen-panel');if(!root)return;const wordbank=root.querySelector('button.ql-tab[data-page="wordbank"]');if(wordbank){root.querySelectorAll('button.ql-tab').forEach(item=>{const active=item===wordbank;item.classList.toggle('active',active);item.setAttribute('aria-selected',String(active));});root.querySelectorAll('[data-page-panel]').forEach(pageNode=>{const active=pageNode.dataset.pagePanel==='wordbank';pageNode.hidden=!active;pageNode.classList.toggle('active',active);});}const promptTab=root.querySelector('button.ql-subtab[data-subpage="prompt-library"]');if(promptTab){const scope=promptTab.closest('.ql-page')||root;scope.querySelectorAll('button.ql-subtab').forEach(item=>{const active=item===promptTab;item.classList.toggle('active',active);item.setAttribute('aria-selected',String(active));});scope.querySelectorAll('[data-subpage-panel]').forEach(pageNode=>{const active=pageNode.dataset.subpagePanel==='prompt-library';pageNode.hidden=!active;pageNode.classList.toggle('active',active);});}};const s=cfg();initWorldbookModeManager({root,cfg});const viewfinderResult=$('#ql-result');if(viewfinderResult&&!viewfinderResult.dataset.qlViewfinderBound){viewfinderResult.dataset.qlViewfinderBound='1';viewfinderResult.addEventListener('click',event=>{if(event.target.closest('button'))return;const image=event.target.closest('img');if(image)openViewfinderImage(image.src);});new MutationObserver(()=>syncViewfinderActions()).observe(viewfinderResult,{childList:true,subtree:true});}$('#ql-result-enlarge').onclick=()=>{const image=$('#ql-result img');if(image){openViewfinderImage(image.src);status('已打开原图预览。点击图片外侧或右上角关闭。');}};const favoriteButton=$('#ql-result-favorite');if(favoriteButton){favoriteButton.onclick=null;if(favoriteButton.dataset.qlFavoriteBound!=='1'){favoriteButton.dataset.qlFavoriteBound='1';favoriteButton.addEventListener('click',event=>{event.preventDefault();toggleViewfinderFavorite();setTimeout(()=>syncViewfinderActions(),0);});}}$('#ql-prompt-clear').onclick=()=>{const field=$('#ql-prompt');if(field)field.value='';const settings=cfg();settings.prompt='';delete settings.activePromptEntryId;delete settings.activePromptEntryAppliedAt;settings.viewfinderPromptUnlinked=true;save();read();syncViewfinderAlbumTargets();status('正向提示词已清空；接下来生成的图片不会自动归入原提示词图集，可选择收藏目标相册。');};$('#ql-result-album-target-save')?.addEventListener('click',()=>{const select=$('#ql-result-album-target'),target=String(select?.value||'');if(!target){status('请先选择要作为默认目标的相册。');return;}const settings=cfg();settings.viewfinderAlbumTargetKey=target;save();syncViewfinderAlbumTargets();const name=select?.selectedOptions[0]?.textContent||target;status('已保存默认收藏目标：「'+name+'」。保存键已启用，之后收藏的图片会进入该角色卡相册。');});$('#ql-result-album-target')?.addEventListener('focus',()=>syncViewfinderAlbumTargets());$('#ql-result-album-target')?.addEventListener('pointerdown',()=>syncViewfinderAlbumTargets());$('#ql-result-album-target')?.addEventListener('change',()=>{const select=$('#ql-result-album-target'),settings=cfg();qlPendingAlbumTarget=null;syncViewfinderAlbumTargets();if(select?.value&&select.value!==String(settings.viewfinderAlbumTargetKey||''))status('目标已更改但尚未保存；点击「保存」后才会启用该收藏目标。');});syncViewfinderAlbumTargets();syncViewfinderActions();const pluginToggle=$('#ql-plugin-toggle');const syncPluginToggle=()=>{const enabled=cfg().enabled!==false;pluginToggle.textContent=enabled?'插件：已启用':'插件：已停用';pluginToggle.setAttribute('aria-pressed',String(enabled));pluginToggle.classList.toggle('ql-plugin-disabled',!enabled);pluginToggle.title=enabled?'点击暂停自动扫描与自动生图':'点击恢复自动扫描与自动生图';};pluginToggle.onclick=()=>{const settings=cfg();settings.enabled=settings.enabled===false;saveSettingsDebounced();syncPluginToggle();};syncPluginToggle();if(s.provider==='openai'||!['novelai','novelai-thirdparty'].includes(s.provider)){s.provider='novelai';saveSettingsDebounced();}$('#ql-provider').value=s.provider;$('#ql-endpoint').value=s.endpoint;$('#ql-key').value=s.apiKey;$('#ql-gpt-endpoint').value='';$('#ql-gpt-key').value='';$('#ql-nai-key').value=s.naiApiKey||'';$('#ql-nai-third-endpoint').value=s.naiThirdEndpoint||'';$('#ql-nai-third-key').value=s.naiThirdKey||'';$('#ql-model').value=s.model;$('#ql-size').value=s.size;$('#ql-quality').value=s.quality;$('#ql-nai-model').value=s.naiModel||'nai-diffusion-4-5-full';$('#ql-nai-steps').value=s.naiSteps||28;$('#ql-nai-scale').value=s.naiScale||5;$('#ql-nai-width').value=s.naiWidth||832;$('#ql-nai-height').value=s.naiHeight||1216;$('#ql-fast-nai-size-preset').value=(s.naiWidth||832)+'x'+(s.naiHeight||1216);if(!$('#ql-fast-nai-size-preset').querySelector('option:checked'))$('#ql-fast-nai-size-preset').value='832x1216';$('#ql-nai-sampler').value=s.naiSampler||'k_euler_ancestral';$('#ql-nai-scheduler').value=s.naiScheduler||'karras';$('#ql-prompt').value='';s.prompt='';delete s.activePromptEntryId;delete s.activePromptEntryAppliedAt;s.viewfinderPromptUnlinked=false;save();const toggleProvider=()=>{const nai=$('#ql-provider').value!=='openai';$('#ql-openai-settings').hidden=nai;$('#ql-nai-settings').hidden=!nai;};$('#ql-provider').onchange=toggleProvider;toggleProvider();$('#ql-fast-provider').value=s.provider==='novelai-thirdparty'?'novelai-thirdparty':'novelai';$('#ql-fast-model').value=s.model||'gpt-image-1';$('#ql-fast-size').value=s.size||'1024x1024';$('#ql-fast-quality').value=s.quality||'medium';$('#ql-fast-nai-model').value=s.naiModel||'nai-diffusion-4-5-full';$('#ql-fast-nai-steps').value=s.naiSteps||28;$('#ql-fast-nai-scale').value=s.naiScale||5;$('#ql-fast-nai-width').value=s.naiWidth||832;$('#ql-fast-nai-height').value=s.naiHeight||1216;$('#ql-fast-nai-size-preset').value=(s.naiWidth||832)+'x'+(s.naiHeight||1216);if(!$('#ql-fast-nai-size-preset').querySelector('option:checked'))$('#ql-fast-nai-size-preset').value='832x1216';$('#ql-fast-nai-sampler').value=s.naiSampler||'k_euler_ancestral';$('#ql-fast-nai-scheduler').value=s.naiScheduler||'karras';$('#ql-fast-nai-normalize').checked=s.naiNormalizeVibeStrengths!==false;$('#ql-fast-nai-quality').value=s.naiQualityMode||'standard';$('#ql-fast-nai-uc').value=String(s.naiUcPreset??3);$('#ql-fast-nai-seed').value=Number(s.naiSeed)>=0?String(s.naiSeed):'';const toggleFast=()=>{const nai=true;$('#ql-fast-openai').hidden=nai;$('#ql-fast-nai').hidden=!nai;syncFastControls();$('#ql-provider').value=$('#ql-fast-provider').value;toggleProvider();};$('#ql-fast-provider').onchange=toggleFast;toggleFast();
+// 切换模型：立刻全局生效（不需要先跑一次生成才同步），并且步数/CFG/采样器/调度器/质量标签/UC 按模型分别记忆、自动切换（不含宽高尺寸）。
+$('#ql-fast-nai-model').onchange=()=>{
+ const s=cfg(),oldModel=String(s.naiModel||'nai-diffusion-4-5-full'),newModel=$('#ql-fast-nai-model').value;
+ if(newModel===oldModel)return;
+ qlSaveNaiModelParams(s,oldModel);
+ s.naiModel=newModel;
+ qlApplyNaiModelParams(s,newModel);
+ save();
+ status('已切换到 '+($('#ql-fast-nai-model').selectedOptions[0]?.textContent||newModel)+'，对应的步数 / CFG / 采样器等参数已自动套用。');
+};$('#ql-prompt').addEventListener('input',()=>{const settings=cfg();settings.prompt=$('#ql-prompt').value;if(String(settings.prompt||'').trim())settings.viewfinderPromptUnlinked=false;syncViewfinderAlbumTargets();save();});$('#ql-active-config-mode').onchange=()=>{const s=cfg();s.activeConfigMode=$('#ql-active-config-mode').value;if(s.activeConfigMode==='separate')s.activeComboIndex=-1;renderActiveConfigMode();renderActiveArtists();renderActiveVibes();save();qlUpdateFinalPreview();};$('#ql-active-preset').onchange=()=>{const c=cfg(),i=Number($('#ql-active-preset').value),combo=c.combinations[i];c.activeConfigMode='combo';c.activeComboIndex=i;c.activePresetIndex=combo?Number(combo.artistIndex??-1):-1;c.activeVibeIndex=combo?Number(combo.vibeIndex??-1):-1;renderActiveConfigMode();renderActiveArtists();renderActiveVibes();syncViewfinderNegativeFromActiveArtist();save();qlUpdateFinalPreview();};$('#ql-active-artist').onchange=()=>{const c=cfg();c.activeConfigMode='separate';c.activeComboIndex=-1;c.activePresetIndex=Number($('#ql-active-artist').value);renderActiveConfigMode();syncViewfinderNegativeFromActiveArtist();save();qlUpdateFinalPreview();};$('#ql-active-vibe').onchange=()=>{const c=cfg();c.activeConfigMode='separate';c.activeComboIndex=-1;c.activeVibeIndex=Number($('#ql-active-vibe').value);renderActiveConfigMode();save();qlUpdateFinalPreview();};$('#ql-apply-preset').onclick=()=>{const s=cfg();if(s.activeConfigMode==='separate'){s.activeComboIndex=-1;s.activePresetIndex=Number($('#ql-active-artist').value);s.activeVibeIndex=Number($('#ql-active-vibe').value);syncViewfinderNegativeFromActiveArtist();save();status('已应用独立配置：'+(s.presets[s.activePresetIndex]?.name||'不使用画师串')+' / '+(s.vibes[s.activeVibeIndex]?.name||'不使用 Vibe'));return;}const i=Number($('#ql-active-preset').value),c=s.combinations[i];if(!c){status('请先在配置中创建组合。');return;}s.activeComboIndex=i;s.activePresetIndex=Number(c.artistIndex??-1);s.activeVibeIndex=Number(c.vibeIndex??-1);syncViewfinderNegativeFromActiveArtist();save();renderActiveArtists();renderActiveVibes();status('已应用组合：'+c.name);};$('#ql-open-preset').onclick=()=>{root.querySelector('.ql-tab[data-page="library"]')?.click();root.querySelector('.ql-subtab[data-subpage="bindings"]')?.click();};const saveGlobalCombo=value=>{const index=Number(value);cfg().globalComboIndex=Number.isInteger(index)&&index>=0&&cfg().combinations[index]?index:-1;const selected=String(cfg().globalComboIndex);const legacy=$('#ql-global-combo'),display=$('#ql-global-combo-display');if(legacy)legacy.value=selected;if(display)display.value=selected;save();status('已保存全局通用预设：'+(cfg().combinations[cfg().globalComboIndex]?.name||'不使用预设'));};$('#ql-global-combo').onchange=()=>saveGlobalCombo($('#ql-global-combo').value);$('#ql-global-combo-display').onchange=()=>saveGlobalCombo($('#ql-global-combo-display').value);
   {const en=$('#ql-extra-neg');if(en)en.oninput=()=>{cfg().extraNegative=en.value;save();};}
   for(const [id,key,sizeKey,label] of [['sb','sbComboIndex','sbSize','状态栏'],['egg','eggComboIndex','eggSize','彩蛋']]){const cb=$('#ql-'+id+'-combo'),sz=$('#ql-'+id+'-size');if(cb)cb.onchange=()=>{const v=Number(cb.value);cfg()[key]=cfg().combinations[v]?v:-1;save();status('已保存'+label+'组合：'+(cfg().combinations[v]?.name||'跟随正文'));};if(sz)sz.onchange=()=>{cfg()[sizeKey]=sz.value||'';save();status('已保存'+label+'尺寸：'+(sz.value||'跟随正文'));};}
   {const to=$('#ql-timeout');if(to)to.onchange=()=>{cfg().requestTimeoutSec=Number(to.value);save();status('已保存生图超时：'+(Number(to.value)?to.value+' 秒':'不限制'));};}
@@ -6876,7 +7097,7 @@ $('#ql-generate').onclick=async()=>{
  if(conf.provider==='novelai'&&!conf.naiApiKey){status('请在接口设置中填写 NovelAI 官网 Key。');return;}if(conf.provider==='novelai-thirdparty'&&(!conf.naiThirdEndpoint||!conf.naiThirdKey)){status('请填写 NAI 第三方接口地址和 Key。');return;}
  busy=true;$('#ql-generate').disabled=true;$('#ql-generate').classList.add('is-generating');{const ind=$('#ql-gen-indicator');if(ind){ind.hidden=false;ind.textContent='正在生图…';}}$('#ql-result').replaceChildren(qlGenLoader());status('正在请求生图接口……');
  try{
-  const activeCombo=conf.activeConfigMode!=='separate'&&Number(conf.activeComboIndex)>=0?conf.combinations[Number(conf.activeComboIndex)]:null;const activePresetIndex=activeCombo?Number(activeCombo.artistIndex??-1):Number(conf.activePresetIndex??-1);const activeVibeIndex=activeCombo?Number(activeCombo.vibeIndex??-1):Number(conf.activeVibeIndex??-1);const activeVibe=activeVibeIndex>=0?conf.vibes[activeVibeIndex]:null;const activePreset=activePresetIndex>=0?conf.presets[activePresetIndex]:null;qlReconcileRoles(conf.prompt);const qlVfNr=qlVfApplyNames(conf.prompt.trim());const finalPrompt=qlVfNr?qlVfNr.finalPrompt(activePreset?.positive):qlComposeViewfinderPrompt(activePreset?.positive,conf.prompt.trim(),conf.viewfinderRoles);const structuredPrompt=qlVfNr?qlVfNr.structured(activePreset?.positive):qlBuildStructuredViewfinderPrompt(activePreset?.positive,conf.prompt.trim(),conf.viewfinderRoles);const useStructuredNai=(conf.provider==='novelai'||conf.provider==='novelai-thirdparty')&&/^nai-diffusion-(?:4(?:-|$)|5-)/i.test(String(conf.naiModel||''))&&structuredPrompt.characters.length>0;const baseNegative=String(conf.negative||'').trim(),presetNegative=String(activePreset?.negative||'').trim();const finalNegative=[baseNegative,...(presetNegative&&presetNegative!==baseNegative?[presetNegative]:[])].filter(Boolean).join(', ');if(!finalPrompt.trim()){status('请填写正向提示词，或选择包含正向提示词的预设。');return;}const normalizePromptEntry=value=>String(value||'').trim().replace(/[\s,，、/／|;；·]+/gu,' ').toLowerCase();const normalizedBasePrompt=normalizePromptEntry(conf.prompt);const selectedPrompt=conf.viewfinderPromptUnlinked?null:(conf.prompts||[]).find(item=>item&&item.id&&item.id===conf.activePromptEntryId);const matchedPrompt=conf.viewfinderPromptUnlinked?null:(normalizedBasePrompt?(conf.prompts||[]).find(item=>item&&normalizePromptEntry(item.promptEn||item.prompt||'')===normalizedBasePrompt):null);const promptEntryId=selectedPrompt?.id||matchedPrompt?.id||null;const requestPrompt=useStructuredNai?structuredPrompt.basePrompt:finalPrompt;const url=await requestImage(requestPrompt,finalNegative,activeVibe,useStructuredNai?structuredPrompt:null);const storedUrl=await persistImageToTavern(url,'manual-'+Date.now());
+  const activeCombo=conf.activeConfigMode!=='separate'&&Number(conf.activeComboIndex)>=0?conf.combinations[Number(conf.activeComboIndex)]:null;const activePresetIndex=activeCombo?Number(activeCombo.artistIndex??-1):Number(conf.activePresetIndex??-1);const activeVibeIndex=activeCombo?Number(activeCombo.vibeIndex??-1):Number(conf.activeVibeIndex??-1);const activeVibe=activeVibeIndex>=0?conf.vibes[activeVibeIndex]:null;const activePreset=activePresetIndex>=0?conf.presets[activePresetIndex]:null;qlReconcileRoles(conf.prompt);const qlVfNr=qlVfApplyNames(conf.prompt.trim());const finalPrompt=qlVfNr?qlVfNr.finalPrompt(activePreset?.positive):qlComposeViewfinderPrompt(activePreset?.positive,conf.prompt.trim(),conf.viewfinderRoles);const structuredPrompt=qlVfNr?qlVfNr.structured(activePreset?.positive):qlBuildStructuredViewfinderPrompt(activePreset?.positive,conf.prompt.trim(),conf.viewfinderRoles);const useStructuredNai=(conf.provider==='novelai'||conf.provider==='novelai-thirdparty')&&/^nai-diffusion-(?:4(?:-|$)|5-)/i.test(String(conf.naiModel||''))&&structuredPrompt.characters.length>0;const baseNegative=String(conf.negative||'').trim(),presetNegative=String(activePreset?.negative||'').trim();const genericNegative=qlVfNr?qlVfNr.negative:qlVfGenericNegative(conf.prompt.trim(),conf.viewfinderRoles);const finalNegative=qlMergeWords([baseNegative,...(presetNegative&&presetNegative!==baseNegative?[presetNegative]:[])].filter(Boolean).join(', '),genericNegative,'back');if(!finalPrompt.trim()){status('请填写正向提示词，或选择包含正向提示词的预设。');return;}const normalizePromptEntry=value=>String(value||'').trim().replace(/[\s,，、/／|;；·]+/gu,' ').toLowerCase();const normalizedBasePrompt=normalizePromptEntry(conf.prompt);const selectedPrompt=conf.viewfinderPromptUnlinked?null:(conf.prompts||[]).find(item=>item&&item.id&&item.id===conf.activePromptEntryId);const matchedPrompt=conf.viewfinderPromptUnlinked?null:(normalizedBasePrompt?(conf.prompts||[]).find(item=>item&&normalizePromptEntry(item.promptEn||item.prompt||'')===normalizedBasePrompt):null);const promptEntryId=selectedPrompt?.id||matchedPrompt?.id||null;const requestPrompt=useStructuredNai?structuredPrompt.basePrompt:finalPrompt;const url=await requestImage(requestPrompt,finalNegative,activeVibe,useStructuredNai?structuredPrompt:null);const storedUrl=await persistImageToTavern(url,'manual-'+Date.now());
   const img=document.createElement('img');img.alt='拾帧生成结果';img.dataset.qlStoredSrc=storedUrl;img.src=url;$('#ql-result').replaceChildren(img);
   try{qlTrimRecords(conf);}catch{}
   conf.records.unshift({at:Date.now(),source:'viewfinder',collection:'cache',prompt:finalPrompt,naiPromptData:useStructuredNai?{basePrompt:structuredPrompt.basePrompt,characters:structuredPrompt.characters.map(x=>({key:x.key,prompt:x.prompt}))}:null,basePrompt:conf.prompt.trim(),negative:qlWithExtraNeg(finalNegative,conf),provider:conf.provider,model:conf.provider!=='openai'?conf.naiModel:conf.model,size:conf.provider!=='openai'?(conf.naiWidth+'x'+conf.naiHeight):conf.size,quality:conf.quality,dataUrl:storedUrl,preset:activePreset?{name:activePreset.name||'',positive:activePreset.positive||'',negative:activePreset.negative||'',index:activePresetIndex,source:activePreset.source||'local'}:null,vibe:activeVibe?{name:activeVibe.name||'',entries:(activeVibe.entries||[]).map(entry=>({strength:entry.strength??0.6,informationExtracted:entry.informationExtracted??1,identifier:entry.identifier||entry.raw?.identifier||'',type:entry.type||entry.raw?.type||'image'}))}:null,config:snapshotConfig(finalPrompt,finalNegative),
