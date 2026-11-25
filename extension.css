@@ -7233,3 +7233,7 @@ html[data-ql-style="comic"] dialog[data-ql-download-sheet] .ql-download-modal-cl
 
 /* Variety+ 仅 V3/V4/V4.5 支持；切到 V5 时提示文字变灰，呼应被禁用的开关。 */
 .ql-muted-strong{opacity:.5}
+
+/* Vibe 池多选建组：勾选框贴在卡片最前面，纵向居中对齐缩略图。 */
+.ql-vp-pick{display:flex;align-items:center;flex-shrink:0;padding-top:4px}
+.ql-vp-pick input{width:18px;height:18px}
