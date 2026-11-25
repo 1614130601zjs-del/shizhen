@@ -5085,6 +5085,27 @@ function qlTcSave(){
  const editedPrompt=(st._renderHost||document).querySelector('.ql-tc-tag-input');if(editedPrompt)st.prompt=editedPrompt.value.trim();
  if(!st.prompt||String(st.prompt).trim()!==String(st.renderedPrompt||'').trim()){const statusEl=document.querySelector('#ql-tc-status');if(statusEl)statusEl.textContent='画面 Tag 已修改，请先点「重 Roll 图片」应用后再保存。';return;}
  const ctx=getContext()||{},cur=currentCharacter();
+ if(st._appendToGroup){
+  // 已收藏小剧场详情页里的「重 Roll」：新开一张记录加进同一个分组，不覆盖旧的，
+  // 这样左右箭头才有东西可切；尺寸也不强制沿用旧图，交给下面 storeChatRecord 走
+  // 正常的"跟随当前取景区全局宽高"路径。
+  const info=st._appendToGroup;
+  const candidate=st._qlCandidates[Number(st._qlIndex)]||st._qlCandidates[st._qlCandidates.length-1];if(!candidate?.url)return;
+  const groupId=info.groupId||('theater:'+Date.now().toString(36)+':'+Math.random().toString(36).slice(2,6));
+  if(!info.groupId&&info.legacyRecord)info.legacyRecord.theaterGroupId=groupId;
+  let newPrompt=String(candidate.prompt||'');
+  if(st.styleMode!=='comic'&&!/^\s*[\[【]\s*彩蛋/.test(newPrompt))newPrompt='[彩蛋]'+newPrompt;
+  const candidateKey='theater-add:'+Date.now().toString(36)+':'+Math.random().toString(36).slice(2,6);
+  const meta={source:'theater',mesStamp:'',characterName:info.albumCharacterName||'',characterKey:info.albumCharacterKey??''};
+  const rec=storeChatRecord(candidate.url,newPrompt,candidateKey,meta,candidate.generation);
+  rec.albumCharacterName=info.albumCharacterName;rec.albumCharacterKey=info.albumCharacterKey;rec.collection='character-album';
+  rec.eggTitle=info.eggTitle;rec.eggBlocks=info.eggBlocks;rec.eggAlbumStyle=info.eggAlbumStyle;
+  rec.theaterGroupId=groupId;rec.theaterStyleMode=st.styleMode==='comic'?'comic':'egg';rec.panelTexts=info.panelTexts||[];
+  save();history();renderTheater();
+  if(st._renderHost)st._renderHost.innerHTML='';qlTcState=null;
+  const statusEl=document.querySelector('#ql-tc-status');if(statusEl)statusEl.textContent='已新增一张图片到同一个小剧场分组，左右切换可以回看之前的。';
+  return;
+ }
  if(Array.isArray(st._editRecords)&&st._editRecords.length){
   const candidate=st._qlCandidates[Number(st._qlIndex)]||st._qlCandidates[st._qlCandidates.length-1];const record=candidate?._editRecord||st._editRecords[Number(st._qlIndex)]||st._editRecords[0];if(!record||!candidate?.url)return;
   const generation=candidate.generation||resolveChatImageGeneration(candidate.prompt,ctx,st.styleMode==='comic'?'':'egg');
@@ -5212,7 +5233,7 @@ function qlAttachBubbleLayer(figure,img,record){
  exportBtn.addEventListener('click',()=>qlBubbleExport(img,record));
  toolbar.append(addSpeech,addThought,exportBtn);
  const hint=document.createElement('p');hint.className='ql-muted ql-bubble-hint';
- hint.textContent='气泡：单指拖动移动位置；拖右下角圆点可自由调整宽高；双指在气泡上捏合/撑开可整体等比例缩放。';
+ hint.textContent='气泡：单指拖动移动位置；拖右下角圆点可自由调整宽高；双指在气泡上捏合/撑开可整体等比例缩放；点图片（不是气泡本身）可以直接看拼好台词后的预览效果。';
  figure.after(hint,toolbar);
 }
 function qlWrapCanvasText(ctx,text,maxWidth){
@@ -5228,11 +5249,14 @@ function qlBubbleDrawOnCanvas(ctx,bubble,imgW,imgH){
  const x=bubble.x/100*imgW,y=bubble.y/100*imgH,w=bubble.w/100*imgW,h=bubble.h/100*imgH;
  const r=Math.min(w,h)*(bubble.shape==='thought'?0.5:0.22);
  ctx.save();
- ctx.fillStyle='#ffffff';ctx.strokeStyle='#1a1a1a';ctx.lineWidth=Math.max(2,Math.min(w,h)*0.02);
+ // 导出合成时气泡底不做纯白不透明——纯白平涂贴上去的感觉很"浮空"，V5直出那种是画进原图里的，
+ // 降一点不透明度、加一圈淡淡的投影，让它更像"嵌"在画面里而不是贴在最上面的一张纸。
+ ctx.shadowColor='rgba(0,0,0,.22)';ctx.shadowBlur=Math.max(3,Math.min(w,h)*0.035);ctx.shadowOffsetY=Math.max(1,Math.min(w,h)*0.012);
+ ctx.fillStyle='rgba(255,255,255,.88)';ctx.strokeStyle='rgba(26,26,26,.9)';ctx.lineWidth=Math.max(2,Math.min(w,h)*0.02);
  ctx.beginPath();
  if(typeof ctx.roundRect==='function')ctx.roundRect(x,y,w,h,r);
  else{ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);}
- ctx.closePath();ctx.fill();ctx.stroke();
+ ctx.closePath();ctx.fill();ctx.shadowColor='transparent';ctx.stroke();
  if(bubble.shape==='thought'){
   let cx=x+w*0.22,cy=y+h,rr=Math.min(w,h)*0.09;
   for(let i=0;i<3;i++){cx-=rr*1.6;cy+=rr*1.4;rr*=0.7;ctx.beginPath();ctx.arc(cx,cy,Math.max(1.5,rr),0,Math.PI*2);ctx.fill();ctx.stroke();}
@@ -5257,23 +5281,35 @@ function qlBubbleDrawOnCanvas(ctx,bubble,imgW,imgH){
  }
  ctx.restore();
 }
+// 合成/预览共用同一份"画布拼好"逻辑，导出按钮和"点空白处看预览"都调这个，不用各写一套。
+async function qlBubbleComposite(img,record){
+ const src=img.currentSrc||img.src;
+ let bitmap=null;
+ if(typeof createImageBitmap==='function'){try{const res=await fetch(src);bitmap=await createImageBitmap(await res.blob());}catch{bitmap=null;}}
+ const width=bitmap?bitmap.width:img.naturalWidth,height=bitmap?bitmap.height:img.naturalHeight;
+ if(!width||!height)throw new Error('无法读取图片尺寸');
+ const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+ const ctx=canvas.getContext('2d');
+ if(bitmap)ctx.drawImage(bitmap,0,0,width,height);else ctx.drawImage(img,0,0,width,height);
+ (record.bubbles||[]).forEach(b=>qlBubbleDrawOnCanvas(ctx,b,width,height));
+ return canvas;
+}
 async function qlBubbleExport(img,record){
  try{
-  const src=img.currentSrc||img.src;
-  let bitmap=null;
-  if(typeof createImageBitmap==='function'){try{const res=await fetch(src);bitmap=await createImageBitmap(await res.blob());}catch{bitmap=null;}}
-  const width=bitmap?bitmap.width:img.naturalWidth,height=bitmap?bitmap.height:img.naturalHeight;
-  if(!width||!height)throw new Error('无法读取图片尺寸');
-  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
-  const ctx=canvas.getContext('2d');
-  if(bitmap)ctx.drawImage(bitmap,0,0,width,height);else ctx.drawImage(img,0,0,width,height);
-  (record.bubbles||[]).forEach(b=>qlBubbleDrawOnCanvas(ctx,b,width,height));
+  const canvas=await qlBubbleComposite(img,record);
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
   if(!blob)throw new Error('合成失败');
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download='shizhen-comic-'+Date.now()+'.png';document.body.append(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),2000);
  }catch(error){console.error('[拾帧] 气泡合成导出失败',error);alert('合成导出失败：'+(error?.message||String(error)));}
+}
+// 不下载文件，只是把拼好的效果用放大图弹窗显示一下，方便随时看效果，不用每次都真的导出一遍。
+async function qlBubblePreview(img,record){
+ try{
+  const canvas=await qlBubbleComposite(img,record);
+  openViewfinderImage(canvas.toDataURL('image/png'));
+ }catch(error){console.error('[拾帧] 气泡预览失败',error);alert('预览失败：'+(error?.message||String(error)));}
 }
 function qlTcBind(){
  const box=document.querySelector('#ql-theater-compose');if(!box)return;
@@ -5397,7 +5433,10 @@ function renderTheater(){
    if(images.length){
     const figure=document.createElement('figure');figure.className='ql-chat-image ql-album-'+style;
     const img=document.createElement('img');img.src=images[0].dataUrl;img.loading='lazy';
-    img.addEventListener('click',()=>openViewfinderImage(img.currentSrc||img.src));figure.append(img);
+    // 条漫且挂了气泡时，点图片看到的应该是"拼好台词之后"的样子，不用每次都手动点"合成导出"才知道效果；
+    // 没气泡或不是条漫就还是老样子，点开看原图。
+    img.addEventListener('click',()=>{const rec=currentRecord();if(rec?.theaterStyleMode==='comic'&&Array.isArray(rec.bubbles)&&rec.bubbles.length)qlBubblePreview(img,rec);else openViewfinderImage(img.currentSrc||img.src);});
+    figure.append(img);
     const {controls,edit:editBtn,reroll:rerollBtn,remove:deleteBtn}=qlCreateTheaterImageActionButtons({removeTitle:'从小剧场与相册记录中删除当前图片'});
     const {editor:tagEditor,textarea:tagInput,saveTag,cancelTag}=qlCreateTheaterTagEditor({hidden:true,ariaLabel:'当前图片 Tag'});
     const rerollStatus=document.createElement('div');rerollStatus.className='ql-theater-reroll-status';rerollStatus.setAttribute('role','status');rerollStatus.setAttribute('aria-live','polite');
@@ -5414,7 +5453,12 @@ function renderTheater(){
      const generation=resolveChatImageGeneration(prompt,getContext(),styleMode==='comic'?'':'egg');
      rerollStatus.hidden=false;rerollStatus.classList.add('is-loading');rerollStatus.textContent='正在重 Roll 中…';
      rerollBtn.disabled=true;
-     qlTcState={title:item.eggTitle||'',eggBlocks:[],panelTexts:Array.isArray(record.panelTexts)?record.panelTexts:[],prompt,renderedPrompt:String(record.basePrompt||record.prompt||prompt),url:record.dataUrl,generation,raw:'',sizeOverride:item.size||'',styleMode,_qlCandidates:[{url:record.dataUrl,prompt,renderedPrompt:String(record.basePrompt||record.prompt||prompt),generation,_editRecord:record}],_qlIndex:0,_editRecords:[record],_renderHost:tagEditor,_inlineTheater:true,_inlineStatusEl:rerollStatus,_inlineRerollButton:rerollBtn};
+     // 重 Roll 不再原地覆盖这条记录——那样会导致"重roll几次只剩最后一张"，没法回看/对比，
+     // 尺寸也会被锁死成最初那张的尺寸。改成往同一个小剧场分组里新增一张（跟首次收藏时一样），
+     // 旧的图片继续留着，可以用左右箭头切换；尺寸不再传 sizeOverride，交给生成逻辑读取当前
+     // 取景区的全局宽高设置（跟正文/取景区一致，切换尺寸后立刻对新图生效）。
+     qlTcState={title:item.eggTitle||'',eggBlocks:[],panelTexts:Array.isArray(record.panelTexts)?record.panelTexts:[],prompt,renderedPrompt:String(record.basePrompt||record.prompt||prompt),url:'',generation,raw:'',sizeOverride:'',styleMode,_qlCandidates:[],_qlIndex:-1,_renderHost:tagEditor,_inlineTheater:true,_inlineStatusEl:rerollStatus,_inlineRerollButton:rerollBtn,
+      _appendToGroup:{groupId:item.theaterGroupId||null,legacyRecord:item,albumCharacterName:record.albumCharacterName,albumCharacterKey:record.albumCharacterKey,eggTitle:item.eggTitle||null,eggBlocks:item.eggBlocks||[],eggAlbumStyle:record.eggAlbumStyle||item.eggAlbumStyle||cfg().chatAlbumStyle||'follow',panelTexts:Array.isArray(record.panelTexts)?record.panelTexts:[]}};
      await qlTcReroll();
     });
     deleteBtn.addEventListener('click',event=>{
