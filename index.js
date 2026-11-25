@@ -4983,30 +4983,35 @@ function qlTcCharacterCardText(ctx){
   return fields.filter(([,value])=>String(value||'').trim()).map(([label,value])=>'【'+label+'】\n'+String(value).trim()).join('\n\n');
  }catch(error){console.warn('[拾帧] 小剧场读取角色卡失败（已忽略）',error);return '';}
 }
+async function qlTcRequestViaMainApi(messages,responseLength){
+ const ctx=getContext();
+ if(typeof ctx?.generateRaw!=='function')throw new Error('当前酒馆版本不支持 generateRaw（跟随主API生成小剧场需要它），请检查酒馆版本或改用「中文转Tag」同一套独立配置');
+ const content=String(await ctx.generateRaw({prompt:messages,responseLength})||'').trim();
+ if(!content)throw new Error('主API返回空内容');
+ return content;
+}
 async function qlTcGenerateText(mode,input,ctx,styleValue){
- let quietPrompt=qlTcBuildQuietPrompt(mode,input,styleValue),s=cfg();
- if(s.llmTagMode!=='custom'){
-  if(typeof ctx?.generateQuietPrompt!=='function')throw new Error('当前酒馆版本不支持静默生成（generateQuietPrompt）');
-  // 酒馆自己的 generateQuietPrompt 管线会自动带上当前预设/角色卡/世界书，但「拾帧角色名单资料」
-  // 是插件自己算出来的东西，酒馆不知道，之前只有「自定义 API」那条路（下面 custom 分支）手动拼过，
-  // 主 API 这条路一直没给模型——模型根本不知道哪些名字在词库里登记过外貌、哪些没有，写分镜时
-  // 自然分不清该写"本名+权重"还是"本名+外貌"，乔明明登记过外貌还被模型重复写了一遍，路西恩没
-  // 登记过却被当成词库角色写成"Lucien:1.2"，都是因为模型压根不知道名单长什么样。
-  try{const roster=qlRosterText(ctx);if(roster&&!roster.startsWith('（角色词库里暂时'))quietPrompt='【拾帧角色名单资料】\n'+roster+'\n\n'+quietPrompt;}catch(error){console.warn('[拾帧] 小剧场读取角色名单失败（已忽略）',error);}
-  // 分镜模式要求模型把每一格的内容都拆开列出来，输出比普通彩蛋长不少；2048 很容易在
-  // image###…### 还没写完、甚至聊天室部分还没写就被截断，截断后 image### 缺收尾的 ###，
-  // 正则匹配不到，就会报“没有找到 image###…### 画面提示词”——其实不是真没写，是被掐断了。
-  const panelCount=qlTcPanelCount(styleValue);
-  return String(await ctx.generateQuietPrompt({quietPrompt,responseLength:panelCount>1?4096:2560})||'').trim();
- }
+ // 之前这里有两条路，但都会被”当前聊天记录/正文进度”带偏，这正是用户反馈的”小剧场根本不理
+ // 我的输入，跑出来的全是正文剧情定格”的根因：①跟随主API用的是酒馆自己的 generateQuietPrompt，
+ // 这个管线的设计就是”正常生成一次、只是不显示在聊天框里”，天然会把完整聊天记录一起喂给模型，
+ // 不管 quietPrompt 里怎么强调”这不是续写正文”，模型还是会被最近几楼的剧情拉着走；②独立配置这条
+ // 路之前手动塞了最近 12 条聊天记录当上下文，结尾还明说”请结合...聊天上下文...完成”，等于主动要求
+ // 模型顺着正文续。小剧场的定位应该跟取景区”中文转Tag”一样——只认用户这次输入的内容，角色卡/
+ // 世界书/预设只用来保持人设和世界观一致，不负责”接着刚才演到哪了”。所以现在两条路统一改成跟
+ // 中文转Tag 同款做法：不传入任何聊天记录，只给模型「人设资料 + 这次的输入」，章节/剧情进度不再
+ // 参与生成。
+ const quietPrompt=qlTcBuildQuietPrompt(mode,input,styleValue),s=cfg();
+ const panelCount=qlTcPanelCount(styleValue);
  const materials=[];
- try{const borrowed=qlPresetBorrowText();if(borrowed)materials.push('【当前预设资料】\n'+borrowed);}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
- try{const card=qlTcCharacterCardText(ctx);if(card)materials.push('【当前角色卡资料】\n'+card);}catch{}
- try{const roster=qlRosterText();if(roster&&!roster.startsWith('（角色词库里暂时'))materials.push('【拾帧角色名单资料】\n'+roster);}catch{}
- const wi=await qlTcFetchWorldInfo(input,ctx);if(wi)materials.push('【当前激活的世界书内容（请遵循其中与本次小剧场相关的规则及输出要求）】\n'+wi);
- const history=Array.isArray(ctx?.chat)?ctx.chat.slice(-12).filter(m=>m&&typeof m.mes==='string'&&m.mes.trim()).map(m=>({role:m.is_user?'user':'assistant',content:String(m.mes).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,3000)})).filter(m=>m.content):[];
+ try{const borrowed=qlPresetBorrowText();if(borrowed)materials.push('【当前预设资料——仅用于保持文风/格式规范一致，不代表要继续当前剧情进度】\n'+borrowed);}catch(error){console.warn('[拾帧] 小剧场读取预设参考失败（已忽略）',error);}
+ try{const card=qlTcCharacterCardText(ctx);if(card)materials.push('【当前角色卡资料——仅用于保持人设/世界观一致，不代表要继续当前剧情进度】\n'+card);}catch(error){console.warn('[拾帧] 小剧场读取角色卡失败（已忽略）',error);}
+ try{const roster=qlRosterText(ctx);if(roster&&!roster.startsWith('（角色词库里暂时'))materials.push('【拾帧角色名单资料】\n'+roster);}catch(error){console.warn('[拾帧] 小剧场读取角色名单失败（已忽略）',error);}
+ try{const wi=await qlTcFetchWorldInfo(input,ctx);if(wi)materials.push('【当前激活的世界书内容——仅供参考人设/世界观设定，不代表要继续当前剧情进度】\n'+wi);}catch(error){console.warn('[拾帧] 小剧场读取世界书失败（已忽略）',error);}
  const system=[...materials,quietPrompt].filter(Boolean).join('\n\n');
- return qlRequestLlmTagViaCustomApi([{role:'system',content:system},...history,{role:'user',content:'请结合上面的预设、角色卡、聊天上下文和已激活世界书内容完成小剧场；世界书中的设定与输出规则优先，严格按小剧场口令结构返回。'}]);
+ const messages=[{role:'system',content:system},{role:'user',content:String(input||'').trim()}];
+ return s.llmTagMode==='custom'
+  ?await qlRequestLlmTagViaCustomApi(messages)
+  :await qlTcRequestViaMainApi(messages,panelCount>1?4096:2560);
 }
 async function qlTcGenerate(){
  if(qlTcBusy)return;
