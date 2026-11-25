@@ -7230,3 +7230,6 @@ html[data-ql-style="comic"] dialog[data-ql-download-sheet] .ql-download-modal-cl
 .ql-bubble-del{position:absolute;top:-10px;right:-10px;width:26px;height:26px;border-radius:50%;border:2px solid #1a1a1a;background:#fff;color:#1a1a1a;font-size:15px;line-height:1;cursor:pointer;z-index:2}
 .ql-bubble-handle{position:absolute;right:-9px;bottom:-9px;width:22px;height:22px;border-radius:50%;border:2px solid #1a1a1a;background:var(--ql-accent,#b9a);cursor:se-resize;z-index:2}
 .ql-bubble-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
+
+/* Variety+ 仅 V3/V4/V4.5 支持；切到 V5 时提示文字变灰，呼应被禁用的开关。 */
+.ql-muted-strong{opacity:.5}
