@@ -5147,15 +5147,47 @@ function qlAttachBubbleLayer(figure,img,record){
   ta.addEventListener('pointerdown',e=>e.stopPropagation());
   ta.addEventListener('input',()=>{bubble.text=ta.value;persist();});
   del.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const idx=record.bubbles.indexOf(bubble);if(idx>=0)record.bubbles.splice(idx,1);el.remove();persist();});
-  let dragging=null;
-  shape.addEventListener('pointerdown',e=>{e.preventDefault();dragging={startX:e.clientX,startY:e.clientY,startLeft:bubble.x,startTop:bubble.y,rect:layer.getBoundingClientRect()};shape.setPointerCapture(e.pointerId);});
+  handle.title='拖动可自由调整宽高（可不等比）';
+  let dragging=null,pinch=null;
+  // 双指在气泡上捏合/撑开 = 整体等比例缩放（手机上最自然的手势），跟右下角圆点的
+  // 自由拉伸互不冲突：触点数达到 2 个就切到缩放模式，降回 1 个或 0 个再恢复拖动/结束。
+  const touchPoints=new Map();
+  shape.addEventListener('pointerdown',e=>{
+   e.preventDefault();shape.setPointerCapture(e.pointerId);
+   touchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
+   const rect=layer.getBoundingClientRect();
+   if(touchPoints.size>=2){
+    dragging=null;
+    const pts=[...touchPoints.values()];
+    pinch={dist:Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y),startW:bubble.w,startH:bubble.h,centerX:bubble.x+bubble.w/2,centerY:bubble.y+bubble.h/2,rect};
+   }else{
+    pinch=null;
+    dragging={startX:e.clientX,startY:e.clientY,startLeft:bubble.x,startTop:bubble.y,rect};
+   }
+  });
   shape.addEventListener('pointermove',e=>{
+   if(touchPoints.has(e.pointerId))touchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
+   if(pinch&&touchPoints.size>=2){
+    const pts=[...touchPoints.values()];
+    const dist=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
+    const ratio=pinch.dist>0?dist/pinch.dist:1;
+    let newW=Math.max(10,Math.min(100,pinch.startW*ratio)),newH=Math.max(8,Math.min(100,pinch.startH*ratio));
+    let newX=pinch.centerX-newW/2,newY=pinch.centerY-newH/2;
+    newX=Math.max(0,Math.min(100-newW,newX));newY=Math.max(0,Math.min(100-newH,newY));
+    bubble.w=newW;bubble.h=newH;bubble.x=newX;bubble.y=newY;
+    el.style.left=bubble.x+'%';el.style.top=bubble.y+'%';el.style.width=bubble.w+'%';el.style.height=bubble.h+'%';
+    return;
+   }
    if(!dragging)return;
    const dxPct=(e.clientX-dragging.startX)/dragging.rect.width*100,dyPct=(e.clientY-dragging.startY)/dragging.rect.height*100;
    bubble.x=Math.max(0,Math.min(100-bubble.w,dragging.startLeft+dxPct));bubble.y=Math.max(0,Math.min(100-bubble.h,dragging.startTop+dyPct));
    el.style.left=bubble.x+'%';el.style.top=bubble.y+'%';
   });
-  const endDrag=()=>{if(dragging){dragging=null;persist();}};
+  const endDrag=e=>{
+   if(e&&touchPoints.has(e.pointerId))touchPoints.delete(e.pointerId);
+   if(touchPoints.size<2)pinch=null;
+   if(touchPoints.size===0){dragging=null;persist();}
+  };
   shape.addEventListener('pointerup',endDrag);shape.addEventListener('pointercancel',endDrag);
   let resizing=null;
   handle.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();resizing={startX:e.clientX,startY:e.clientY,startW:bubble.w,startH:bubble.h,rect:layer.getBoundingClientRect()};handle.setPointerCapture(e.pointerId);});
@@ -5179,7 +5211,9 @@ function qlAttachBubbleLayer(figure,img,record){
  addThought.addEventListener('click',()=>{record.bubbles.push({id:qlBubbleId(),shape:'thought',x:20,y:20,w:40,h:20,text:''});persist();redraw();});
  exportBtn.addEventListener('click',()=>qlBubbleExport(img,record));
  toolbar.append(addSpeech,addThought,exportBtn);
- figure.after(toolbar);
+ const hint=document.createElement('p');hint.className='ql-muted ql-bubble-hint';
+ hint.textContent='气泡：单指拖动移动位置；拖右下角圆点可自由调整宽高；双指在气泡上捏合/撑开可整体等比例缩放。';
+ figure.after(hint,toolbar);
 }
 function qlWrapCanvasText(ctx,text,maxWidth){
  const out=[];
