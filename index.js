@@ -7,7 +7,7 @@ import { buildShizhenVaultSnapshot } from './vault-adapter.js';
 
 const EXT = 'shizhen';
 const LEGACY_EXT = 'qinghui_lite';
-const defaults = { enabled:true, activeConfigMode:'combo', downloadFormat:'png', historyColumns:3, chatAlbumStyle:'classic', vibes:[], combinations:[], activeComboIndex:-1, globalComboIndex:-1, sbComboIndex:-1, extraNegative:'', bodySize:'', recordLimit:800, requestTimeoutSec:180, sbSize:'', eggComboIndex:-1, eggSize:'', activeVibeIndex:-1, activePresetIndex:-1, bindings:[], provider:'novelai', endpoint:'', apiKey:'', naiApiKey:'', naiThirdEndpoint:'', naiThirdKey:'', model:'gpt-image-1', size:'auto', quality:'medium', naiModel:'nai-diffusion-4-5-full', naiSteps:28, naiScale:5, naiWidth:832, naiHeight:1216, naiSampler:'k_euler_ancestral', naiScheduler:'karras', naiNormalizeVibeStrengths:true, naiQualityMode:'standard', naiUcPreset:3, naiSeed:-1, prompt:'', negative:'', records:[], presets:[], characters:[], prompts:[], viewfinderRoles:[], workLibrary:[], workDisplayNames:{}, llmTagMode:'main', llmTagApiUrl:'', llmTagApiKey:'', llmTagModel:'', llmTagTemperature:1, llmTagSystemPrompt:'', llmTagUseWorldInfo:true, llmTagWiExcludedWorlds:[], llmTagWiExcludedEntryKeys:[], llmTagPresetIds:[], theaterComposeMode:'scene', theaterComposeSize:'', theaterComposeCombo:'', theaterComposeText:'', theaterComposeStyle:'egg' };
+const defaults = { enabled:true, activeConfigMode:'combo', downloadFormat:'png', historyColumns:3, chatAlbumStyle:'classic', vibes:[], combinations:[], activeComboIndex:-1, globalComboIndex:-1, sbComboIndex:-1, extraNegative:'', bodySize:'', recordLimit:800, requestTimeoutSec:180, sbSize:'', eggComboIndex:-1, eggSize:'', activeVibeIndex:-1, activePresetIndex:-1, bindings:[], provider:'novelai', endpoint:'', apiKey:'', naiApiKey:'', naiThirdEndpoint:'', naiThirdKey:'', model:'gpt-image-1', size:'auto', quality:'medium', naiModel:'nai-diffusion-4-5-full', naiSteps:28, naiScale:5, naiWidth:832, naiHeight:1216, naiSampler:'k_euler_ancestral', naiScheduler:'karras', naiNormalizeVibeStrengths:true, naiQualityMode:'standard', naiUcPreset:3, naiSeed:-1, prompt:'', negative:'', records:[], presets:[], characters:[], prompts:[], viewfinderRoles:[], workLibrary:[], workDisplayNames:{}, llmTagMode:'main', llmTagApiUrl:'', llmTagApiKey:'', llmTagModel:'', llmTagTemperature:1, llmTagSystemPrompt:'', llmTagUseWorldInfo:true, llmTagWiExcludedWorlds:[], llmTagWiExcludedEntryKeys:[], llmTagPresetIds:[], theaterComposeMode:'scene', theaterComposeSize:'', theaterComposeCombo:'', theaterComposeText:'', theaterComposeStyle:'egg', theaterMangaStyle:'eromanga', bodyMangaV5:false, bodyMangaStyle:'eromanga', bodyMangaWorldName:'' };
 const $ = (s, root=document) => root.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // 角色卡相册与提示词图集共用同一套真实的相册工具栏、铺开页 DOM，避免两套排版逐渐分叉。
@@ -1624,6 +1624,10 @@ function qlKindSettings(kind,s,binding=null){
  const body=pick('body'),me=kind==='egg'?pick('egg'):kind==='statusbar'?pick('statusbar'):body;
  return {comboIndex:me.combo>=0?me.combo:body.combo,size:me.size||body.size,ownCombo:me.combo>=0&&me!==body};
 }
+// 正文/状态栏 V5 整页漫画总开关：只看「bodyMangaV5」是否打开 + 当前模型是不是 V5；
+// 世界书那边有没有真的配合教会主创作模型新格式是另一回事（qlSyncBodyMangaWorldEntry 负责），
+// 这里只管"这次生图要不要按 mangaV5 规则处理提示词/跳过人名检测"。
+function qlBodyMangaV5Active(){const s=cfg();return !!s.bodyMangaV5&&/^nai-diffusion-5-/i.test(String(s.naiModel||''));}
 function resolveChatImageGeneration(prompt, context=getContext(), kindHint=''){
  const sk=qlSplitKind(prompt);prompt=sk.prompt;const kind=sk.kind||kindHint,s=cfg();
  const characterId=context?.characterId==null?'':String(context.characterId);
@@ -1632,6 +1636,12 @@ function resolveChatImageGeneration(prompt, context=getContext(), kindHint=''){
  const binding=findCharacterBinding(characterId,characterName,s);
  const ks=qlKindSettings(kind,s,binding),comboIndex=ks.comboIndex;
  const gen=qlResolveWithNames(prompt,context,text=>resolveCombinationGeneration(text,comboIndex,s),{noGeneric:kind==='egg'});
+ // 正文/状态栏 V5 整页漫画：提示词本来就是主创作模型照世界书规范直接吐出来的
+ // <image>@page/@panel/@character…</image> 结构化长文本，不能再走上面角色名替换/通用词合并
+ // 那套给"扁平逗号 tag"设计的处理——会把这段多行结构拆散，甚至把质量词/画师串塞进 <image> 内部；
+ // 负面也强制留空，排除词已经按格式约定写进文本自己的 @negative 段里了。只对正文(kind==='')
+ // 和状态栏(kind==='statusbar')生效，彩蛋和小剧场各自已有自己的 mangaV5 判断，不受这个开关影响。
+ if((kind===''||kind==='statusbar')&&qlBodyMangaV5Active()){gen.prompt=prompt;gen.negative='';}
  return {...gen,kind,sizeOverride:ks.size,bindingApplied:!!binding&&Number(binding.combinationIndex)>=0,globalApplied:!binding&&Number(s.globalComboIndex??-1)>=0};
 }
 // 角色名替换 + 组合解析：无论用哪种配置（默认/全局/绑定/临时/取景），正文提示词都先做名字替换。
@@ -2665,7 +2675,7 @@ function addMessageImage(host,url,prompt,taskKey,recordMeta={},anchor=null) {
    if(card.dataset.qlBusy==='1'&&busySince&&Date.now()-busySince<120000)return;
    if(card.dataset.qlBusy==='1'&&(!busySince||Date.now()-busySince>=120000)){card.dataset.qlBusy='0';card.dataset.qlBusySince='0';}
    const currentPrompt=String(card.dataset.qlPrompt||'').trim();
-   if(currentPrompt&&!await qlGuardMissingNames(currentPrompt,getContext()))return;
+   if(currentPrompt&&!qlBodyMangaV5Active()&&!await qlGuardMissingNames(currentPrompt,getContext()))return;
    if(!currentPrompt){qlAlert('这张图片没有找到可用的画面提示词，请点击“修改 tag”检查。');return;}
    const rerollKey=taskKey+':reroll:'+Date.now()+':'+Math.random().toString(36).slice(2,7);
    let candidate;
@@ -2940,7 +2950,7 @@ async function runInlineImageTrigger(button,entry){
  const prompt=String(button.dataset.qlPrompt||entry?.prompt||'').trim();
  let taskKey=String(button.dataset.qlTrigger||entry?.taskKey||'');
  if(!prompt||!taskKey)return;
- if(!await qlGuardMissingNames(prompt,getContext()))return;
+ if(!qlBodyMangaV5Active()&&!await qlGuardMissingNames(prompt,getContext()))return;
  // 编辑消息会让酒馆重建正文 DOM。若该 marker 曾经成功生图，重新出现的按钮应可再次使用，而不是被旧成功状态永久锁住。
  if(triggerRegistry.get(taskKey)?.status==='succeeded')taskKey=taskKey+':edited:'+Date.now();
  const accepted=triggerRegistry.begin(taskKey,{prompt,source:'chat-button',messageIndex:entry.messageIndex,markerOrdinal:entry.markerOrdinal});
@@ -3248,7 +3258,7 @@ function renderStatusbarCard(frame,prompt,url,taskKey){
   remove.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const current=card._qlCandidates[card._qlIndex];if(!current?.url)return;const records=cfg().records||[];const before=records.length;cfg().records=records.filter(item=>!(item&&item.taskKey===taskKey&&sameImageSource(item.dataUrl,current.url)&&(item.source||'chat')==='statusbar'));card._qlCandidates.splice(card._qlIndex,1);if(card._qlIndex>=card._qlCandidates.length)card._qlIndex=card._qlCandidates.length-1;save();history();card._qlRender();status(before===cfg().records.length?'已从当前状态栏轮播中移除图片。':'已删除当前状态栏图片及其缓存记录。');});
   controls.addEventListener('dblclick',e=>{e.preventDefault();e.stopPropagation();});
   controls.addEventListener('click',e=>e.stopPropagation());
-  const reroll=async()=>{if(card.dataset.busy==='1'||(Date.now()-(Number(card.dataset.lastRerollAt)||0))<900)return;card.dataset.lastRerollAt=Date.now();if(card._qlPrompt&&!await qlGuardMissingNames(card._qlPrompt,getContext()))return;status('正在重新生成状态栏图片……');try{if(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')navigator.vibrate([28,42,28]);}catch{}const manualKey=taskKey+':manual:'+Date.now();const candidate=triggerRegistry.begin(manualKey,{prompt:card._qlPrompt,source:'statusbar-reroll'});if(!candidate.accepted)return;triggerRegistry.markRunning(manualKey);card.dataset.busy='1';try{syncViewfinderSizeToConfig();const c=cfg(),old={width:c.naiWidth,height:c.naiHeight,size:c.size};try{const choice=String(card.dataset.qlTempCombo??'');let generation;if(choice==='viewfinder')generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveActiveGeneration(t));else if(/^\d+$/.test(choice)&&c.combinations[Number(choice)])generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveCombinationGeneration(t,Number(choice),c));else generation=resolveChatImageGeneration(card._qlPrompt,getContext(),'statusbar');const dims=String(card.dataset.qlTempSize||'').split('x').map(Number);if(dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0)){if(c.provider==='novelai'||c.provider==='novelai-thirdparty'){c.naiWidth=dims[0];c.naiHeight=dims[1];}else c.size=card.dataset.qlTempSize;}const tempDims2=dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0);const fresh=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null,null,tempDims2?'':(generation.sizeOverride||''));card._qlAddCandidate(fresh);storeChatRecord(fresh,card._qlPrompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame),...qlStatusbarLinkMeta(frame,prompt)},generation);card._qlRender?.();}finally{c.naiWidth=old.width;c.naiHeight=old.height;c.size=old.size;save();}triggerRegistry.markSucceeded(manualKey,manualKey+':candidate:'+Date.now());}catch(e){triggerRegistry.markFailed(manualKey,e?.message||String(e));qlAlert('拾帧生成失败：'+(e?.message||String(e)));}finally{card.dataset.busy='0';}};
+  const reroll=async()=>{if(card.dataset.busy==='1'||(Date.now()-(Number(card.dataset.lastRerollAt)||0))<900)return;card.dataset.lastRerollAt=Date.now();if(card._qlPrompt&&!qlBodyMangaV5Active()&&!await qlGuardMissingNames(card._qlPrompt,getContext()))return;status('正在重新生成状态栏图片……');try{if(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')navigator.vibrate([28,42,28]);}catch{}const manualKey=taskKey+':manual:'+Date.now();const candidate=triggerRegistry.begin(manualKey,{prompt:card._qlPrompt,source:'statusbar-reroll'});if(!candidate.accepted)return;triggerRegistry.markRunning(manualKey);card.dataset.busy='1';try{syncViewfinderSizeToConfig();const c=cfg(),old={width:c.naiWidth,height:c.naiHeight,size:c.size};try{const choice=String(card.dataset.qlTempCombo??'');let generation;if(choice==='viewfinder')generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveActiveGeneration(t));else if(/^\d+$/.test(choice)&&c.combinations[Number(choice)])generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveCombinationGeneration(t,Number(choice),c));else generation=resolveChatImageGeneration(card._qlPrompt,getContext(),'statusbar');const dims=String(card.dataset.qlTempSize||'').split('x').map(Number);if(dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0)){if(c.provider==='novelai'||c.provider==='novelai-thirdparty'){c.naiWidth=dims[0];c.naiHeight=dims[1];}else c.size=card.dataset.qlTempSize;}const tempDims2=dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0);const fresh=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null,null,tempDims2?'':(generation.sizeOverride||''));card._qlAddCandidate(fresh);storeChatRecord(fresh,card._qlPrompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame),...qlStatusbarLinkMeta(frame,prompt)},generation);card._qlRender?.();}finally{c.naiWidth=old.width;c.naiHeight=old.height;c.size=old.size;save();}triggerRegistry.markSucceeded(manualKey,manualKey+':candidate:'+Date.now());}catch(e){triggerRegistry.markFailed(manualKey,e?.message||String(e));qlAlert('拾帧生成失败：'+(e?.message||String(e)));}finally{card.dataset.busy='0';}};
   img.style.touchAction='manipulation';
   // 手机浏览器的 pointerup 与 touchend 可能在同一次点击中都触发，混用会把单击误判成双击。
   // 触屏只使用 touchend；鼠标/触控笔使用 dblclick。监听放在覆盖层 card 上，避免图片元素被酒馆重绘替换后失效。
@@ -3358,7 +3368,7 @@ async function processStatusbarFrames(){
   // data-ql-autoarm：由页面自己的按钮（如抽卡）决定什么时候出图，不再多点一次「定格此刻」。
   if(frame.dataset.qlArmed!=='1'&&frame.hasAttribute('data-ql-autoarm'))frame.dataset.qlArmed='1';
   if(frame.dataset.qlArmed!=='1'){ensureStatusbarTrigger(frame,prompt);frame.dataset.qlBusy='0';continue;}
-  if(!await qlGuardMissingNames(prompt,getContext())){frame.dataset.qlArmed='0';frame.dataset.qlBusy='0';continue;}
+  if(!qlBodyMangaV5Active()&&!await qlGuardMissingNames(prompt,getContext())){frame.dataset.qlArmed='0';frame.dataset.qlBusy='0';continue;}
   const accepted=triggerRegistry.begin(taskKey,{prompt,source:'statusbar'});
   if(!accepted.accepted){frame.dataset.qlBusy='0';continue;}
   triggerRegistry.markRunning(taskKey);
@@ -3982,7 +3992,7 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 <div class="ql-card ql-llm-tag-box"><div class="ql-prompt-label-row"><label for="ql-prompt-zh">中文转Tag（可选）</label></div><textarea id="ql-prompt-zh" placeholder="用中文描述想要的画面，点「转换为Tag」会调用LLM转换成画面提示词（会整体替换下面的内容）"></textarea><div class="ql-row"><button id="ql-llm-tag-convert" type="button" class="menu_button ql-primary">转换为Tag</button><span id="ql-llm-tag-status" class="ql-muted"></span></div></div><div class="ql-card"><div class="ql-prompt-label-row"><label for="ql-prompt">画面提示词</label><button id="ql-prompt-clear" type="button" class="menu_button">清空</button></div><textarea id="ql-prompt" placeholder="画面提示词"></textarea></div>
 <div class="ql-card ql-viewfinder-roles-card"><div class="ql-section-heading"><div><h3>角色外貌</h3><p class="ql-muted">提示词里的 boy A / girl B / character A / char1 或 1girl / 2girls 等标记会自动生成对应的外貌栏位；外貌会作为 NAI 的「角色提示词」单独提交（不再插进正文里），也可以手动填写、清空或从角色词库导入。</p></div><button id="ql-role-add" type="button" class="menu_button">添加角色</button></div><label class="ql-check ql-vf-generic-row"><input type="checkbox" id="ql-vf-generic"> 取景区注入男 / 女体型词（需先在「预设 → 通用词」里启用并选好词组）<b class="ql-check-state" id="ql-vf-generic-state"></b></label><p class="ql-muted">只管男 / 女体型词；提示词里已经写了体型时可以关掉这一项，避免重复。「通用画面」不受这个开关影响，常驻生效，要关可以去「预设 → 通用词」里单独关。</p><div id="ql-viewfinder-roles"></div><details class="ql-final-preview"><summary>查看最终提交给 NAI 的完整提示词</summary><pre id="ql-final-prompt-text"></pre><div class="ql-row"><button id="ql-final-prompt-copy" type="button" class="menu_button">复制完整提示词</button></div><p class="ql-muted">有角色外貌时分成两块提交：Base Prompt 是画师串、质量词、动作与场景；Character Prompts 是各角色的外貌，按角色 1、2…顺序排列。没有角色外貌时只提交一整段。你输入的原始画面提示词不会被改写。</p></details></div>
 <div class="ql-card"><h3>影像配置</h3><label for="ql-active-config-mode">选择方式</label><select id="ql-active-config-mode"><option value="combo">选择组合（使用预设）</option><option value="separate">选择画师串 + 选择 Vibe</option></select><div id="ql-combo-config-row"><label for="ql-active-preset">选择预设组合</label><select id="ql-active-preset"><option value="-1">不使用组合</option></select></div><div id="ql-separate-config-row" hidden><label for="ql-active-artist">选择画师串</label><select id="ql-active-artist"><option value="-1">不使用画师串</option></select><label for="ql-active-vibe">选择 Vibe</label><select id="ql-active-vibe"><option value="-1">不使用 Vibe</option></select></div><div class="ql-row"><button id="ql-apply-preset" class="menu_button" type="button">应用组合</button><button id="ql-open-preset" class="menu_button" type="button">管理配置</button></div><p class="ql-muted">第一种直接使用已保存的预设组合；第二种分别选择画师串和 Vibe，两项可以独立设置。角色卡默认组合在「配置 → 预设」中管理。</p></div>
-<div class="ql-card"><h3>模型参数</h3><label for="ql-fast-provider">生图后端</label><select id="ql-fast-provider"><option value="novelai">NovelAI 官网</option><option value="novelai-thirdparty">NovelAI 第三方</option></select><div id="ql-fast-openai" hidden><input id="ql-fast-model" value="gpt-image-1"><select id="ql-fast-size"><option value="auto">auto</option><option>1024x1024</option></select><select id="ql-fast-quality"><option>medium</option></select></div><div id="ql-fast-nai" hidden><label>NovelAI 模型</label><select id="ql-fast-nai-model"><option value="nai-diffusion-5-full">V5 Full（5F）</option><option value="nai-diffusion-5-curated">V5 Curated（5C）</option><option value="nai-diffusion-4-5-full">V4.5 Full</option><option value="nai-diffusion-4-5-curated">V4.5 Curated</option><option value="nai-diffusion-4-full">V4 Full</option><option value="nai-diffusion-4-curated">V4 Curated</option><option value="nai-diffusion-3">Anime V3</option><option value="nai-diffusion-furry-3">Furry V3</option></select><div class="ql-row"><div><label>画面尺寸预设</label><select id="ql-fast-nai-size-preset"><option value="832x1216">竖版 · 832 × 1216</option><option value="768x1344">长竖版 · 768 × 1344</option><option value="1024x1024">正方形 · 1024 × 1024</option><option value="1216x832">横版 · 1216 × 832</option><option value="1344x768">宽横版 · 1344 × 768</option></select><input id="ql-fast-nai-width" type="hidden"><input id="ql-fast-nai-height" type="hidden"></div></div><details class="ql-nai-advanced"><summary>高级生成设置（不常调整）</summary><div class="ql-row"><div><label>步数</label><input id="ql-fast-nai-steps" type="number" min="1" max="50"></div><div><label>CFG Scale</label><input id="ql-fast-nai-scale" type="number" min="1" max="20" step="0.5"></div></div><div class="ql-row"><div><label>采样器</label><select id="ql-fast-nai-sampler"><option value="k_euler_ancestral">Euler Ancestral</option><option value="k_euler">Euler</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_2m">DPM++ 2M</option><option value="k_dpmpp_sde">DPM++ SDE</option><option value="k_dpmpp_2m_sde">DPM++ 2M SDE</option><option value="ddim_v3">DDIM（仅 V3 模型）</option></select></div><div><label>调度器</label><select id="ql-fast-nai-scheduler"><option value="karras">Karras</option><option value="native">Native</option><option value="exponential">Exponential</option><option value="polyexponential">Polyexponential</option></select></div></div><div class="ql-row"><div><label for="ql-fast-nai-quality">质量标签</label><select id="ql-fast-nai-quality"><option value="standard">标准</option><option value="light">轻量（仅 V5）</option><option value="off">关闭</option></select></div><div><label for="ql-fast-nai-uc">Undesired Content</label><select id="ql-fast-nai-uc"><option value="0">Heavy</option><option value="1">Light</option><option value="2">Furry</option><option value="3">Human</option><option value="4">None</option></select></div></div><label for="ql-fast-nai-seed">固定 Seed（留空则随机）</label><input id="ql-fast-nai-seed" type="number" min="0" max="2147483647" placeholder="随机 Seed"><label class="ql-inline-check"><input id="ql-fast-nai-normalize" type="checkbox"> 归一化 Vibe 参考强度<b class="ql-check-state" id="ql-fast-nai-normalize-state"></b></label><p class="ql-muted">开启后会自动归一化 V4/V4.5 多条 Vibe 的强度；关闭则按每条参考的原始强度发送。</p><label class="ql-inline-check"><input id="ql-fast-nai-variety" type="checkbox"> Variety+（构图多样性增强）<b class="ql-check-state" id="ql-fast-nai-variety-state"></b></label><p class="ql-muted" id="ql-fast-nai-variety-hint">让模型在早期步数里先自由发挥构图，后段才套用负面词/CFG，画面更多样但负面提示词的管控会变弱。仅 V3/V4/V4.5 可用，V5 模型不支持，切到 V5 时这个开关会自动失效。</p></details></div><p id="ql-status" class="ql-muted" role="status"></p></div>
+<div class="ql-card"><h3>模型参数</h3><label for="ql-fast-provider">生图后端</label><select id="ql-fast-provider"><option value="novelai">NovelAI 官网</option><option value="novelai-thirdparty">NovelAI 第三方</option></select><div id="ql-fast-openai" hidden><input id="ql-fast-model" value="gpt-image-1"><select id="ql-fast-size"><option value="auto">auto</option><option>1024x1024</option></select><select id="ql-fast-quality"><option>medium</option></select></div><div id="ql-fast-nai" hidden><label>NovelAI 模型</label><select id="ql-fast-nai-model"><option value="nai-diffusion-5-full">V5 Full（5F）</option><option value="nai-diffusion-5-curated">V5 Curated（5C）</option><option value="nai-diffusion-4-5-full">V4.5 Full</option><option value="nai-diffusion-4-5-curated">V4.5 Curated</option><option value="nai-diffusion-4-full">V4 Full</option><option value="nai-diffusion-4-curated">V4 Curated</option><option value="nai-diffusion-3">Anime V3</option><option value="nai-diffusion-furry-3">Furry V3</option></select><div class="ql-row"><div><label>画面尺寸预设</label><select id="ql-fast-nai-size-preset"><option value="832x1216">竖版 · 832 × 1216</option><option value="768x1344">长竖版 · 768 × 1344</option><option value="1024x1024">正方形 · 1024 × 1024</option><option value="1216x832">横版 · 1216 × 832</option><option value="1344x768">宽横版 · 1344 × 768</option></select><input id="ql-fast-nai-width" type="hidden"><input id="ql-fast-nai-height" type="hidden"></div></div><details class="ql-nai-advanced"><summary>高级生成设置（不常调整）</summary><div class="ql-row"><div><label>步数</label><input id="ql-fast-nai-steps" type="number" min="1" max="50"></div><div><label>CFG Scale</label><input id="ql-fast-nai-scale" type="number" min="1" max="20" step="0.5"></div></div><div class="ql-row"><div><label>采样器</label><select id="ql-fast-nai-sampler"><option value="k_euler_ancestral">Euler Ancestral</option><option value="k_euler">Euler</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_2m">DPM++ 2M</option><option value="k_dpmpp_sde">DPM++ SDE</option><option value="k_dpmpp_2m_sde">DPM++ 2M SDE</option><option value="ddim_v3">DDIM（仅 V3 模型）</option></select></div><div><label>调度器</label><select id="ql-fast-nai-scheduler"><option value="karras">Karras</option><option value="native">Native</option><option value="exponential">Exponential</option><option value="polyexponential">Polyexponential</option></select></div></div><div class="ql-row"><div><label for="ql-fast-nai-quality">质量标签</label><select id="ql-fast-nai-quality"><option value="standard">标准</option><option value="light">轻量（仅 V5）</option><option value="off">关闭</option></select></div><div><label for="ql-fast-nai-uc">Undesired Content</label><select id="ql-fast-nai-uc"><option value="0">Heavy</option><option value="1">Light</option><option value="2">Furry</option><option value="3">Human</option><option value="4">None</option></select></div></div><label for="ql-fast-nai-seed">固定 Seed（留空则随机）</label><input id="ql-fast-nai-seed" type="number" min="0" max="2147483647" placeholder="随机 Seed"><label class="ql-inline-check"><input id="ql-fast-nai-normalize" type="checkbox"> 归一化 Vibe 参考强度<b class="ql-check-state" id="ql-fast-nai-normalize-state"></b></label><p class="ql-muted">开启后会自动归一化 V4/V4.5 多条 Vibe 的强度；关闭则按每条参考的原始强度发送。</p><label class="ql-inline-check"><input id="ql-fast-nai-variety" type="checkbox"> Variety+（构图多样性增强）<b class="ql-check-state" id="ql-fast-nai-variety-state"></b></label><p class="ql-muted" id="ql-fast-nai-variety-hint">让模型在早期步数里先自由发挥构图，后段才套用负面词/CFG，画面更多样但负面提示词的管控会变弱。仅 V3/V4/V4.5 可用，V5 模型不支持，切到 V5 时这个开关会自动失效。</p></details><details class="ql-nai-advanced" id="ql-body-manga-details"><summary>正文 / 状态栏 V5 整页漫画（实验，仅 V5 模型可用）</summary><p class="ql-muted">开启后，正文和状态栏的配图会让主创作模型按 NovelAI V5 专属的多画格漫画格式来写（画格大小、位置自由排布，不是均匀网格）。这边需要先选一个目标世界书——拾帧会在里面自动维护一条叫「【拾帧】V5 整页漫画格式」的条目，内容和开关状态都跟下面的设置同步；没选世界书之前，光开这个开关没用（主创作模型学不到新格式，正文该怎么出图还是怎么出）。</p><label for="ql-body-manga-world">目标世界书（自动维护专属条目）</label><select id="ql-body-manga-world"><option value="">请选择世界书</option></select><label for="ql-body-manga-style">分镜风格</label><select id="ql-body-manga-style"></select><label class="ql-inline-check"><input id="ql-body-manga-on" type="checkbox"> 正文 / 状态栏 V5 整页漫画模式<b class="ql-check-state" id="ql-body-manga-on-state"></b></label><p class="ql-muted" id="ql-body-manga-hint">仅 V5 模型可用，切到 V4.5/V4/V3 时这个开关会自动失效（世界书条目也会跟着自动关闭）。开启后正文/状态栏生成会跳过画师串/角色名替换/负面词合并，提示词和负面完全交给主创作模型自己按格式写；如果它写出来的东西不照规范来、画格还是很均匀，可以去世界书编辑器里把这条条目挪到更靠前/深度更低的位置提高优先级。</p><p id="ql-body-manga-status" class="ql-muted" role="status"></p></details></div><p id="ql-status" class="ql-muted" role="status"></p></div>
 </section>
 <section class="ql-subpage" data-subpage-panel="workshop" hidden><div class="ql-card"><h3>拾帧工坊</h3><p class="ql-muted">基于 NovelAI 的图生图 / 局部重绘 / 重点修复。结果会存入影像缓存并记录来源关系。需要 NovelAI 后端；每次生成按官网规则消耗 Anlas。</p><label>选择来源</label><div id="ql-ws-sources" class="ql-ws-sources"></div><div class="ql-row"><button id="ql-ws-upload-btn" type="button" class="menu_button">上传本地图片</button></div><input id="ql-ws-upload" type="file" accept="image/*" hidden></div>
 <div class="ql-card" id="ql-ws-stage" hidden><p id="ql-ws-size" class="ql-muted"></p><div class="ql-ws-canvas-wrap"><canvas id="ql-ws-base"></canvas><canvas id="ql-ws-mask"></canvas></div><div class="ql-ws-tools"><button type="button" class="menu_button is-selected" data-ws-tool="brush">画笔</button><button type="button" class="menu_button" data-ws-tool="eraser">橡皮</button><button type="button" class="menu_button" data-ws-tool="rect">矩形修复</button><button type="button" class="menu_button" id="ql-ws-undo" disabled>撤销</button><button type="button" class="menu_button" id="ql-ws-redo" disabled>重做</button><button type="button" class="menu_button" id="ql-ws-clear">清空涂色</button></div><label for="ql-ws-brush">笔刷大小：<span id="ql-ws-brush-out">24</span></label><input id="ql-ws-brush" type="range" min="6" max="120" step="2" value="24">
@@ -4752,6 +4762,91 @@ const QL_TC_MANGA_SPEC=`【NovelAI V5 漫画页规范】
 3. 画格布局不要求均分——大小、位置自由搭配，具体怎么分要按下面指定的分镜风格来写，不要擅自改成整齐网格。
 4. 页级排除词写在第一个 @panel 之前单独一段 @negative；人物专属排除词写在该人物自己的 @negative 段里，不要混在一起。
 5. 整段 <image>……</image> 之间不要出现任何别的标签、JSON、注释或说明文字，也不要在外面重复写一遍画面内容。`;
+// ===== 正文 / 状态栏 V5 整页漫画：靠世界书条目教会主创作模型（不是靠插件自己的 LLM 调用，
+// 小剧场那套是插件自己起一次独立的文字生成；正文续写用的是用户自己那条主聊天模型，拾帧管不到
+// 它怎么写，只能像别的生图规则一样，往世界书里塞一条条目当「新增规则」让它读到）=====
+// 这条目的 disable 字段跟着「正文 V5 漫画模式」这个开关走：开了就 disable:false（正常参与匹配/常驻注入），
+// 关了就 disable:true（酒馆读取世界书时会直接跳过，形同没这条）。用 comment 当稳定标记，重复调用这个
+// 函数只会更新同一条，不会每次都新建一条出来。
+const QL_BODY_MANGA_MARKER='【拾帧】V5 整页漫画格式（自动维护，开关请去拾帧「模型参数」设置里切换，不要手动删除/改名）';
+function qlBuildBodyMangaWorldInfoContent(styleId){
+ const style=QL_TC_MANGA_STYLES.find(x=>x.id===styleId)||QL_TC_MANGA_STYLES[0];
+ return [
+  '【拾帧·正文/状态栏 V5 整页漫画格式（由拾帧插件自动维护这条世界书条目，不代表要改变正文的剧情推进方式）】',
+  '只要这次续写需要配一张图（也就是要写 image###……### 这个标记），这张图整段按下面这套格式写，完全替换你平时学到的"逗号分隔画面 tag"写法；这次续写不需要配图的话，这条跟平时一样，不用理会。',
+  '',
+  QL_TC_MANGA_SPEC,
+  '',
+  '【本次分镜风格】'+style.label+(style.rule?'：'+style.rule:'（不限定风格，按事件自然分配画格大小与主次，不强制主格过半，也不强制均分）')
+ ].join('\n');
+}
+// 把当前「正文 V5 漫画模式」开关状态同步进目标世界书：开 → 条目 disable:false 且内容写成最新分镜风格；
+// 关 → 条目 disable:true（内容保留，方便她自己在酒馆世界书编辑器里看到/手动调整，只是不参与匹配）。
+// loadWorldInfo/saveWorldInfo 是酒馆稳定扩展 API（跟上面读世界书引用用的是同一类函数），但没有现成的
+// 「新建条目」辅助函数暴露在 getContext() 上，这里按确认过的字段结构自己手搭一条最小可用的条目。
+async function qlSyncBodyMangaWorldEntry(){
+ const s=cfg(),statusEl=document.querySelector('#ql-body-manga-status');
+ const bookName=String(s.bodyMangaWorldName||'').trim();
+ if(!bookName){if(statusEl)statusEl.textContent='还没选目标世界书，开关暂时不会真正生效（主创作模型学不到新格式）。';return;}
+ const ctx=getContext();
+ if(typeof ctx?.loadWorldInfo!=='function'||typeof ctx?.saveWorldInfo!=='function'){
+  if(statusEl)statusEl.textContent='当前酒馆版本不支持通过接口读写世界书，这个联动用不了。';
+  return;
+ }
+ try{
+  const data=await ctx.loadWorldInfo(bookName);
+  if(!data||typeof data!=='object'||!data.entries){if(statusEl)statusEl.textContent='读取世界书「'+bookName+'」失败，请确认名字没填错、这本书确实存在。';return;}
+  let entry=Object.values(data.entries).find(e=>e&&e.comment===QL_BODY_MANGA_MARKER);
+  if(!entry){
+   const uids=Object.keys(data.entries).map(Number).filter(Number.isFinite);
+   const uid=uids.length?Math.max(...uids)+1:0;
+   entry={uid,key:[],keysecondary:[],comment:QL_BODY_MANGA_MARKER,content:'',constant:true,vectorized:false,selective:true,selectiveLogic:0,addMemo:true,order:100,position:0,disable:false,probability:100,useProbability:true,depth:4,group:''};
+   data.entries[uid]=entry;
+  }
+  entry.constant=true;
+  entry.content=qlBuildBodyMangaWorldInfoContent(s.bodyMangaStyle||'eromanga');
+  entry.disable=!s.bodyMangaV5;
+  await ctx.saveWorldInfo(bookName,data);
+  if(statusEl)statusEl.textContent='已把世界书「'+bookName+'」里的 V5 漫画条目'+(s.bodyMangaV5?'打开':'关闭')+'（分镜风格：'+(QL_TC_MANGA_STYLES.find(x=>x.id===(s.bodyMangaStyle||'eromanga'))?.label||'')+'）。这条目在世界书编辑器里能看到、能手动微调，只是请不要改它的名字（改了名字下次同步会认不出来，变成新建一条）。';
+ }catch(error){
+  console.error('[拾帧] 同步正文 V5 漫画世界书条目失败',error);
+  if(statusEl)statusEl.textContent='同步世界书失败：'+(error?.message||String(error));
+ }
+}
+// 仅 V5 模型可用：跟 Variety+ 开关一样的思路，切模型瞬间同步可用性；关掉时顺带把世界书条目也
+// 带着一起关掉（不然切走 V5 之后正文还在按漫画格式写，V4.5/V4/V3 不认识这套语法，等于白写）。
+function qlSyncBodyMangaAvailability(){
+ const onEl=document.querySelector('#ql-body-manga-on'),hint=document.querySelector('#ql-body-manga-hint');
+ const isV5=/^nai-diffusion-5-/i.test(String(document.querySelector('#ql-fast-nai-model')?.value||cfg().naiModel||''));
+ if(onEl)onEl.disabled=!isV5;
+ if(!isV5&&cfg().bodyMangaV5){cfg().bodyMangaV5=false;if(onEl)onEl.checked=false;save();qlSyncBodyMangaWorldEntry();}
+ qlPaintCheckState('ql-body-manga-on','ql-body-manga-on-state');
+ if(hint)hint.classList.toggle('ql-muted-strong',!isV5);
+}
+// 世界书下拉从 getContext().getWorldInfoNames() 取（酒馆稳定扩展 API，前面读世界书引用条目用的
+// qlListWorldInfoEntries 走的是 loadWorldInfo 这条，这里只要名字列表，更轻量）；分镜风格复用小剧场
+// 那份 QL_TC_MANGA_STYLES，三个控件改了都要调一次 qlSyncBodyMangaWorldEntry 让世界书条目跟上。
+function qlBodyMangaBind(){
+ const worldEl=document.querySelector('#ql-body-manga-world'),styleEl=document.querySelector('#ql-body-manga-style'),onEl=document.querySelector('#ql-body-manga-on');
+ if(!worldEl||!styleEl||!onEl||worldEl.dataset.qlBound)return;
+ worldEl.dataset.qlBound='1';
+ const s=cfg();
+ if(!styleEl.dataset.qlFilled){styleEl.dataset.qlFilled='1';QL_TC_MANGA_STYLES.forEach(x=>{const opt=document.createElement('option');opt.value=x.id;opt.textContent=x.label;styleEl.append(opt);});}
+ styleEl.value=[...styleEl.options].some(o=>o.value===s.bodyMangaStyle)?s.bodyMangaStyle:'eromanga';
+ onEl.checked=!!s.bodyMangaV5;
+ qlSyncBodyMangaAvailability();
+ (async()=>{
+  try{
+   const ctx=getContext();
+   const names=typeof ctx?.getWorldInfoNames==='function'?ctx.getWorldInfoNames():[];
+   for(const name of names){const opt=document.createElement('option');opt.value=name;opt.textContent=name;worldEl.append(opt);}
+  }catch(error){console.warn('[拾帧] 读取世界书名单失败',error);}
+  worldEl.value=[...worldEl.options].some(o=>o.value===cfg().bodyMangaWorldName)?cfg().bodyMangaWorldName:'';
+ })();
+ worldEl.addEventListener('change',()=>{cfg().bodyMangaWorldName=worldEl.value;save();qlSyncBodyMangaWorldEntry();});
+ styleEl.addEventListener('change',()=>{cfg().bodyMangaStyle=styleEl.value;save();if(cfg().bodyMangaV5)qlSyncBodyMangaWorldEntry();});
+ onEl.addEventListener('change',()=>{cfg().bodyMangaV5=onEl.checked;save();qlPaintCheckState('ql-body-manga-on','ql-body-manga-on-state');qlSyncBodyMangaWorldEntry();});
+}
 function qlTcBuildQuietPrompt(mode,text,styleValue){
  const label=mode==='plot'?'剧情词':'画面词';
  const modeRule=mode==='plot'
@@ -6889,12 +6984,14 @@ const qlSyncVarietyAvailability=()=>{
  qlPaintCheckState('ql-fast-nai-variety','ql-fast-nai-variety-state');
 };
 qlSyncVarietyAvailability();
+qlBodyMangaBind();
 $('#ql-fast-nai-normalize').onchange=()=>qlPaintCheckState('ql-fast-nai-normalize','ql-fast-nai-normalize-state');
 $('#ql-fast-nai-variety').onchange=()=>qlPaintCheckState('ql-fast-nai-variety','ql-fast-nai-variety-state');
 // 切换模型：立刻全局生效（不需要先跑一次生成才同步），并且步数/CFG/采样器/调度器/质量标签/UC 按模型分别记忆、自动切换（不含宽高尺寸）。
 $('#ql-fast-nai-model').onchange=()=>{
  const s=cfg(),oldModel=String(s.naiModel||'nai-diffusion-4-5-full'),newModel=$('#ql-fast-nai-model').value;
  qlSyncVarietyAvailability();
+ qlSyncBodyMangaAvailability();
  if(newModel===oldModel)return;
  qlSaveNaiModelParams(s,oldModel);
  s.naiModel=newModel;
