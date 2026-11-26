@@ -4008,7 +4008,7 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 </div>
 <div class="ql-page" data-page-panel="history" role="tabpanel" hidden><div class="ql-card"><h3>影像缓存</h3><p class="ql-muted">这里保存生成过的影像记录；点击缩略图可查看提示词、参考图与生成参数。</p><label for="ql-history-columns">每行影像数量</label><select id="ql-history-columns"><option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option><option value="5">5 张</option></select><label for="ql-history-kind">显示</label><select id="ql-history-kind"><option value="">全部</option><option value="normal">正文 / 状态栏</option><option value="egg">彩蛋</option></select><button type="button" class="ql-cache-footer-ball" id="ql-cache-footer-ball" aria-label="展开底片工具" aria-expanded="false" title="底片工具（可拖动）">⋮<span class="ql-cache-footer-ball-badge" data-ql-footer-ball-badge hidden>0</span></button><div id="ql-cache-footer" class="ql-cache-bulk-tools" hidden><div class="ql-cache-bar-row"><button type="button" class="menu_button" id="ql-cache-select-mode" aria-pressed="false">多选</button><label class="ql-cache-select-all" hidden><input type="checkbox" data-ql-select-all disabled> 全选</label><span class="ql-cache-selected-count" data-ql-selected-count hidden>已选 0 张</span><button type="button" class="menu_button" data-ql-bulk-download disabled hidden>逐张下载</button><button type="button" class="menu_button" data-ql-bulk-delete disabled hidden>删除所选</button></div><div class="ql-cache-bar-row ql-cache-clear-row"><select id="ql-clear-range" aria-label="清理范围"><option value="0">清理全部</option><option value="1">清理 1 天前</option><option value="3">清理 3 天前</option><option value="7">清理 7 天前</option><option value="30">清理 30 天前</option></select><button type="button" class="menu_button" id="ql-clear">清理缓存</button><button type="button" class="menu_button" id="ql-clear-all" title="连正文里每个格子当前的图也一起清掉">彻底清空</button><button type="button" class="menu_button" id="ql-dedupe" title="完全一样的图只留一张">合并重复</button></div><div class="ql-cache-bar-row"><label for="ql-record-limit">自动保留</label><select id="ql-record-limit"><option value="300">最近 300 条</option><option value="500">最近 500 条</option><option value="800">最近 800 条</option><option value="1500">最近 1500 条</option><option value="0">不限制</option></select><span class="ql-muted">超出时自动清掉最旧的缓存</span></div><p class="ql-muted ql-cache-bar-tip" id="ql-clear-tip"></p></div><div id="ql-history"></div></div></div>
 <div class="ql-page" data-page-panel="albums" role="tabpanel" hidden><div class="ql-card ql-album-library-card"><div id="ql-character-albums"></div></div></div>
-<div class="ql-page" data-page-panel="theater" role="tabpanel" hidden><div class="ql-card" id="ql-theater-compose"><h3>创作区</h3><p class="ql-muted">写下画面词或剧情词，让模型按当前预设、聊天上下文、角色卡和世界书写一段小剧场（标题 + 画面 + 聊天室），再用彩蛋的出图方式画出来（不注入体型/质量通用词）。满意后点「收入小剧场」。</p><div class="ql-row"><label for="ql-tc-mode">写入内容</label><select id="ql-tc-mode"><option value="scene">画面词（照我写的画面来）</option><option value="plot">剧情词（模型自己选画面）</option></select></div><div class="ql-row"><label for="ql-tc-style">画风</label><select id="ql-tc-style"><option value="egg">彩蛋 · Q 版（默认，不分镜）</option><option value="comic1">条漫 · 正常比例（单图不分镜）</option><option value="comic2">条漫 · 正常比例（双格分镜）</option><option value="comic4">条漫 · 正常比例（四格分镜）</option></select></div><textarea id="ql-tc-input" rows="4" placeholder="画面词：比如「乔把 Lucien 推开，手抵在他胸口，Q 版」；剧情词：比如「两人在厨房抢最后一块蛋糕」"></textarea><div class="ql-row"><label for="ql-tc-size">尺寸</label><select id="ql-tc-size"><option value="">跟随彩蛋/正文尺寸</option><option value="832x1216">竖版 · 832 × 1216</option><option value="768x1344">长竖版 · 768 × 1344</option><option value="1024x1024">正方形 · 1024 × 1024</option><option value="1216x832">横版 · 1216 × 832</option><option value="1344x768">宽横版 · 1344 × 768</option></select></div><div class="ql-row"><label for="ql-tc-combo">出图组合</label><select id="ql-tc-combo"></select></div><div class="ql-row"><button id="ql-tc-generate" type="button" class="menu_button ql-primary">生成小剧场</button></div><p id="ql-tc-status" class="ql-muted" role="status"></p><div id="ql-tc-result"></div></div><div class="ql-card"><h3>小剧场</h3><p class="ql-muted">收藏图片时（点正文图片的收藏按钮），如果这条消息带着彩蛋聊天室，会把当时的标题和对话内容一起存下来，重 Roll 掉之后还能在这里原样回看，不受正文重 Roll 影响。</p><div class="ql-row"><button type="button" class="menu_button" id="ql-egg-avatar-lib-btn">头像库</button></div><p class="ql-muted">点聊天室里任意一个头像，随时可以补传；在这里统一上传/替换的头像，聊天室里同名的头像会一起更新。</p><div id="ql-egg-avatar-lib" class="ql-egg-avatar-lib" hidden></div><div id="ql-theater-list"></div></div></div>
+<div class="ql-page" data-page-panel="theater" role="tabpanel" hidden><div class="ql-card" id="ql-theater-compose"><h3>创作区</h3><p class="ql-muted">写下画面词或剧情词，让模型按当前预设、聊天上下文、角色卡和世界书写一段小剧场（标题 + 画面 + 聊天室），再用彩蛋的出图方式画出来（不注入体型/质量通用词）。满意后点「收入小剧场」。</p><div class="ql-row"><label for="ql-tc-mode">写入内容</label><select id="ql-tc-mode"><option value="scene">画面词（照我写的画面来）</option><option value="plot">剧情词（模型自己选画面）</option></select></div><div class="ql-row"><label for="ql-tc-style">画风</label><select id="ql-tc-style"><option value="egg">彩蛋 · Q 版（默认，不分镜）</option><option value="comic1">条漫 · 正常比例（单图不分镜）</option><option value="comic2">条漫 · 正常比例（双格分镜）</option><option value="comic4">条漫 · 正常比例（四格分镜）</option><option value="comicV5" id="ql-tc-style-v5-opt">条漫 · V5 整页漫画（大小格自由排布，仅 V5 模型可用）</option></select></div><div class="ql-row" id="ql-tc-manga-style-row" hidden><label for="ql-tc-manga-style">分镜风格</label><select id="ql-tc-manga-style"></select></div><textarea id="ql-tc-input" rows="4" placeholder="画面词：比如「乔把 Lucien 推开，手抵在他胸口，Q 版」；剧情词：比如「两人在厨房抢最后一块蛋糕」"></textarea><div class="ql-row"><label for="ql-tc-size">尺寸</label><select id="ql-tc-size"><option value="">跟随彩蛋/正文尺寸</option><option value="832x1216">竖版 · 832 × 1216</option><option value="768x1344">长竖版 · 768 × 1344</option><option value="1024x1024">正方形 · 1024 × 1024</option><option value="1216x832">横版 · 1216 × 832</option><option value="1344x768">宽横版 · 1344 × 768</option></select></div><div class="ql-row"><label for="ql-tc-combo">出图组合</label><select id="ql-tc-combo"></select></div><div class="ql-row"><button id="ql-tc-generate" type="button" class="menu_button ql-primary">生成小剧场</button></div><p id="ql-tc-status" class="ql-muted" role="status"></p><div id="ql-tc-result"></div></div><div class="ql-card"><h3>小剧场</h3><p class="ql-muted">收藏图片时（点正文图片的收藏按钮），如果这条消息带着彩蛋聊天室，会把当时的标题和对话内容一起存下来，重 Roll 掉之后还能在这里原样回看，不受正文重 Roll 影响。</p><div class="ql-row"><button type="button" class="menu_button" id="ql-egg-avatar-lib-btn">头像库</button></div><p class="ql-muted">点聊天室里任意一个头像，随时可以补传；在这里统一上传/替换的头像，聊天室里同名的头像会一起更新。</p><div id="ql-egg-avatar-lib" class="ql-egg-avatar-lib" hidden></div><div id="ql-theater-list"></div></div></div>
 <div class="ql-page" data-page-panel="prompt-gallery" role="tabpanel" hidden><div class="ql-card ql-prompt-gallery-page-card"><h3 id="ql-prompt-gallery-title" class="ql-muted" hidden>提示词图集</h3><p class="ql-muted" id="ql-prompt-gallery-description" hidden></p><div id="ql-prompt-gallery-content"></div></div></div>
 <div class="ql-page" data-page-panel="settings" role="tabpanel" hidden><details class="ql-card"><summary>插件运行状态</summary><p class="ql-muted">关闭后会暂停拾帧的状态栏扫描、正文标记自动触发和自动生图；已有影像、相册与设置会保留。</p><div class="ql-row"><button id="ql-plugin-toggle" class="menu_button ql-primary" type="button" aria-pressed="true">插件：已启用</button></div></details><details class="ql-card"><summary>拾帧本地数据库</summary><p class="ql-muted">连接同一台手机上的拾帧素材库 App。只同步拾帧插件自己的设置、素材和图片原始字节，不读取酒馆其他角色卡、聊天记录或世界书。同步前请先打开 App 并保持在前台。</p><label for="ql-vault-url">本地数据库地址</label><input id="ql-vault-url" value="http://127.0.0.1:8765" autocomplete="off"><label for="ql-vault-token">配对令牌</label><input id="ql-vault-token" type="password" autocomplete="off" placeholder="从拾帧素材库 App 复制"><div class="ql-row"><button id="ql-vault-test" type="button" class="menu_button">测试数据库连接</button><button id="ql-vault-push" type="button" class="menu_button ql-primary">同步到本地数据库</button><button id="ql-vault-pull" type="button" class="menu_button">从本地数据库恢复</button></div><div class="ql-row"><button id="ql-vault-pull-selected" type="button" class="menu_button">拉取 App 里已标记的照片</button></div><p class="ql-muted">只拉回在 App 里勾选标记过的底片/角色相册照片，追加合并进当前拾帧数据，不会动现有的任何记录；已经拉过的照片会按照片编号自动跳过，不会重复导入。</p><p id="ql-vault-status" class="ql-muted" role="status"></p></details><details class="ql-card"><summary>文件备份与迁移</summary><p class="ql-muted">用于手动保存拾帧设置 JSON，或在不同酒馆实例间迁移。文件可能包含 API Key；请勿分享给他人。图片原文件由上面的本地数据库同步单独保存。</p><div class="ql-row"><button id="ql-export-all-data" type="button" class="menu_button">导出设置 JSON</button><button id="ql-import-all-data" type="button" class="menu_button">导入设置 JSON</button></div><input id="ql-import-all-file" type="file" accept=".json,application/json" hidden><p id="ql-export-all-status" class="ql-muted" role="status"></p></details><details class="ql-card"><summary>图片下载选项</summary><p class="ql-muted">可选择保存为 PNG 或 JPG。PNG 保留原始文件及其元数据；JPG 会重新编码图像，不保留原 PNG 的提示词与生成参数数据块。</p><label for="ql-download-format">下载文件格式</label><div class="ql-row ql-setting-control-row"><select id="ql-download-format"><option value="png">PNG（.png）</option><option value="jpg">JPG（.jpg）</option></select><button id="ql-png-download-save" type="button" class="menu_button ql-primary">保存下载格式</button></div><p id="ql-png-download-status" class="ql-muted" role="status"></p></details><details class="ql-card"><summary>放大图小互动（果冻）</summary><p class="ql-muted">在详情页点开放大图后，可以戳一戳、拖一拖、摇一摇图片，松手会 Q 弹地回去。纯装饰，默认关闭。放大图下方的「果冻」小面板可以随时快速切换这些选项，还能涂出「选区」，只让选中的地方动。</p><label for="ql-jelly-on">果冻</label><select id="ql-jelly-on"><option value="off">关闭</option><option value="on">开启</option></select><label for="ql-jelly-scope">范围</label><select id="ql-jelly-scope"><option value="local">局部：按到的一小块凹下去</option><option value="smudge">抹开：手指划过的地方被带着走，松手回弹</option><option value="whole">全屏：整张图一起弹</option></select><label>交互方式（可多选）</label><label class="ql-check"><input type="checkbox" id="ql-jelly-drag"> 拖动：按住拖拽拉伸，松手回弹</label><label class="ql-check"><input type="checkbox" id="ql-jelly-shake"> 摇晃手机：图片跟着晃，停了弹回</label><label class="ql-check"><input type="checkbox" id="ql-jelly-burst"> 点一下连晃：点一下图，自己连晃几下</label><div id="ql-burst-box"><label for="ql-burst-mode">连晃模式</label><select id="ql-burst-mode"><option value="wobble">摇晃（随机方向晃几下）</option><option value="press">点击反馈（按压回弹，重复几次）</option></select><label for="ql-burst-n">次数 <span id="ql-burst-n-v" class="ql-muted"></span></label><input id="ql-burst-n" type="range" min="1" max="10" step="1"><label for="ql-burst-power">幅度 <span id="ql-burst-power-v" class="ql-muted"></span></label><input id="ql-burst-power" type="range" min="20" max="200" step="5"><label class="ql-check"><input type="checkbox" id="ql-burst-decay"> 越晃越弱</label></div><p id="ql-jelly-shake-msg" class="ql-muted" role="status"></p><label for="ql-jelly-strength">弹性</label><select id="ql-jelly-strength"><option value="soft">软糯</option><option value="mid">Q弹</option><option value="bouncy">DUANG</option></select></details><details class="ql-card"><summary>悬浮球（小萌物）</summary><p class="ql-muted">屏幕边上放一个可拖动的小萌物，点一下直接打开拾帧；手机摇晃时它会摇头晃脑。默认关闭。</p><div id="ql-fb-settings"></div></details><details class="ql-card"><summary>影像美化设置</summary><p class="ql-muted">选择正文里「标题徽章 + 相册卡片 + 聊天室」这一整套的外观风格，三者绑在一起切换；保存后会应用到现有内容和新内容。</p><label for="ql-chat-album-style">影像风格</label><div class="ql-row ql-setting-control-row"><select id="ql-chat-album-style"><option value="follow">跟随界面风格（默认）</option><option value="pixel">像素掌机</option><option value="ccd">CCD 数码相机</option><option value="polaroid">拍立得手账</option><option value="scroll">简约书笺</option><option value="cyber">赛博像素</option><option value="win">经典桌面（Windows）</option><option value="news">复古报纸</option><option value="purikura">大头贴（Y2K）</option><option value="receipt">热敏小票</option><option value="comic">黑白漫画分镜卡</option><option value="player">观影放映厅（一起看）</option><option value="wuxia">江湖武侠</option><option value="classic">经典相册（白边留白）</option><option value="film">胶片相册（深色边框）</option><option value="soft">柔和卡片（圆角浅色）</option></select><button id="ql-chat-album-style-save" type="button" class="menu_button">应用影像风格</button></div><p id="ql-chat-album-style-status" class="ql-muted" role="status"></p><p class="ql-muted">目前「黑白漫画分镜卡」「拍立得手账」「观影放映厅」「江湖武侠」四套标题 / 相册卡片 / 聊天室三部分配套齐全；其余风格暂时只有标题和相册卡片换了皮，聊天室会先退到跟随主题色的默认配色，想要配套可以在下面新建一套自定义影像风格。</p><details class="ql-custom-style-box"><summary>✦ 新建 / 管理自定义影像风格</summary><label for="ql-ca-pick">选择要编辑的影像风格</label><select id="ql-ca-pick"><option value="">＋ 新建影像风格</option></select><label for="ql-ca-name">风格名称</label><input id="ql-ca-name" type="text" maxlength="24" placeholder="给这套影像风格起个名字"><label for="ql-ca-css">影像美化 CSS（含说明的骨架，覆盖标题 / 相册 / 聊天室三部分）</label><textarea id="ql-ca-css" rows="12" spellcheck="false"></textarea><div class="ql-row"><button id="ql-ca-skeleton" type="button" class="menu_button">插入骨架</button><button id="ql-ca-save" type="button" class="menu_button">保存并应用</button><button id="ql-ca-delete" type="button" class="menu_button">删除</button></div><div class="ql-row"><button id="ql-ca-export" type="button" class="menu_button">导出 JSON</button><button id="ql-ca-export-ai" type="button" class="menu_button">导出给 AI（含说明）</button><button id="ql-ca-import" type="button" class="menu_button">导入 JSON / CSS</button><input id="ql-ca-file" type="file" accept=".json,.css,application/json,text/css" hidden></div><p id="ql-ca-status" class="ql-muted" role="status"></p></details></details><details class="ql-card"><summary>外观与配色</summary><p class="ql-muted">拾帧使用独立配色与字体，不跟随酒馆主题设置；可选择低饱和配色或自选点缀色。</p><label for="ql-ui-style">界面风格</label><div class="ql-row ql-setting-control-row"><select id="ql-ui-style"><option value="default">柔和（默认）</option><option value="pixel">像素掌机</option><option value="ccd">CCD 数码相机</option><option value="polaroid">拍立得手账</option><option value="scroll">简约书笺</option><option value="cyber">赛博像素</option><option value="win">经典桌面（Windows）</option><option value="crab">小螃蟹（沙滩）</option><option value="cat">小黑猫（月夜）</option><option value="news">复古报纸</option><option value="purikura">大头贴（Y2K）</option><option value="receipt">热敏小票</option><option value="comic">黑白漫画分镜</option></select></div><details class="ql-custom-style-box"><summary>✦ 新建 / 管理自定义风格</summary><label for="ql-cs-pick">选择要编辑的风格</label><select id="ql-cs-pick"><option value="">＋ 新建风格</option></select><label for="ql-cs-name">风格名称</label><input id="ql-cs-name" type="text" maxlength="24" placeholder="给风格起个名字"><label for="ql-cs-css">风格 CSS（含变量说明的骨架）</label><textarea id="ql-cs-css" rows="14" spellcheck="false"></textarea><div class="ql-row"><button id="ql-cs-skeleton" type="button" class="menu_button">插入骨架</button><button id="ql-cs-save" type="button" class="menu_button">保存并应用</button><button id="ql-cs-delete" type="button" class="menu_button">删除</button></div><div class="ql-row"><button id="ql-cs-export" type="button" class="menu_button">导出 JSON</button><button id="ql-cs-export-ai" type="button" class="menu_button">导出给 AI（含说明）</button><button id="ql-cs-import" type="button" class="menu_button">导入 JSON / CSS</button><input id="ql-cs-file" type="file" accept=".json,.css,application/json,text/css" hidden></div><p id="ql-cs-status" class="ql-muted" role="status"></p></details><p class="ql-muted">风格改变设置面板、放大弹窗和详情页的外观；每套风格自带点缀色，在下方配色里选别的配色或「自选颜色」就会换成它。</p><label for="ql-ui-tint">背景染色强度 <span id="ql-ui-tint-value" class="ql-muted"></span></label><input id="ql-ui-tint" type="range" min="0" max="24" step="1"><p class="ql-muted">把点缀色轻轻染进背景；0 为不染色，数值越大颜色越明显（只在选了别的配色或自选颜色时有效）。</p><label for="ql-theme-color">点缀色（拖动色环，或用下面三个滑条）</label><div class="ql-row ql-setting-control-row"><select id="ql-theme-preset" hidden><option value="mist">雾灰蓝（默认独立主题）</option><option value="sage">鼠尾草绿</option><option value="lavender">灰紫</option><option value="oat">燕麦奶茶</option><option value="custom">自选颜色</option></select><button id="ql-theme-apply" type="button" class="menu_button">应用配色</button><button id="ql-theme-reset" type="button" class="menu_button">恢复默认</button></div><div id="ql-custom-color-row"><div class="ql-color-picker-row"><input id="ql-theme-color" type="color" value="#9aaec2" aria-label="自选点缀色"><span id="ql-theme-color-value">#9AAEC2</span></div><div class="ql-hsl-row"><label for="ql-hsl-h">色相</label><input id="ql-hsl-h" class="ql-hsl-hue" type="range" min="0" max="360" step="1"><label for="ql-hsl-s">饱和度</label><input id="ql-hsl-s" class="ql-hsl-sat" type="range" min="0" max="100" step="1"><label for="ql-hsl-l">明度</label><input id="ql-hsl-l" class="ql-hsl-lum" type="range" min="15" max="85" step="1"></div><p class="ql-muted">只调整拾帧界面的点缀色，卡片和图片周围保持浅色底，不会把相框变成深色。</p></div><p id="ql-theme-status" class="ql-muted" role="status"></p></details><details class="ql-card"><summary>接口连接设置</summary><nav class="ql-subtabs" role="tablist" aria-label="接口类型"><button type="button" class="ql-subtab active" data-subpage="conn-nai-official" aria-selected="true">NAI 官网</button><button type="button" class="ql-subtab" data-subpage="conn-nai-third" aria-selected="false">NAI 第三方</button></nav><section class="ql-subpage active" data-subpage-panel="conn-nai-official"><p class="ql-muted">官网模式使用 NovelAI 官方 API，Key 仅保存在当前酒馆扩展设置中。</p><label for="ql-nai-key">NovelAI 官网 Key</label><input id="ql-nai-key" type="password" autocomplete="off" placeholder="NovelAI Persistent API Token"><button id="ql-save-nai" class="menu_button ql-primary">保存 NAI 官网连接</button><button id="ql-nai-sub-check" type="button" class="menu_button">查询账号信息（到期/点数/额度）</button><div id="ql-nai-sub-info" class="ql-muted" role="status"></div></section><section class="ql-subpage" data-subpage-panel="conn-nai-third" hidden><p class="ql-muted">第三方 NAI 兼容服务需要填写服务商提供的地址与 Key。</p><label for="ql-nai-third-endpoint">第三方 API 地址</label><input id="ql-nai-third-endpoint" placeholder="https://服务商地址"><label for="ql-nai-third-key">第三方 API Key</label><input id="ql-nai-third-key" type="password" autocomplete="off" placeholder="服务商提供的 Key"><button id="ql-save-nai-third" class="menu_button ql-primary">保存 NAI 第三方连接</button></section><div hidden><input id="ql-endpoint"><input id="ql-key"><input id="ql-gpt-endpoint"><input id="ql-gpt-key"></div></details><details class="ql-card"><summary>API 配置</summary><p class="ql-muted">这里统一管理拾帧的文本模型连接，取景区中文转 Tag 与小剧场剧情生成共用同一套 API。可跟随酒馆主 API，也可填写独立 API；世界书、预设条目与系统提示词设置仍用于画面 Tag 转换。</p><label for="ql-llm-tag-mode">使用哪个LLM</label><select id="ql-llm-tag-mode"><option value="main">跟随酒馆主API（默认）</option><option value="custom">使用独立配置</option></select><div id="ql-llm-tag-custom-box" hidden><label for="ql-llm-tag-url">API 地址</label><input id="ql-llm-tag-url" placeholder="https://你的中转/反代地址"><label for="ql-llm-tag-key">API Key</label><input id="ql-llm-tag-key" type="password" autocomplete="off" placeholder="API Key"><label for="ql-llm-tag-model">模型名</label><div class="ql-row"><input id="ql-llm-tag-model" list="ql-llm-tag-model-list" placeholder="例如 gpt-4o-mini，或点右边拉取"><button id="ql-llm-tag-fetch-models" type="button" class="menu_button">拉取模型列表</button></div><datalist id="ql-llm-tag-model-list"></datalist><p id="ql-llm-tag-model-status" class="ql-muted" role="status"></p><label for="ql-llm-tag-temp">温度</label><input id="ql-llm-tag-temp" type="number" min="0" max="2" step="0.1"></div><label class="ql-check"><input type="checkbox" id="ql-llm-tag-wi-on"> 转换时参考世界书设定（自动跟随当前角色卡绑定的世界书，按关键词触发/常驻规则读取，不是整本塞入）</label><p class="ql-muted">读到的条目会作为参考资料交给LLM，帮它贴近正文里角色的外貌、服饰等设定。点下面的按钮可以直接看到当前绑定的世界书都有哪些条目，取消勾选自检清单、彩蛋解析格式这类跟画面无关的条目就行，不用自己跑去世界书里抄名字。</p><div class="ql-row"><button id="ql-llm-tag-wi-refresh" type="button" class="menu_button">刷新世界书条目列表</button><span id="ql-llm-tag-wi-refresh-status" class="ql-muted"></span></div><div id="ql-llm-tag-wi-entries" class="ql-wi-entries-box"></div><p class="ql-muted"><strong>借用预设条目</strong>：从酒馆当前预设（聊天补全）里挑几条文字条目，转换时拼在提示词最前面，借用它的文风规范和内容限制；不勾选就不借用。预设里的字数、状态栏、思维链之类的条目别勾，会干扰「只输出一行 tag」。</p><div class="ql-row"><button id="ql-llm-tag-preset-refresh" type="button" class="menu_button">读取当前预设条目</button><span id="ql-llm-tag-preset-status" class="ql-muted"></span></div><div id="ql-llm-tag-preset-entries" class="ql-wi-entries-box"></div><label for="ql-llm-tag-sys">自定义系统提示词（可留空，追加在内置转换规则后面）</label><textarea id="ql-llm-tag-sys" placeholder="留空则只用内置的转换规则；这里填的内容会追加在后面"></textarea><div class="ql-row"><button id="ql-llm-tag-save" type="button" class="menu_button ql-primary">保存 API 配置</button></div><p id="ql-llm-tag-settings-status" class="ql-muted" role="status"></p></details><div hidden><select id="ql-provider"><option value="novelai">NovelAI 官网</option><option value="novelai-thirdparty">NovelAI 第三方</option></select><input id="ql-model"><select id="ql-size"><option value="auto">auto</option><option>1024x1024</option><option>1536x1024</option><option>1024x1536</option><option>2048x2048</option><option>2048x1152</option><option>3840x2160</option><option>2160x3840</option></select><select id="ql-quality"><option>low</option><option>medium</option><option>high</option></select><input id="ql-nai-model"><input id="ql-nai-steps"><input id="ql-nai-scale"><input id="ql-nai-width" type="hidden"><input id="ql-nai-height" type="hidden"><select id="ql-nai-sampler"><option value="k_euler_ancestral">Euler Ancestral</option><option value="k_euler">Euler</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_2m">DPM++ 2M</option><option value="k_dpmpp_sde">DPM++ SDE</option><option value="k_dpmpp_2m_sde">DPM++ 2M SDE</option><option value="ddim_v3">DDIM（仅 V3 模型）</option></select><select id="ql-nai-scheduler"><option value="karras">Karras</option><option value="native">Native</option><option value="exponential">Exponential</option><option value="polyexponential">Polyexponential</option></select><input id="ql-nai-normalize" type="checkbox"><input id="ql-nai-variety" type="checkbox"><input id="ql-nai-quality"><input id="ql-nai-uc"><input id="ql-nai-seed"><div id="ql-openai-settings" hidden></div><div id="ql-nai-settings" hidden></div></div></div>
 </section></div>`;}
@@ -4714,12 +4714,75 @@ function renderViewfinderRoles(){
 // 提交给 NAI 的内容（角色名替换、外貌分块、组合/预设/Vibe）复用取景区和正文同一套解析。
 let qlTcBusy=false;
 let qlTcState=null;
-function qlTcPanelCount(styleValue){return styleValue==='comic2'?2:styleValue==='comic4'?4:1;}
+function qlTcPanelCount(styleValue){return styleValue==='comic2'?2:styleValue==='comic4'?4:styleValue==='comicV5'?10:1;}
+// 参考同类 SillyTavern 扩展「柏宝绘」(github.com/stilljy-commits/ST-BaiBai-Image) 的做法搬过来的：
+// NAI V5 Full 自己认识一套 <image>@page/@panel/@character/@outfit/@negative>…</image> 结构化
+// 标记文本，写进提示词里能让它一次性把"一整页漫画"画成一张图，画格大小/位置可以自由不均分
+// （不像我们自己的 comic2/comic4 那样靠 2koma/4koma 这种 Danbooru 标签，基本只能出均匀网格）。
+// 这套只对 V5 生效，V4.5/V4/V3 发了也没用，所以画风下拉框里这个选项只在选中 V5 模型时才可选。
+const QL_TC_MANGA_STYLES=[
+ {id:'eromanga',label:'本子肉感（默认，NSFW 向）',rule:'本子肉感分镜：每页必设一处核心主画格，完整呈现互动全貌与肢体纠缠；在大格边角紧贴嵌入极近特写切入小格（close-up, cut-in），收束视觉焦点至神态与接触点；画格边框顺应卧躺或交缠的身体线条作动态斜切（The panel border follows the curve of the body.）。画格大小与形状写成英文完整句，例如 The main panel fills most of the page.'},
+ {id:'universal',label:'仅通用规则（不限定风格）',rule:''},
+ {id:'yonkoma',label:'经典四格（固定四格，均衡排布）',rule:'经典四格分镜：每页严格四格，以等宽矩形的垂直四格或清晰阶梯布局按起承转合排布（铺垫→发展→转折→收束），大小均衡、结构规整；不套用主格面积过半要求。最后一格承载笑点或结论的定格时刻。'},
+ {id:'moodSfw',label:'氛围特写·SFW（大格烘托情绪+局部反应特写，不露骨）',rule:'氛围特写分镜（SFW）：以一处情绪氛围主格承载整体互动与场景张力，人物可以溢出画格边界强调情绪；在边角嵌入一两格局部反应特写（手部接触、耳朵泛红、嘴唇微张、视线躲闪等细微反应，不聚焦性器官/裸露部位），不要求每格都推进剧情，允许某一格单纯定格一个细微反应而不交代新动作；竖向构图优先，姿态强调优雅与张力。画格大小与形状写成英文完整句，例如 The main panel fills most of the page while a small close-up panel sits in the corner.'}
+];
+const QL_TC_MANGA_SPEC=`【NovelAI V5 漫画页规范】
+这张图会直接发给 NovelAI V5 Full 生成一整页漫画（多画格），下面内容整段写进 image###……### 之间，不要在外面再写别的标签/说明文字。
+
+页文本语法：每个标记独占一行；@page 必需；逐格写 @panel；格子里有人物才写 @character（紧跟在对应 @panel 之后，一格可以有多个 @character）；无排除词时 @negative 整段省略，不要写空的 @negative。
+
+<image>
+@page
+人数词、页面形态（comic 或 full page comic）、画格数量、布局（各画格的位置与大小，用英文完整句描述）、全局光影（光源方向+时间+色调），必须包含 high complexity
+@panel P1
+本格在页面上的位置与大小、景别（close-up / upper body / medium shot / full body / wide shot 选一个）与构图、环境及非人物演出
+@character C1 角色名
+性别词 + 外貌（名单资料里登记过的角色照抄登记的外貌，不要自己另编一套；没登记过的原创角色自己设计一套具体外貌，全文保持一致）+ 当前动作/表情/视线
+@outfit
+该角色当前可见衣着
+@negative
+（可选）只归上面这个角色的排除词，没有需要排除的就整段省略
+@panel P2
+……继续按上面的格式写下一格
+</image>
+
+规则：
+1. 每页只写一个 @page；@panel 按从右到左、先上后下的阅读顺序编号（P1、P2……）。
+2. 页面形态：普通分格写 comic，整页单格写 full page comic。格数按事件自然取舍，不要为了凑数拆重复镜头，也不要求每格都必须有新剧情推进。
+3. 画格布局不要求均分——大小、位置自由搭配，具体怎么分要按下面指定的分镜风格来写，不要擅自改成整齐网格。
+4. 页级排除词写在第一个 @panel 之前单独一段 @negative；人物专属排除词写在该人物自己的 @negative 段里，不要混在一起。
+5. 整段 <image>……</image> 之间不要出现任何别的标签、JSON、注释或说明文字，也不要在外面重复写一遍画面内容。`;
 function qlTcBuildQuietPrompt(mode,text,styleValue){
  const label=mode==='plot'?'剧情词':'画面词';
  const modeRule=mode==='plot'
   ?'根据用户给的剧情词，自己决定最适合表现它的一个画面，并把剧情写进聊天室对话里。'
   :'画面以用户给的画面词为准：其中的角色、动作、构图不要改动（中文的话按世界书/生图规则转成 tag，人名保留原文）；聊天室内容围绕这张画面展开。';
+ if(String(styleValue||'')==='comicV5'){
+  const mangaStyleId=String(document.querySelector('#ql-tc-manga-style')?.value||'eromanga');
+  const mangaStyle=QL_TC_MANGA_STYLES.find(x=>x.id===mangaStyleId)||QL_TC_MANGA_STYLES[0];
+  return [
+   '【小剧场创作任务】',
+   '这次不是续写正文，而是单独写一段"小剧场"：一整页漫画（多画格） + 一段聊天室对话。忽略预设里关于字数、状态栏、正文格式、必须续写剧情之类的要求。',
+   '',
+   '用户给的'+label+'：',
+   text,
+   '',
+   '只输出下面这几种口令，其余一律不要写（不要正文、旁白、解释、分析、代码块）：',
+   '1. title###小剧场标题###',
+   '2. image###漫画页提示词，按下面【NovelAI V5 漫画页规范】的格式写一整段 <image>……</image>###',
+   '3. paneltext###按 Panel 1/Panel 2/……依次写每一格的台词（编号要跟 image 里 @panel 的 P1/P2 对应），用「|」分隔；这一格没人说话或不适合配台词就写「Panel N: 」（冒号后面留空），不要为了凑数瞎编###',
+   '4. eggroom###群聊名字|人数|群主|解说员|解说员吐槽###',
+   '5. eggmsg###left或right|说话人|对话内容###（可以有多条；side 只写 left 或 right）',
+   '6. eggend###',
+   '顺序：先 title，再 image，再 paneltext，再 eggroom、若干条 eggmsg、最后 eggend。只出一整页漫画、一份聊天室。',
+   '',
+   QL_TC_MANGA_SPEC,
+   '',
+   '【本次分镜风格】'+mangaStyle.label+(mangaStyle.rule?'：'+mangaStyle.rule:'（不限定风格，按事件自然分配画格大小与主次，不强制主格过半，也不强制均分）'),
+   modeRule,
+   '聊天室里说话人的称呼要和当前角色、用户的称呼一致。'
+  ].filter(Boolean).join('\n');
+ }
  const isComic=/^comic/.test(String(styleValue||''));
  const panelCount=qlTcPanelCount(styleValue);
  // 彩蛋（Q 版）：不写质量词/体型词，交给插件自己的「彩蛋不注入通用词」逻辑拉去 Q 版比例；
@@ -4838,12 +4901,21 @@ async function qlTcMakeImage(st){
  }else{
   generation=resolveChatImageGeneration(prompt,ctx,isComic?'':'egg');
  }
+ if(st.mangaV5){
+  // V5 整页漫画：提示词就是模型直接吐出来的 <image>@page/@panel/@character…</image> 结构化
+  // 文本，不能再走上面画师串/通用词/角色名替换那套给"扁平逗号 tag"设计的合并逻辑——那套会把
+  // 这段多行结构拆散，甚至把质量词/画师串塞进 <image> 里面，违反柏宝绘自己的格式要求；负面也
+  // 强制留空，排除词已经按格式约定写进文本里的 @negative 段了。vibe/采样参数等其余字段还是
+  // 用上面组合选择算出来的那一套，不受影响。
+  generation.prompt=prompt;generation.negative='';
+ }
  const sizeSel=String(document.querySelector('#ql-tc-size')?.value||'');
  const sizeOv=(Array.isArray(st._editRecords)&&st._editRecords.length?st.sizeOverride||sizeSel:sizeSel)||generation.sizeOverride||'';
  // 条漫气泡台词：只有 V5 才会自动拼进画面提示词让模型自己画字（V4/V4.5/V3 画不了中文，
  // 这份台词只会在生成完之后用来预填手动气泡，不会进提示词——qlBuildNaiTextBlock 内部
- // 自己会再判一次模型是不是 V5，这里即使传了也不会被用在非 V5 模型上）。
- const extraTextBlock=isComic?qlBuildNaiTextBlock(st.panelTexts):'';
+ // 自己会再判一次模型是不是 V5，这里即使传了也不会被用在非 V5 模型上）。V5 整页漫画模式
+ // 这轮先不叠加 Text: 画字语法（两套没试过同时生效会不会打架），台词照样走气泡贴图。
+ const extraTextBlock=isComic&&!st.mangaV5?qlBuildNaiTextBlock(st.panelTexts):'';
  const url=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null,null,sizeOv,extraTextBlock);
  const candidate={url,prompt,generation,renderedPrompt:prompt,at:Date.now()};
  if(!Array.isArray(st._qlCandidates))st._qlCandidates=[];
@@ -5020,6 +5092,7 @@ async function qlTcGenerate(){
  const mode=document.querySelector('#ql-tc-mode')?.value==='plot'?'plot':'scene';
  const styleValue=String(document.querySelector('#ql-tc-style')?.value||'egg');
  const styleMode=/^comic/.test(styleValue)?'comic':'egg';
+ const mangaV5=styleValue==='comicV5';
  if(!input){if(statusEl)statusEl.textContent='先写点画面词或剧情词。';return;}
  if(cfg().enabled===false){if(statusEl)statusEl.textContent='拾帧已停用；请先在偏好设置中重新启用插件。';return;}
  const ctx=getContext();
@@ -5034,15 +5107,18 @@ async function qlTcGenerate(){
   if(!parsed.prompt||!parsed.eggBlocks.length){
    // 不再直接吞掉 raw：解析失败多半是输出被截断，把原始文字摆出来方便判断，
    // 并留一个「重新生成文字」按钮，不用用户重新手打一遍画面词/剧情词。
-   qlTcState={title:parsed.title||'',eggBlocks:[],prompt:'',raw,url:'',generation:null,renderedPrompt:'',styleMode,_qlCandidates:[],_qlIndex:-1,_parseFailed:true};
+   qlTcState={title:parsed.title||'',eggBlocks:[],prompt:'',raw,url:'',generation:null,renderedPrompt:'',styleMode,mangaV5,_qlCandidates:[],_qlIndex:-1,_parseFailed:true};
    throw new Error(!parsed.prompt?'模型输出里没有找到 image###…### 画面提示词':'模型输出里没有找到 eggroom### 聊天室口令（没有聊天室就不会显示在小剧场里）');
   }
   let prompt=parsed.prompt;
   // 条漫模式不打 [彩蛋] 标记：qlSplitKind 认出这个前缀就会强制 Q 版/不注入体型通用词，
   // 条漫要的是正常比例，所以这里不能像彩蛋那样无条件补前缀。
   if(styleMode!=='comic'&&!/^\s*[\[【]\s*彩蛋/.test(prompt))prompt='[彩蛋]'+prompt;
-  if(!await qlGuardMissingNames(prompt,ctx)){if(statusEl)statusEl.textContent='已取消。';return;}
-  qlTcState={title:parsed.title,eggBlocks:parsed.eggBlocks,panelTexts:parsed.panelTexts||[],prompt,raw,url:'',generation:null,renderedPrompt:'',styleMode,_qlCandidates:[],_qlIndex:-1};
+  // V5 整页漫画的提示词是 <image>@page/@panel/@character…</image> 这种多行结构化文本，不是
+  // 给人读的"扁平逗号 tag"，缺词条检测(qlGuardMissingNames)是按后者的格式扫描的，拿这种结构
+  // 化文本去跑只会抓出一堆英文句子里的误报，所以这里直接跳过，不弹窗。
+  if(!mangaV5&&!await qlGuardMissingNames(prompt,ctx)){if(statusEl)statusEl.textContent='已取消。';return;}
+  qlTcState={title:parsed.title,eggBlocks:parsed.eggBlocks,panelTexts:parsed.panelTexts||[],prompt,raw,url:'',generation:null,renderedPrompt:'',styleMode,mangaV5,_qlCandidates:[],_qlIndex:-1};
   if(statusEl)statusEl.textContent='文字已写好，正在出图…'+(parsed.extraImages?'（模型多写了 '+parsed.extraImages+' 张图的口令，只画第一张）':'');
   await qlTcMakeImage(qlTcState);
   qlTcRenderResult();
@@ -5105,7 +5181,7 @@ function qlTcSave(){
   const rec=storeChatRecord(candidate.url,newPrompt,candidateKey,meta,candidate.generation);
   rec.albumCharacterName=info.albumCharacterName;rec.albumCharacterKey=info.albumCharacterKey;rec.collection='character-album';
   rec.eggTitle=info.eggTitle;rec.eggBlocks=info.eggBlocks;rec.eggAlbumStyle=info.eggAlbumStyle;
-  rec.theaterGroupId=groupId;rec.theaterStyleMode=st.styleMode==='comic'?'comic':'egg';rec.panelTexts=info.panelTexts||[];
+  rec.theaterGroupId=groupId;rec.theaterStyleMode=st.styleMode==='comic'?'comic':'egg';rec.theaterMangaV5=!!st.mangaV5;rec.panelTexts=info.panelTexts||[];
   save();history();renderTheater();
   if(st._renderHost)st._renderHost.innerHTML='';qlTcState=null;
   const statusEl=document.querySelector('#ql-tc-status');if(statusEl)statusEl.textContent='已新增一张图片到同一个小剧场分组，左右切换可以回看之前的。';
@@ -5136,7 +5212,7 @@ function qlTcSave(){
   const candidateKey=taskKey+':'+String(i+1);
   const rec=storeChatRecord(candidate.url,candidate.prompt,candidateKey,meta,candidate.generation);
   rec.albumCharacterName=name;rec.albumCharacterKey=cur.id||'';rec.collection='character-album';
-  rec.eggTitle=st.title||null;rec.eggBlocks=st.eggBlocks;rec.eggAlbumStyle=cfg().chatAlbumStyle||'follow';rec.theaterGroupId=taskKey;rec.theaterStyleMode=styleMode;rec.panelTexts=Array.isArray(st.panelTexts)?st.panelTexts:[];
+  rec.eggTitle=st.title||null;rec.eggBlocks=st.eggBlocks;rec.eggAlbumStyle=cfg().chatAlbumStyle||'follow';rec.theaterGroupId=taskKey;rec.theaterStyleMode=styleMode;rec.theaterMangaV5=!!st.mangaV5;rec.panelTexts=Array.isArray(st.panelTexts)?st.panelTexts:[];
  }
  save();history();
  const savedCount=st._qlCandidates.length;
@@ -5323,7 +5399,26 @@ function qlTcBind(){
  box.dataset.qlBound='1';
  const s=cfg(),modeEl=document.querySelector('#ql-tc-mode'),inputEl=document.querySelector('#ql-tc-input'),sizeEl=document.querySelector('#ql-tc-size'),comboEl=document.querySelector('#ql-tc-combo'),styleEl=document.querySelector('#ql-tc-style');
  if(modeEl){modeEl.value=s.theaterComposeMode==='plot'?'plot':'scene';modeEl.addEventListener('change',()=>{cfg().theaterComposeMode=modeEl.value;save();});}
- if(styleEl){styleEl.value=[...styleEl.options].some(o=>o.value===s.theaterComposeStyle)?s.theaterComposeStyle:'egg';styleEl.addEventListener('change',()=>{cfg().theaterComposeStyle=styleEl.value;save();});}
+ const mangaStyleEl=document.querySelector('#ql-tc-manga-style'),mangaRow=document.querySelector('#ql-tc-manga-style-row');
+ if(mangaStyleEl&&!mangaStyleEl.dataset.qlFilled){mangaStyleEl.dataset.qlFilled='1';QL_TC_MANGA_STYLES.forEach(x=>{const opt=document.createElement('option');opt.value=x.id;opt.textContent=x.label;mangaStyleEl.append(opt);});}
+ const qlSyncTcStyleRow=()=>{if(mangaRow)mangaRow.hidden=styleEl?.value!=='comicV5';};
+ if(mangaStyleEl){mangaStyleEl.value=[...mangaStyleEl.options].some(o=>o.value===s.theaterMangaStyle)?s.theaterMangaStyle:'eromanga';mangaStyleEl.addEventListener('change',()=>{cfg().theaterMangaStyle=mangaStyleEl.value;save();});}
+ if(styleEl){
+  styleEl.value=[...styleEl.options].some(o=>o.value===s.theaterComposeStyle)?s.theaterComposeStyle:'egg';
+  // V5 整页漫画选项只有当前选的 NAI 模型是 V5 的时候才能选——发给非 V5 模型完全没用。
+  // 跟 Variety+ 那个开关一样的思路：切模型的时候顺带把这个选项的可用性也同步一下。
+  const v5Opt=document.querySelector('#ql-tc-style-v5-opt');
+  const qlSyncTcStyleV5=()=>{
+   const naiModel=String(document.querySelector('#ql-fast-nai-model')?.value||cfg().naiModel||'');
+   const isV5=/^nai-diffusion-5-/i.test(naiModel);
+   if(v5Opt)v5Opt.disabled=!isV5;
+   if(!isV5&&styleEl.value==='comicV5'){styleEl.value='egg';cfg().theaterComposeStyle='egg';save();}
+   qlSyncTcStyleRow();
+  };
+  qlSyncTcStyleV5();
+  document.querySelector('#ql-fast-nai-model')?.addEventListener('change',qlSyncTcStyleV5);
+  styleEl.addEventListener('change',()=>{cfg().theaterComposeStyle=styleEl.value;save();qlSyncTcStyleRow();});
+ }
  if(inputEl){inputEl.value=String(s.theaterComposeText||'');inputEl.addEventListener('change',()=>{cfg().theaterComposeText=inputEl.value;save();});}
  if(sizeEl){sizeEl.value=[...sizeEl.options].some(o=>o.value===s.theaterComposeSize)?s.theaterComposeSize:'';sizeEl.addEventListener('change',()=>{cfg().theaterComposeSize=sizeEl.value;save();});}
  if(comboEl)comboEl.addEventListener('change',()=>{cfg().theaterComposeCombo=comboEl.value;save();});
@@ -5462,7 +5557,7 @@ function renderTheater(){
      // 尺寸也会被锁死成最初那张的尺寸。改成往同一个小剧场分组里新增一张（跟首次收藏时一样），
      // 旧的图片继续留着，可以用左右箭头切换；尺寸不再传 sizeOverride，交给生成逻辑读取当前
      // 取景区的全局宽高设置（跟正文/取景区一致，切换尺寸后立刻对新图生效）。
-     qlTcState={title:item.eggTitle||'',eggBlocks:[],panelTexts:Array.isArray(record.panelTexts)?record.panelTexts:[],prompt,renderedPrompt:String(record.basePrompt||record.prompt||prompt),url:'',generation,raw:'',sizeOverride:'',styleMode,_qlCandidates:[],_qlIndex:-1,_renderHost:tagEditor,_inlineTheater:true,_inlineStatusEl:rerollStatus,_inlineRerollButton:rerollBtn,
+     qlTcState={title:item.eggTitle||'',eggBlocks:[],panelTexts:Array.isArray(record.panelTexts)?record.panelTexts:[],prompt,renderedPrompt:String(record.basePrompt||record.prompt||prompt),url:'',generation,raw:'',sizeOverride:'',styleMode,mangaV5:!!record.theaterMangaV5,_qlCandidates:[],_qlIndex:-1,_renderHost:tagEditor,_inlineTheater:true,_inlineStatusEl:rerollStatus,_inlineRerollButton:rerollBtn,
       _appendToGroup:{groupId:item.theaterGroupId||null,legacyRecord:item,albumCharacterName:record.albumCharacterName,albumCharacterKey:record.albumCharacterKey,eggTitle:item.eggTitle||null,eggBlocks:item.eggBlocks||[],eggAlbumStyle:record.eggAlbumStyle||item.eggAlbumStyle||cfg().chatAlbumStyle||'follow',panelTexts:Array.isArray(record.panelTexts)?record.panelTexts:[]}};
      await qlTcReroll();
     });
