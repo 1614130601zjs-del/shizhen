@@ -981,17 +981,18 @@ async function requestImageUnlocked(prompt, negativeOverride, vibeItem=null, nai
     throw new Error('当前 NovelAI 模型不支持 Vibe Transfer，请切换到 V3、V4/V4.5 或受支持的 V5 模型。');
    }
   }
-  // 服装参考（NAI V5 Precise Reference · Outfit Reference）：上传一张服装/穿搭参考图，模型照抄图里的
-  // 服装，不用靠文字描述。字段名对照 NAI 官方 journal 文章 + 第三方客户端抓包记录核实过：
+  // 精准参考（NAI V5 Precise Reference：角色/画风/角色+画风/服装）：上传一张图，模型照抄图里指定的那部分，
+  // 不用靠文字描述。字段名对照 NAI 官方 journal 文章 + 第三方客户端抓包记录核实过：
   // director_reference_descriptions/information_extracted/strength_values/secondary_strength_values/images
   // 五个同长度数组一一对应。V5 没有 Fidelity 滑条，固定按 fidelity=1 发送，所以 secondary_strength 恒为 0。
-  // 简单版只支持"服装"这一种引用类型（不做角色/画风/Prefer same outfit 那整套），且只用于纯文字生图，
-  // 不和工坊的图生图/局部重绘叠加（官方说法是 V5 Inpainting 暂不支持 Precise Reference）。
+  // 简单版单次只支持一张参考图（不像 Vibe 那样能叠多条），且只用于纯文字生图，不和工坊的图生图/局部重绘
+  // 叠加（官方说法是 V5 Inpainting 暂不支持 Precise Reference）。每张参考图固定额外消耗 5 Anlas，
+  // 不算在 Opus 订阅"免费生成"的额度(Usage Limit)里，是直接从订阅 Anlas / 付费 Anlas 扣的。
   if(outfitRef&&outfitRef.image){
-   if(!isV5)throw new Error('服装参考（Outfit Reference）目前只支持 V5 模型。');
-   if(edit)throw new Error('服装参考暂不支持和图生图/局部重绘一起用，请先清空服装参考图，或退出工坊编辑状态。');
+   if(!isV5)throw new Error('精准参考（Precise Reference）目前只支持 V5 模型。');
+   if(edit)throw new Error('精准参考暂不支持和图生图/局部重绘一起用，请先清空参考图，或退出工坊编辑状态。');
    const strength=Math.max(1,Math.min(5,Number(outfitRef.strength)||3));
-   parameters.director_reference_descriptions=[{caption:{base_caption:'costume',char_captions:[]},legacy_uc:false}];
+   parameters.director_reference_descriptions=[{caption:{base_caption:outfitRef.refType||'costume',char_captions:[]},legacy_uc:false}];
    parameters.director_reference_information_extracted=[1];
    parameters.director_reference_strength_values=[strength];
    parameters.director_reference_secondary_strength_values=[0];
@@ -4007,7 +4008,7 @@ function html(){return `<div id="ql-overlay" hidden><section id="shizhen-panel">
 
 <div class="ql-card ql-llm-tag-box"><div class="ql-prompt-label-row"><label for="ql-prompt-zh">中文转Tag（可选）</label></div><textarea id="ql-prompt-zh" placeholder="用中文描述想要的画面，点「转换为Tag」会调用LLM转换成画面提示词（会整体替换下面的内容）"></textarea><div class="ql-row"><button id="ql-llm-tag-convert" type="button" class="menu_button ql-primary">转换为Tag</button><span id="ql-llm-tag-status" class="ql-muted"></span></div></div><div class="ql-card"><div class="ql-prompt-label-row"><label for="ql-prompt">画面提示词</label><button id="ql-prompt-clear" type="button" class="menu_button">清空</button></div><textarea id="ql-prompt" placeholder="画面提示词"></textarea></div>
 <div class="ql-card ql-viewfinder-roles-card"><div class="ql-section-heading"><div><h3>角色外貌</h3><p class="ql-muted">提示词里的 boy A / girl B / character A / char1 或 1girl / 2girls 等标记会自动生成对应的外貌栏位；外貌会作为 NAI 的「角色提示词」单独提交（不再插进正文里），也可以手动填写、清空或从角色词库导入。</p></div><button id="ql-role-add" type="button" class="menu_button">添加角色</button></div><label class="ql-check ql-vf-generic-row"><input type="checkbox" id="ql-vf-generic"> 取景区注入男 / 女体型词（需先在「预设 → 通用词」里启用并选好词组）<b class="ql-check-state" id="ql-vf-generic-state"></b></label><p class="ql-muted">只管男 / 女体型词；提示词里已经写了体型时可以关掉这一项，避免重复。「通用画面」不受这个开关影响，常驻生效，要关可以去「预设 → 通用词」里单独关。</p><div id="ql-viewfinder-roles"></div><details class="ql-final-preview"><summary>查看最终提交给 NAI 的完整提示词</summary><pre id="ql-final-prompt-text"></pre><div class="ql-row"><button id="ql-final-prompt-copy" type="button" class="menu_button">复制完整提示词</button></div><p class="ql-muted">有角色外貌时分成两块提交：Base Prompt 是画师串、质量词、动作与场景；Character Prompts 是各角色的外貌，按角色 1、2…顺序排列。没有角色外貌时只提交一整段。你输入的原始画面提示词不会被改写。</p></details></div>
-<div class="ql-card" id="ql-outfit-ref-card" hidden><h3>服装参考 <span class="ql-muted">（NAI V5 Outfit Reference，实验）</span></h3><p class="ql-muted">上传一张衣服/穿搭参考图，V5 会照着图里的服装来画，不用再靠文字描述服装；只对下一次生成生效，不会保存，刷新或关闭面板就没了。暂不支持和工坊的图生图/局部重绘一起用。</p><div class="ql-row"><button id="ql-outfit-ref-upload-btn" type="button" class="menu_button">上传服装参考图</button><button id="ql-outfit-ref-clear" type="button" class="menu_button" hidden>清除</button></div><input id="ql-outfit-ref-file" type="file" accept="image/*" hidden><div id="ql-outfit-ref-preview" class="ql-muted">还没有上传参考图。</div><label for="ql-outfit-ref-strength">强度（1.0 ~ 5.0，越高越贴近参考图，默认 3）</label><input id="ql-outfit-ref-strength" type="number" min="1" max="5" step="0.1" value="3"><p class="ql-muted" id="ql-outfit-ref-hint"></p></div>
+<div class="ql-card" id="ql-outfit-ref-card" hidden><h3>精准参考 <span class="ql-muted">（NAI V5 Precise Reference，实验）</span></h3><p class="ql-muted">上传一张图，V5 会照抄图里指定的那部分——角色长相、画风、服装，或角色+画风一起抄，不用再靠文字描述；只对下一次生成生效，不会保存，刷新或关闭面板就没了。暂不支持和工坊的图生图/局部重绘一起用。<b>每张参考图不管强度高低、固定额外消耗 5 点 Anlas，不算在 Opus 订阅的免费生成额度里，直接从订阅 Anlas / 付费 Anlas 扣。</b></p><label for="ql-outfit-ref-type">引用类型</label><select id="ql-outfit-ref-type"><option value="character&style">角色 + 画风</option><option value="character">角色</option><option value="style">画风</option><option value="costume">服装</option></select><label class="ql-inline-check" id="ql-outfit-ref-prefer-row"><input id="ql-outfit-ref-prefer-outfit" type="checkbox"> 同时沿用参考图里的服装（仅角色 / 角色+画风可选）<b class="ql-check-state" id="ql-outfit-ref-prefer-outfit-state"></b></label><div class="ql-row"><button id="ql-outfit-ref-upload-btn" type="button" class="menu_button">上传参考图</button><button id="ql-outfit-ref-clear" type="button" class="menu_button" hidden>清除</button></div><input id="ql-outfit-ref-file" type="file" accept="image/*" hidden><div id="ql-outfit-ref-preview" class="ql-muted">还没有上传参考图。</div><label for="ql-outfit-ref-strength">强度（1.0 ~ 5.0，越高越贴近参考图，默认 3）</label><input id="ql-outfit-ref-strength" type="number" min="1" max="5" step="0.1" value="3"><p class="ql-muted" id="ql-outfit-ref-hint"></p></div>
 <div class="ql-card"><h3>影像配置</h3><label for="ql-active-config-mode">选择方式</label><select id="ql-active-config-mode"><option value="combo">选择组合（使用预设）</option><option value="separate">选择画师串 + 选择 Vibe</option></select><div id="ql-combo-config-row"><label for="ql-active-preset">选择预设组合</label><select id="ql-active-preset"><option value="-1">不使用组合</option></select></div><div id="ql-separate-config-row" hidden><label for="ql-active-artist">选择画师串</label><select id="ql-active-artist"><option value="-1">不使用画师串</option></select><label for="ql-active-vibe">选择 Vibe</label><select id="ql-active-vibe"><option value="-1">不使用 Vibe</option></select></div><div class="ql-row"><button id="ql-apply-preset" class="menu_button" type="button">应用组合</button><button id="ql-open-preset" class="menu_button" type="button">管理配置</button></div><p class="ql-muted">第一种直接使用已保存的预设组合；第二种分别选择画师串和 Vibe，两项可以独立设置。角色卡默认组合在「配置 → 预设」中管理。</p></div>
 <div class="ql-card"><h3>模型参数</h3><label for="ql-fast-provider">生图后端</label><select id="ql-fast-provider"><option value="novelai">NovelAI 官网</option><option value="novelai-thirdparty">NovelAI 第三方</option></select><div id="ql-fast-openai" hidden><input id="ql-fast-model" value="gpt-image-1"><select id="ql-fast-size"><option value="auto">auto</option><option>1024x1024</option></select><select id="ql-fast-quality"><option>medium</option></select></div><div id="ql-fast-nai" hidden><label>NovelAI 模型</label><select id="ql-fast-nai-model"><option value="nai-diffusion-5-full">V5 Full（5F）</option><option value="nai-diffusion-5-curated">V5 Curated（5C）</option><option value="nai-diffusion-4-5-full">V4.5 Full</option><option value="nai-diffusion-4-5-curated">V4.5 Curated</option><option value="nai-diffusion-4-full">V4 Full</option><option value="nai-diffusion-4-curated">V4 Curated</option><option value="nai-diffusion-3">Anime V3</option><option value="nai-diffusion-furry-3">Furry V3</option></select><div class="ql-row"><div><label>画面尺寸预设</label><select id="ql-fast-nai-size-preset"><option value="832x1216">竖版 · 832 × 1216</option><option value="768x1344">长竖版 · 768 × 1344</option><option value="1024x1024">正方形 · 1024 × 1024</option><option value="1216x832">横版 · 1216 × 832</option><option value="1344x768">宽横版 · 1344 × 768</option></select><input id="ql-fast-nai-width" type="hidden"><input id="ql-fast-nai-height" type="hidden"></div></div><details class="ql-nai-advanced"><summary>高级生成设置（不常调整）</summary><div class="ql-row"><div><label>步数</label><input id="ql-fast-nai-steps" type="number" min="1" max="50"></div><div><label>CFG Scale</label><input id="ql-fast-nai-scale" type="number" min="1" max="20" step="0.5"></div></div><div class="ql-row"><div><label>采样器</label><select id="ql-fast-nai-sampler"><option value="k_euler_ancestral">Euler Ancestral</option><option value="k_euler">Euler</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_2m">DPM++ 2M</option><option value="k_dpmpp_sde">DPM++ SDE</option><option value="k_dpmpp_2m_sde">DPM++ 2M SDE</option><option value="ddim_v3">DDIM（仅 V3 模型）</option></select></div><div><label>调度器</label><select id="ql-fast-nai-scheduler"><option value="karras">Karras</option><option value="native">Native</option><option value="exponential">Exponential</option><option value="polyexponential">Polyexponential</option></select></div></div><div class="ql-row"><div><label for="ql-fast-nai-quality">质量标签</label><select id="ql-fast-nai-quality"><option value="standard">标准</option><option value="light">轻量（仅 V5）</option><option value="off">关闭</option></select></div><div><label for="ql-fast-nai-uc">Undesired Content</label><select id="ql-fast-nai-uc"><option value="0">Heavy</option><option value="1">Light</option><option value="2">Furry</option><option value="3">Human</option><option value="4">None</option></select></div></div><label for="ql-fast-nai-seed">固定 Seed（留空则随机）</label><input id="ql-fast-nai-seed" type="number" min="0" max="2147483647" placeholder="随机 Seed"><label class="ql-inline-check"><input id="ql-fast-nai-normalize" type="checkbox"> 归一化 Vibe 参考强度<b class="ql-check-state" id="ql-fast-nai-normalize-state"></b></label><p class="ql-muted">开启后会自动归一化 V4/V4.5 多条 Vibe 的强度；关闭则按每条参考的原始强度发送。</p><label class="ql-inline-check"><input id="ql-fast-nai-variety" type="checkbox"> Variety+（构图多样性增强）<b class="ql-check-state" id="ql-fast-nai-variety-state"></b></label><p class="ql-muted" id="ql-fast-nai-variety-hint">让模型在早期步数里先自由发挥构图，后段才套用负面词/CFG，画面更多样但负面提示词的管控会变弱。仅 V3/V4/V4.5 可用，V5 模型不支持，切到 V5 时这个开关会自动失效。</p></details><details class="ql-nai-advanced" id="ql-body-manga-details"><summary>正文 / 状态栏 V5 整页漫画（实验，仅 V5 模型可用）</summary><p class="ql-muted">开启后，正文和状态栏的配图会让主创作模型按 NovelAI V5 专属的多画格漫画格式来写（画格大小、位置自由排布，不是均匀网格）。这边需要先选一个目标世界书——拾帧会在里面自动维护一条叫「【拾帧】V5 整页漫画格式」的条目，内容和开关状态都跟下面的设置同步；没选世界书之前，光开这个开关没用（主创作模型学不到新格式，正文该怎么出图还是怎么出）。</p><label for="ql-body-manga-world">目标世界书（自动维护专属条目）</label><select id="ql-body-manga-world"><option value="">请选择世界书</option></select><label for="ql-body-manga-style">分镜风格</label><select id="ql-body-manga-style"></select><label class="ql-inline-check"><input id="ql-body-manga-on" type="checkbox"> 正文 / 状态栏 V5 整页漫画模式<b class="ql-check-state" id="ql-body-manga-on-state"></b></label><p class="ql-muted" id="ql-body-manga-hint">仅 V5 模型可用，切到 V4.5/V4/V3 时这个开关会自动失效（世界书条目也会跟着自动关闭）。开启后正文/状态栏生成会跳过画师串/角色名替换/负面词合并，提示词和负面完全交给主创作模型自己按格式写；如果它写出来的东西不照规范来、画格还是很均匀，可以去世界书编辑器里把这条条目挪到更靠前/深度更低的位置提高优先级。</p><p id="ql-body-manga-status" class="ql-muted" role="status"></p></details></div><p id="ql-status" class="ql-muted" role="status"></p></div>
 </section>
@@ -4832,7 +4833,8 @@ async function qlSyncBodyMangaWorldEntry(){
 }
 // 仅 V5 模型可用：跟 Variety+ 开关一样的思路，切模型瞬间同步可用性；关掉时顺带把世界书条目也
 // 带着一起关掉（不然切走 V5 之后正文还在按漫画格式写，V4.5/V4/V3 不认识这套语法，等于白写）。
-// ===== 取景区「服装参考」(NAI V5 Outfit Reference) 简单版：单次生图临时传一张，不建库/不持久化 =====
+// ===== 取景区「精准参考」(NAI V5 Precise Reference：角色/画风/角色+画风/服装) 简单版：
+// 单次生图临时传一张，不建库/不持久化 =====
 // 97 组桶尺寸 + 挑桶算法原样照搬 NAI 官方 Web 端逻辑（经第三方客户端 sunanakgo/NAIS3 的
 // src/shared/precise-reference.ts 核对过，注释标注是对照 2026-11-25 版 Web Bundle 确认的）：
 // 每个 height 从 4096 到 1024（步长 64）配一个不超过 1 MP 的最宽 64 倍数宽度，纵版 97 组 + 镜像出横版。
@@ -4876,11 +4878,30 @@ function qlSyncOutfitRefAvailability(){
   const hint=document.querySelector('#ql-outfit-ref-hint');if(hint)hint.textContent='已切走 V5，服装参考图被清空了。';
  }
 }
+// 角色/角色+画风 两种类型才有「Prefer same outfit」开关（对照 precise-reference.ts 的 TOGGLE_ON/OFF 表）：
+// 开关"开"时，character → character_mainoutfit，character&style → character&style（即 character&style 本身
+// 默认就是"沿用服装"的状态）；开关"关"时，character → character（不带后缀），character&style → character&style_anyoutfit。
+// 两边命名不对称是 NAI 官方自己的命名习惯，不是我们这边的问题，照抄即可。
+function qlOutfitRefResolveType(baseType,preferOutfit){
+ if(baseType==='character')return preferOutfit?'character_mainoutfit':'character';
+ if(baseType==='character&style')return preferOutfit?'character&style':'character&style_anyoutfit';
+ return baseType; // style / costume 没有这个开关
+}
 function qlOutfitRefBind(){
  const btn=document.querySelector('#ql-outfit-ref-upload-btn'),file=document.querySelector('#ql-outfit-ref-file'),clearBtn=document.querySelector('#ql-outfit-ref-clear'),preview=document.querySelector('#ql-outfit-ref-preview'),strengthInput=document.querySelector('#ql-outfit-ref-strength'),hint=document.querySelector('#ql-outfit-ref-hint');
+ const typeEl=document.querySelector('#ql-outfit-ref-type'),preferRow=document.querySelector('#ql-outfit-ref-prefer-row'),preferEl=document.querySelector('#ql-outfit-ref-prefer-outfit');
  if(!btn||!file||btn.dataset.qlBound)return;
  btn.dataset.qlBound='1';
  qlSyncOutfitRefAvailability();
+ const syncPreferRowVisibility=()=>{if(preferRow)preferRow.hidden=!['character','character&style'].includes(typeEl?.value);};
+ const syncState=()=>{
+  if(!qlOutfitRefState)return;
+  qlOutfitRefState.strength=Math.max(1,Math.min(5,Number(strengthInput?.value)||3));
+  qlOutfitRefState.refType=qlOutfitRefResolveType(typeEl?.value||'costume',!!preferEl?.checked);
+ };
+ syncPreferRowVisibility();
+ typeEl?.addEventListener('change',()=>{syncPreferRowVisibility();syncState();});
+ preferEl?.addEventListener('change',()=>{qlPaintCheckState('ql-outfit-ref-prefer-outfit','ql-outfit-ref-prefer-outfit-state');syncState();});
  btn.addEventListener('click',()=>file.click());
  file.addEventListener('change',async()=>{
   const f=file.files&&file.files[0];file.value='';
@@ -4888,10 +4909,10 @@ function qlOutfitRefBind(){
   if(hint)hint.textContent='正在处理图片……';
   try{
    const {base64,previewUrl,bucket}=await qlProcessOutfitRefImage(f);
-   qlOutfitRefState={image:base64,strength:Math.max(1,Math.min(5,Number(strengthInput?.value)||3))};
-   if(preview){preview.innerHTML='';const img=document.createElement('img');img.src=previewUrl;img.style.maxWidth='160px';img.style.maxHeight='160px';img.style.borderRadius='8px';img.alt='服装参考图预览';preview.append(img);}
+   qlOutfitRefState={image:base64,strength:Math.max(1,Math.min(5,Number(strengthInput?.value)||3)),refType:qlOutfitRefResolveType(typeEl?.value||'costume',!!preferEl?.checked)};
+   if(preview){preview.innerHTML='';const img=document.createElement('img');img.src=previewUrl;img.style.maxWidth='160px';img.style.maxHeight='160px';img.style.borderRadius='8px';img.alt='精准参考图预览';preview.append(img);}
    if(clearBtn)clearBtn.hidden=false;
-   if(hint)hint.textContent='已按 '+bucket.width+'×'+bucket.height+' 规格裁好，下一次生成会用上这张参考图（生成后仍会保留，想连续用同一张不用重新传）。';
+   if(hint)hint.textContent='已按 '+bucket.width+'×'+bucket.height+' 规格裁好，下一次生成会用上这张参考图（生成后仍会保留，想连续用同一张不用重新传；5 点 Anlas 会在真正生成那一刻才扣）。';
   }catch(error){
    qlOutfitRefState=null;
    if(hint)hint.textContent='处理失败：'+(error?.message||String(error));
@@ -4903,7 +4924,7 @@ function qlOutfitRefBind(){
   clearBtn.hidden=true;
   if(hint)hint.textContent='';
  });
- strengthInput?.addEventListener('change',()=>{if(qlOutfitRefState)qlOutfitRefState.strength=Math.max(1,Math.min(5,Number(strengthInput.value)||3));});
+ strengthInput?.addEventListener('change',syncState);
 }
 function qlSyncBodyMangaAvailability(){
  const onEl=document.querySelector('#ql-body-manga-on'),hint=document.querySelector('#ql-body-manga-hint');
