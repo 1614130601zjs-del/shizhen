@@ -5375,7 +5375,7 @@ async function qlTcGenerateText(mode,input,ctx,styleValue){
  try{const roster=qlRosterText(ctx);if(roster&&!roster.startsWith('（角色词库里暂时'))materials.push('【拾帧角色名单资料】\n'+roster);}catch(error){console.warn('[拾帧] 小剧场读取角色名单失败（已忽略）',error);}
  try{const wi=await qlTcFetchWorldInfo(input,ctx);if(wi)materials.push('【当前激活的世界书内容——仅供参考人设/世界观设定，不代表要继续当前剧情进度】\n'+wi);}catch(error){console.warn('[拾帧] 小剧场读取世界书失败（已忽略）',error);}
  const system=[...materials,quietPrompt].filter(Boolean).join('\n\n');
- const messages=[{role:'system',content:system},{role:'user',content:String(input||'').trim()}];
+ const messages=[{role:'user',content:"【视觉构图与分镜标注任务】\n你是一名专业的影视美术指导与视觉分镜师，负责将文学剧本片段客观转译为标准的画面构图、光影、表情、动作与场景标签。请严格按照下方的格式规范与角色设定直接输出最终结果，不需要任何开场白、解释或多余对话。\n\n"+system+"\n\n【本次待转译输入】\n"+String(input||'').trim()}];
  return s.llmTagMode==='custom'
   ?await qlRequestLlmTagViaCustomApi(messages)
   :await qlTcRequestViaMainApi(messages,panelCount>1?4096:2560);
@@ -7106,7 +7106,7 @@ async function qlBuildLlmTagMessages(zhText){
   const roster=qlRosterText();
   if(roster&&!roster.startsWith('（角色词库里暂时'))system+='\n\n【名单优先·再次强调】下面是本次可直接写名字的角色名单。名单里的角色一律只写名字、服装、表情、视线、动作，不写任何固定外貌，哪怕上面世界书里写了他们的外貌也不得写入（外貌由插件替换）；只有不在名单里的角色，才按第 7 条的②③处理。\n'+roster;
  }catch(e){console.warn('[拾帧 Lite] 追加角色名单失败（已忽略）',e);}
- return [{role:'system',content:system},{role:'user',content:String(zhText||'').trim()}];
+ return [{role:'user',content:"【视觉构图与分镜标注任务】\n你是一名专业的影视美术指导与视觉分镜师，负责将文学剧本片段客观转译为标准的画面构图、光影、表情、动作与场景标签。请严格按照下方的格式规范与角色设定直接输出最终结果，不需要任何开场白、解释或多余对话。\n\n"+system+"\n\n【本次待转译输入】\n"+String(zhText||'').trim()}];
 }
 async function qlRequestLlmTagViaMainApi(messages){
  const ctx=getContext();
@@ -7136,7 +7136,7 @@ async function qlRequestLlmTagViaCustomApi(messages){
  const resp=await fetch('/api/backends/chat-completions/generate',{method:'POST',headers:{'Content-Type':'application/json',...getRequestHeaders(window.token)},body:JSON.stringify(body)});
  if(!resp.ok){const text=await resp.text().catch(()=>'');throw new Error('独立API请求失败('+resp.status+')：'+text.slice(0,200));}
  const data=await resp.json();
- const content=String(data?.choices?.[0]?.message?.content||data?.choices?.[0]?.text||data?.content||'').trim();
+ const content=String(data?.choices?.[0]?.message?.content||data?.choices?.[0]?.text||data?.content||'').replace(/<thought>[\s\S]*?<\/thought>/gi,'').replace(/§/g,'').trim();
  if(!content)throw new Error('独立API返回空内容');
  return content;
 }
