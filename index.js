@@ -1645,6 +1645,12 @@ function qlKindSettings(kind,s,binding=null){
 // 世界书那边有没有真的配合教会主创作模型新格式是另一回事（qlSyncBodyMangaWorldEntry 负责），
 // 这里只管"这次生图要不要按 mangaV5 规则处理提示词/跳过人名检测"。
 function qlBodyMangaV5Active(){const s=cfg();return !!s.bodyMangaV5&&/^nai-diffusion-5-/i.test(String(s.naiModel||''));}
+// 世界书/小剧场都只是"教"模型写这套结构化格式，模型不一定真的听话——如果它压根没照着写
+// （比如直接用回了老的逗号 tag），再按 mangaV5 的方式处理（跳过画师串/角色名替换/人名检测、
+// 负面留空）反而是错的：既丢了画风（画师串），又放过了没登记的人名。这里先检测一下output
+// 里有没有真的出现 <image>/@panel 这两个格式自带的标记，只有真像这套格式时才按 mangaV5 处理，
+// 否则原样回落到跟没开 mangaV5 一样的正常处理（画师串/角色名替换/人名检测全部照常跑）。
+function qlLooksLikeMangaV5Prompt(text){const t=String(text||'');return /<image>/i.test(t)&&/@panel\b/i.test(t);}
 function resolveChatImageGeneration(prompt, context=getContext(), kindHint=''){
  const sk=qlSplitKind(prompt);prompt=sk.prompt;const kind=sk.kind||kindHint,s=cfg();
  const characterId=context?.characterId==null?'':String(context.characterId);
@@ -1658,7 +1664,11 @@ function resolveChatImageGeneration(prompt, context=getContext(), kindHint=''){
  // 那套给"扁平逗号 tag"设计的处理——会把这段多行结构拆散，甚至把质量词/画师串塞进 <image> 内部；
  // 负面也强制留空，排除词已经按格式约定写进文本自己的 @negative 段里了。只对正文(kind==='')
  // 和状态栏(kind==='statusbar')生效，彩蛋和小剧场各自已有自己的 mangaV5 判断，不受这个开关影响。
- if((kind===''||kind==='statusbar')&&qlBodyMangaV5Active()){gen.prompt=prompt;gen.negative='';}
+ if((kind===''||kind==='statusbar')&&qlBodyMangaV5Active()&&qlLooksLikeMangaV5Prompt(prompt)){
+  // 画师串（preset.positive）之前整段被扔掉了——其实上面 qlResolveWithNames 已经按正常流程
+  // 算出来过一次，这里重新拼回去，不是另找一套逻辑；gen.preset 就是那次算出来的那个。
+  gen.prompt=[gen.preset?.positive,prompt].filter(Boolean).join(', ');gen.negative='';
+ }
  return {...gen,kind,sizeOverride:ks.size,bindingApplied:!!binding&&Number(binding.combinationIndex)>=0,globalApplied:!binding&&Number(s.globalComboIndex??-1)>=0};
 }
 // 角色名替换 + 组合解析：无论用哪种配置（默认/全局/绑定/临时/取景），正文提示词都先做名字替换。
@@ -2692,7 +2702,7 @@ function addMessageImage(host,url,prompt,taskKey,recordMeta={},anchor=null) {
    if(card.dataset.qlBusy==='1'&&busySince&&Date.now()-busySince<120000)return;
    if(card.dataset.qlBusy==='1'&&(!busySince||Date.now()-busySince>=120000)){card.dataset.qlBusy='0';card.dataset.qlBusySince='0';}
    const currentPrompt=String(card.dataset.qlPrompt||'').trim();
-   if(currentPrompt&&!qlBodyMangaV5Active()&&!await qlGuardMissingNames(currentPrompt,getContext()))return;
+   if(currentPrompt&&!(qlBodyMangaV5Active()&&qlLooksLikeMangaV5Prompt(currentPrompt))&&!await qlGuardMissingNames(currentPrompt,getContext()))return;
    if(!currentPrompt){qlAlert('这张图片没有找到可用的画面提示词，请点击“修改 tag”检查。');return;}
    const rerollKey=taskKey+':reroll:'+Date.now()+':'+Math.random().toString(36).slice(2,7);
    let candidate;
@@ -2993,7 +3003,7 @@ async function runInlineImageTrigger(button,entry){
  const prompt=String(button.dataset.qlPrompt||entry?.prompt||'').trim();
  let taskKey=String(button.dataset.qlTrigger||entry?.taskKey||'');
  if(!prompt||!taskKey)return;
- if(!qlBodyMangaV5Active()&&!await qlGuardMissingNames(prompt,getContext()))return;
+ if(!(qlBodyMangaV5Active()&&qlLooksLikeMangaV5Prompt(prompt))&&!await qlGuardMissingNames(prompt,getContext()))return;
  // 编辑消息会让酒馆重建正文 DOM。若该 marker 曾经成功生图，重新出现的按钮应可再次使用，而不是被旧成功状态永久锁住。
  if(triggerRegistry.get(taskKey)?.status==='succeeded')taskKey=taskKey+':edited:'+Date.now();
  const accepted=triggerRegistry.begin(taskKey,{prompt,source:'chat-button',messageIndex:entry.messageIndex,markerOrdinal:entry.markerOrdinal});
@@ -3301,7 +3311,7 @@ function renderStatusbarCard(frame,prompt,url,taskKey){
   remove.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const current=card._qlCandidates[card._qlIndex];if(!current?.url)return;const records=cfg().records||[];const before=records.length;cfg().records=records.filter(item=>!(item&&item.taskKey===taskKey&&sameImageSource(item.dataUrl,current.url)&&(item.source||'chat')==='statusbar'));card._qlCandidates.splice(card._qlIndex,1);if(card._qlIndex>=card._qlCandidates.length)card._qlIndex=card._qlCandidates.length-1;save();history();card._qlRender();status(before===cfg().records.length?'已从当前状态栏轮播中移除图片。':'已删除当前状态栏图片及其缓存记录。');});
   controls.addEventListener('dblclick',e=>{e.preventDefault();e.stopPropagation();});
   controls.addEventListener('click',e=>e.stopPropagation());
-  const reroll=async()=>{if(card.dataset.busy==='1'||(Date.now()-(Number(card.dataset.lastRerollAt)||0))<900)return;card.dataset.lastRerollAt=Date.now();if(card._qlPrompt&&!qlBodyMangaV5Active()&&!await qlGuardMissingNames(card._qlPrompt,getContext()))return;status('正在重新生成状态栏图片……');try{if(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')navigator.vibrate([28,42,28]);}catch{}const manualKey=taskKey+':manual:'+Date.now();const candidate=triggerRegistry.begin(manualKey,{prompt:card._qlPrompt,source:'statusbar-reroll'});if(!candidate.accepted)return;triggerRegistry.markRunning(manualKey);card.dataset.busy='1';try{syncViewfinderSizeToConfig();const c=cfg(),old={width:c.naiWidth,height:c.naiHeight,size:c.size};try{const choice=String(card.dataset.qlTempCombo??'');let generation;if(choice==='viewfinder')generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveActiveGeneration(t));else if(/^\d+$/.test(choice)&&c.combinations[Number(choice)])generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveCombinationGeneration(t,Number(choice),c));else generation=resolveChatImageGeneration(card._qlPrompt,getContext(),'statusbar');const dims=String(card.dataset.qlTempSize||'').split('x').map(Number);if(dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0)){if(c.provider==='novelai'||c.provider==='novelai-thirdparty'){c.naiWidth=dims[0];c.naiHeight=dims[1];}else c.size=card.dataset.qlTempSize;}const tempDims2=dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0);const fresh=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null,null,tempDims2?'':(generation.sizeOverride||''));card._qlAddCandidate(fresh);storeChatRecord(fresh,card._qlPrompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame),...qlStatusbarLinkMeta(frame,prompt)},generation);card._qlRender?.();}finally{c.naiWidth=old.width;c.naiHeight=old.height;c.size=old.size;save();}triggerRegistry.markSucceeded(manualKey,manualKey+':candidate:'+Date.now());}catch(e){triggerRegistry.markFailed(manualKey,e?.message||String(e));qlAlert('拾帧生成失败：'+(e?.message||String(e)));}finally{card.dataset.busy='0';}};
+  const reroll=async()=>{if(card.dataset.busy==='1'||(Date.now()-(Number(card.dataset.lastRerollAt)||0))<900)return;card.dataset.lastRerollAt=Date.now();if(card._qlPrompt&&!(qlBodyMangaV5Active()&&qlLooksLikeMangaV5Prompt(card._qlPrompt))&&!await qlGuardMissingNames(card._qlPrompt,getContext()))return;status('正在重新生成状态栏图片……');try{if(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')navigator.vibrate([28,42,28]);}catch{}const manualKey=taskKey+':manual:'+Date.now();const candidate=triggerRegistry.begin(manualKey,{prompt:card._qlPrompt,source:'statusbar-reroll'});if(!candidate.accepted)return;triggerRegistry.markRunning(manualKey);card.dataset.busy='1';try{syncViewfinderSizeToConfig();const c=cfg(),old={width:c.naiWidth,height:c.naiHeight,size:c.size};try{const choice=String(card.dataset.qlTempCombo??'');let generation;if(choice==='viewfinder')generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveActiveGeneration(t));else if(/^\d+$/.test(choice)&&c.combinations[Number(choice)])generation=qlResolveWithNames(card._qlPrompt,getContext(),t=>resolveCombinationGeneration(t,Number(choice),c));else generation=resolveChatImageGeneration(card._qlPrompt,getContext(),'statusbar');const dims=String(card.dataset.qlTempSize||'').split('x').map(Number);if(dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0)){if(c.provider==='novelai'||c.provider==='novelai-thirdparty'){c.naiWidth=dims[0];c.naiHeight=dims[1];}else c.size=card.dataset.qlTempSize;}const tempDims2=dims.length===2&&dims.every(n=>Number.isFinite(n)&&n>0);const fresh=await requestImage(generation.prompt,generation.negative,generation.vibe,generation.naiPromptData||null,null,tempDims2?'':(generation.sizeOverride||''));card._qlAddCandidate(fresh);storeChatRecord(fresh,card._qlPrompt,taskKey,{source:'statusbar',mesStamp:messageStampOfElement(frame),...qlStatusbarLinkMeta(frame,prompt)},generation);card._qlRender?.();}finally{c.naiWidth=old.width;c.naiHeight=old.height;c.size=old.size;save();}triggerRegistry.markSucceeded(manualKey,manualKey+':candidate:'+Date.now());}catch(e){triggerRegistry.markFailed(manualKey,e?.message||String(e));qlAlert('拾帧生成失败：'+(e?.message||String(e)));}finally{card.dataset.busy='0';}};
   img.style.touchAction='manipulation';
   // 手机浏览器的 pointerup 与 touchend 可能在同一次点击中都触发，混用会把单击误判成双击。
   // 触屏只使用 touchend；鼠标/触控笔使用 dblclick。监听放在覆盖层 card 上，避免图片元素被酒馆重绘替换后失效。
@@ -3411,7 +3421,7 @@ async function processStatusbarFrames(){
   // data-ql-autoarm：由页面自己的按钮（如抽卡）决定什么时候出图，不再多点一次「定格此刻」。
   if(frame.dataset.qlArmed!=='1'&&frame.hasAttribute('data-ql-autoarm'))frame.dataset.qlArmed='1';
   if(frame.dataset.qlArmed!=='1'){ensureStatusbarTrigger(frame,prompt);frame.dataset.qlBusy='0';continue;}
-  if(!qlBodyMangaV5Active()&&!await qlGuardMissingNames(prompt,getContext())){frame.dataset.qlArmed='0';frame.dataset.qlBusy='0';continue;}
+  if(!(qlBodyMangaV5Active()&&qlLooksLikeMangaV5Prompt(prompt))&&!await qlGuardMissingNames(prompt,getContext())){frame.dataset.qlArmed='0';frame.dataset.qlBusy='0';continue;}
   const accepted=triggerRegistry.begin(taskKey,{prompt,source:'statusbar'});
   if(!accepted.accepted){frame.dataset.qlBusy='0';continue;}
   triggerRegistry.markRunning(taskKey);
@@ -5178,13 +5188,15 @@ async function qlTcMakeImage(st){
  }else{
   generation=resolveChatImageGeneration(prompt,ctx,isComic?'':'egg');
  }
- if(st.mangaV5){
+ if(st.mangaV5&&qlLooksLikeMangaV5Prompt(prompt)){
   // V5 整页漫画：提示词就是模型直接吐出来的 <image>@page/@panel/@character…</image> 结构化
   // 文本，不能再走上面画师串/通用词/角色名替换那套给"扁平逗号 tag"设计的合并逻辑——那套会把
   // 这段多行结构拆散，甚至把质量词/画师串塞进 <image> 里面，违反柏宝绘自己的格式要求；负面也
   // 强制留空，排除词已经按格式约定写进文本里的 @negative 段了。vibe/采样参数等其余字段还是
-  // 用上面组合选择算出来的那一套，不受影响。
-  generation.prompt=prompt;generation.negative='';
+  // 用上面组合选择算出来的那一套，不受影响。画师串（preset.positive）单独拼回最前面——不拼
+  // 画风会跟着跑掉；qlLooksLikeMangaV5Prompt 没命中（模型没按格式写）时整个跳过这块，原样
+  // 用上面已经算好的 generation（画师串/角色名替换/通用词都照常），不强行按 mangaV5 处理。
+  generation.prompt=[generation.preset?.positive,prompt].filter(Boolean).join(', ');generation.negative='';
  }
  const sizeSel=String(document.querySelector('#ql-tc-size')?.value||'');
  const sizeOv=(Array.isArray(st._editRecords)&&st._editRecords.length?st.sizeOverride||sizeSel:sizeSel)||generation.sizeOverride||'';
@@ -5276,8 +5288,14 @@ function qlTcRenderResult(){
  // 文字部分已经写好（有画面提示词），但还没出图成功（第一次生成失败，或者还没试过）：
  // 给个重新出图按钮，直接拿已有的 prompt 重试，不用再花一次 LLM 调用重写文字。
  if(!active&&!Array.isArray(st._editRecords)&&String(st.prompt||'').trim()){
-  const retryImage=document.createElement('button');retryImage.type='button';retryImage.className='menu_button ql-primary';retryImage.textContent='重新出图';
-  retryImage.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();qlTcReroll();});
+  // 还没出过图（V5整页漫画模式下故意不自动出图，等确认）或者上次出图失败：这里摆一个可编辑的
+  // 画面提示词框，class 沿用 ql-tc-tag-input——qlTcReroll 本来就会自己从渲染区里找这个 class
+  // 读取最新编辑值，不用额外接线。
+  const previewWrap=document.createElement('div');previewWrap.className='ql-chat-image-editor';previewWrap.hidden=false;
+  const previewTa=document.createElement('textarea');previewTa.className='ql-tc-tag-input ql-chat-image-tag-input';previewTa.rows=8;previewTa.value=String(st.prompt||'');previewTa.setAttribute('aria-label','画面提示词（出图前可编辑）');
+  previewWrap.append(previewTa);card.append(previewWrap);
+  const retryImage=document.createElement('button');retryImage.type='button';retryImage.className='menu_button ql-primary';retryImage.textContent=st.mangaV5?'生成图片':'重新出图';
+  retryImage.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();st.prompt=previewTa.value.trim();qlTcReroll();});
   row.append(retryImage);
  }
  const saveButton=document.createElement('button');saveButton.type='button';saveButton.className='menu_button ql-primary';saveButton.textContent=st._editRecords?'保存修改':'收入小剧场';saveButton.dataset.tcSave='1';saveButton.disabled=!active||String(st.prompt||'').trim()!==String(st.renderedPrompt||'').trim();saveButton.addEventListener('click',qlTcSave);row.append(saveButton);
@@ -5394,8 +5412,17 @@ async function qlTcGenerate(){
   // V5 整页漫画的提示词是 <image>@page/@panel/@character…</image> 这种多行结构化文本，不是
   // 给人读的"扁平逗号 tag"，缺词条检测(qlGuardMissingNames)是按后者的格式扫描的，拿这种结构
   // 化文本去跑只会抓出一堆英文句子里的误报，所以这里直接跳过，不弹窗。
-  if(!mangaV5&&!await qlGuardMissingNames(prompt,ctx)){if(statusEl)statusEl.textContent='已取消。';return;}
+  const looksMangaV5=mangaV5&&qlLooksLikeMangaV5Prompt(prompt);
+  if(!looksMangaV5&&!await qlGuardMissingNames(prompt,ctx)){if(statusEl)statusEl.textContent='已取消。';return;}
   qlTcState={title:parsed.title,eggBlocks:parsed.eggBlocks,panelTexts:parsed.panelTexts||[],prompt,raw,url:'',generation:null,renderedPrompt:'',styleMode,mangaV5,_qlCandidates:[],_qlIndex:-1};
+  if(mangaV5){
+   // V5 整页漫画模式不自动出图：这段文字是插件自己起的 LLM 调用写的，经常不听话（比如把
+   // 词库里"乔:1.2"自己音译成"Qiao:1.2"，或者给没登记过外貌的角色也编了名字直接往下写），
+   // 先摆出来让检查一遍、需要的话手动改一改，确认没问题再点「生成图片」，不白费一次真实生图。
+   qlTcRenderResult();
+   if(statusEl)statusEl.textContent='文字已写好——V5整页漫画模式不会自动出图，检查一下下面的画面提示词（尤其是人名有没有写对、有没有编了没登记过的角色），确认或改好后点「生成图片」。';
+   return;
+  }
   if(statusEl)statusEl.textContent='文字已写好，正在出图…'+(parsed.extraImages?'（模型多写了 '+parsed.extraImages+' 张图的口令，只画第一张）':'');
   await qlTcMakeImage(qlTcState);
   qlTcRenderResult();
