@@ -2782,6 +2782,31 @@ async function persistImageToTavern(src,taskKey='image'){
  const result=await response.json();
  return normalizeTavernImagePath(result.path);
 }
+// ===== 清缓存时顺手把酒馆硬盘上的图也删掉 =====
+// 之前"清理缓存/彻底清空/合并重复/自动保留上限"这几个操作，都只是把记录从 cfg().records 里摘掉，
+// 从来没调用酒馆自己的 /api/images/delete 把已经转存到 user/images 目录下的真实文件也删掉——
+// 这才是"明明一直在清缓存，酒馆 user/images 目录却还是越滚越大"的真正原因。这里补上：
+// 真正从酒馆硬盘上删除文件时，先核对一遍"摘掉的这些记录里引用的文件路径，有没有被别的还保留着的
+// 记录（比如判重时留下的那张）引用"，避免误删还在用的图；只处理已经转存成酒馆服务器路径的
+// dataUrl/thumb（data: 开头的内嵌图、http(s) 外链都跳过，不是酒馆自己存的文件）。删除失败（网络抖动、
+// 酒馆版本没有这个接口等）只打印警告，绝不影响记录本身已经清理掉这件事。
+async function qlDeleteTavernFile(filePath){
+ if(typeof filePath!=='string'||!filePath||/^data:|^https?:\/\//i.test(filePath))return;
+ try{
+  const response=await fetch('/api/images/delete',{method:'POST',headers:{'Content-Type':'application/json',...getRequestHeaders(window.token)},body:JSON.stringify({path:filePath})});
+  if(!response.ok&&response.status!==404)console.warn('[拾帧] 删除酒馆硬盘旧图失败（记录本身已正常清理，只是磁盘空间没回收）',filePath,response.status);
+ }catch(e){console.warn('[拾帧] 删除酒馆硬盘旧图失败（记录本身已正常清理，只是磁盘空间没回收）',filePath,e);}
+}
+function qlPurgeDroppedRecordFiles(dropped,keptRecords){
+ try{
+  if(!Array.isArray(dropped)||!dropped.length)return;
+  const stillReferenced=new Set();
+  for(const r of keptRecords||[]){if(!r)continue;if(r.dataUrl)stillReferenced.add(r.dataUrl);if(r.thumb)stillReferenced.add(r.thumb);}
+  const paths=new Set();
+  for(const r of dropped){if(!r)continue;if(r.dataUrl&&!stillReferenced.has(r.dataUrl))paths.add(r.dataUrl);if(r.thumb&&!stillReferenced.has(r.thumb))paths.add(r.thumb);}
+  (async()=>{for(const p of paths)await qlDeleteTavernFile(p);})();
+ }catch(e){console.warn('[拾帧] 批量清理酒馆硬盘旧图时出错',e);}
+}
 
 // ===== 消息锚定：把图片记录的 uid 写进聊天消息自己的 extra 里（参考智绘姬：图片跟着消息走，而不是只靠楼层号 / 聊天 ID / 时间戳去对）=====
 // 结构：message.extra.shizhen_images[swipe:提示词哈希:同提示词序号]=[uid…]。刷新、改聊天名、分支、时间戳变化都不影响找回。
@@ -2848,6 +2873,7 @@ function qlTrimRecords(c=cfg()){
  const drop=new Set(droppable.slice(0,over));
  if(!drop.size)return 0;
  c.records=recs.filter(r=>!drop.has(r));
+ qlPurgeDroppedRecordFiles([...drop],c.records);
  return drop.size;
 }
 function storeChatRecord(url,prompt,taskKey,meta={},generationOverride=null){
@@ -4324,11 +4350,11 @@ function history(){
  const refreshTip=()=>{if(!tip)return;const days=Number(rangeSel?.value||0),p=clearPlan(days,true);const bytes=(s.records||[]).reduce((n,r)=>n+(r&&r.dataUrl?String(r.dataUrl).length*0.75:0),0),mb=bytes>=1048576?(bytes/1048576).toFixed(1)+' MB':Math.round(bytes/1024)+' KB';tip.textContent='当前缓存约 '+mb+'。'+(p.drop.length?('将清理 '+p.drop.length+' 张；相册 / 图集里的照片和正文里每格当前的图（'+p.slots+' 张）会保留。'):'没有可清理的缓存（相册 / 图集照片和正文当前图会保留）。');};
  if(rangeSel){rangeSel.onchange=refreshTip;}refreshTip();
  const dupPlan=()=>{const seen=new Set(),drop=new Set();(s.records||[]).forEach((r,i)=>{if(!r||!r.dataUrl||r.albumCharacterName||isPromptGalleryRecord(r,s))return;const k=(v=>{const t=String(v).trim();if(/^data:/i.test(t)||/^https?:\/\//i.test(t))return t;try{return new URL(t.startsWith('/')?t:'/'+t,window.location.origin).href;}catch{return t;}})(r.dataUrl);if(seen.has(k))drop.add(i);else seen.add(k);});return drop;};
- const dedupeBtn=footer?.querySelector('#ql-dedupe');if(dedupeBtn){const n=dupPlan().size;dedupeBtn.textContent=n?'合并重复（'+n+'）':'合并重复';dedupeBtn.onclick=async()=>{const drop=dupPlan();if(!drop.size){status('没有发现完全一样的重复图。');return;}if(!await qlConfirm('发现 '+drop.size+' 张重复（一模一样的图），合并后每组只留最新的一张。继续？'))return;s.records=(s.records||[]).filter((r,i)=>!drop.has(i));save();history();status('已合并 '+drop.size+' 张重复图。');};}
+ const dedupeBtn=footer?.querySelector('#ql-dedupe');if(dedupeBtn){const n=dupPlan().size;dedupeBtn.textContent=n?'合并重复（'+n+'）':'合并重复';dedupeBtn.onclick=async()=>{const drop=dupPlan();if(!drop.size){status('没有发现完全一样的重复图。');return;}if(!await qlConfirm('发现 '+drop.size+' 张重复（一模一样的图），合并后每组只留最新的一张。继续？'))return;const all=s.records||[],dropped=all.filter((r,i)=>drop.has(i)),kept=all.filter((r,i)=>!drop.has(i));s.records=kept;save();history();qlPurgeDroppedRecordFiles(dropped,kept);status('已合并 '+drop.size+' 张重复图。');};}
  const doClear=async(keepSlots)=>{const days=Number(rangeSel?.value||0),p=clearPlan(days,keepSlots);if(!p.drop.length){status('没有可清理的缓存。');return;}
   const label=days>0?days+' 天前的':'全部';
   if(!await qlConfirm((keepSlots?'清理'+label+'缓存？将删除 '+p.drop.length+' 张。收藏到相册 / 图集的照片，以及正文里每个格子当前的那张图会保留。':'彻底清空'+label+'缓存？将删除 '+p.drop.length+' 张，包括正文里每个格子当前的图（重新打开聊天后这些格子需要重新生成）。相册 / 图集里的照片仍会保留。')))return;
-  s.records=p.keep;save();history();try{navigator.vibrate?.(18);}catch{}status('已清理 '+p.drop.length+' 张缓存'+(keepSlots?'，正文当前图已保留。':'。'));};
+  s.records=p.keep;save();history();qlPurgeDroppedRecordFiles(p.drop,p.keep);try{navigator.vibrate?.(18);}catch{}status('已清理 '+p.drop.length+' 张缓存'+(keepSlots?'，正文当前图已保留。':'。')+'（含酒馆硬盘上的原图文件）');};
  const clearButton=footer?.querySelector('#ql-clear');if(clearButton)clearButton.onclick=()=>doClear(true);
  const clearAll=footer?.querySelector('#ql-clear-all');if(clearAll)clearAll.onclick=()=>doClear(false);
  let modal=document.getElementById('ql-image-cache-modal');
@@ -4542,12 +4568,12 @@ function history(){
  host.querySelectorAll('[data-ql-detail]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();const i=Number(b.dataset.qlDetail);if(selectionMode&&b.classList.contains('ql-cache-image')){const tile=b.closest('.ql-cache-tile');const input=tile?.querySelector('[data-ql-select]');if(input)input.checked=!input.checked;else{const hidden=document.createElement('input');hidden.type='checkbox';hidden.dataset.qlSelect=String(i);hidden.checked=true;hidden.hidden=true;tile?.append(hidden);}tile?.classList.toggle('is-selected',!!tile?.querySelector('[data-ql-select]')?.checked);updateSelection();return;}openDetail(qlResolveRecordIndex(uidSnap[i],i));});
   host.querySelectorAll('[data-ql-restore-theater]').forEach(button=>button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();const index=Number(button.dataset.qlRestoreTheater);const record=s.records[qlResolveRecordIndex(uidSnap[index],index)];if(!record)return;record.theaterHidden=false;if(record._theaterPreviousAlbumCharacterName){record.albumCharacterName=record._theaterPreviousAlbumCharacterName;delete record._theaterPreviousAlbumCharacterName;}if(record._theaterPreviousAlbumCharacterKey!=null){record.albumCharacterKey=record._theaterPreviousAlbumCharacterKey;delete record._theaterPreviousAlbumCharacterKey;}record.collection=record.albumCharacterName?'character-album':'cache';save();history();renderTheater();status('已恢复到原小剧场组。');}));
  host.querySelectorAll('[data-ql-download]').forEach(b=>b.onclick=async e=>{e.preventDefault();e.stopPropagation();const button=e.currentTarget;if(button.dataset.busy==='1')return;button.dataset.busy='1';try{const r=records[Number(button.dataset.qlDownload)];if(!r)throw new Error('找不到这条缓存记录。');const result=await saveCleanImage(r.dataUrl,'shizhen-'+(r.at||Date.now()));status((result?.edgeFallback?'已打开下载面板，请点击面板中的“保存图片”。':result?.downloadStarted?'已发起图片下载；请在浏览器下载列表或系统下载目录查看。':'已发起图片下载。')+(lastPngCleanReport?' '+lastPngCleanReport:''));}catch(e){status(e.message||String(e));}finally{delete button.dataset.busy;}});
- host.querySelectorAll('[data-ql-delete]').forEach(b=>b.onclick=async e=>{e.preventDefault();e.stopPropagation();const i=Number(b.dataset.qlDelete);if(!await qlConfirm('删除这条拾帧图片缓存？不会删除聊天消息中的图片。'))return;s.records.splice(i,1);save();history();status('图片缓存已删除。');});
+ host.querySelectorAll('[data-ql-delete]').forEach(b=>b.onclick=async e=>{e.preventDefault();e.stopPropagation();const i=Number(b.dataset.qlDelete);if(!await qlConfirm('删除这条拾帧图片缓存？不会删除聊天消息中的图片。'))return;const removed=s.records.splice(i,1);save();history();qlPurgeDroppedRecordFiles(removed,s.records);status('图片缓存已删除。');});
  const updateSelection=()=>{const tiles=[...host.querySelectorAll('.ql-cache-tile')],selected=tiles.filter(tile=>tile.classList.contains('is-selected')||tile.querySelector('[data-ql-select]')?.checked);const count=footer?.querySelector('[data-ql-selected-count]'),bulkDelete=footer?.querySelector('[data-ql-bulk-delete]'),bulkDownload=footer?.querySelector('[data-ql-bulk-download]'),all=footer?.querySelector('[data-ql-select-all]');if(count){const prev=count.textContent;count.textContent='已选 '+selected.length+' 张';if(prev!==count.textContent){count.classList.remove('ql-pop');void count.offsetWidth;count.classList.add('ql-pop');}}footer?.classList.toggle('is-selecting',selected.length>0);if(bulkDelete)bulkDelete.disabled=!selected.length;if(bulkDownload)bulkDownload.disabled=!selected.length;if(all){all.disabled=!tiles.length;all.checked=tiles.length>0&&selected.length===tiles.length;all.indeterminate=selected.length>0&&selected.length<tiles.length;}if(badge){const show=selectionMode&&selected.length>0;badge.hidden=!show;if(show)badge.textContent=String(selected.length>99?'99+':selected.length);}};
  host.querySelectorAll('[data-ql-select]').forEach(input=>input.addEventListener('change',()=>{input.closest('.ql-cache-tile')?.classList.toggle('is-selected',input.checked);updateSelection();}));
  footer?.querySelector('[data-ql-select-all]')?.addEventListener('change',e=>{host.querySelectorAll('.ql-cache-tile').forEach(tile=>{let input=tile.querySelector('[data-ql-select]');if(!input){input=document.createElement('input');input.type='checkbox';input.dataset.qlSelect=tile.querySelector('[data-ql-detail]')?.dataset.qlDetail||'';input.hidden=true;tile.append(input);}input.checked=e.currentTarget.checked;tile.classList.toggle('is-selected',input.checked);});updateSelection();});
  footer?.querySelector('[data-ql-bulk-download]')?.addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();const selected=[...host.querySelectorAll('.ql-cache-tile.is-selected')].map(tile=>Number(tile.querySelector('[data-ql-detail]')?.dataset.qlDetail)).filter(i=>Number.isInteger(i)&&i>=0&&i<s.records.length);if(!selected.length)return;const button=e.currentTarget;button.disabled=true;const original=button.textContent;button.textContent='正在逐张下载…';let success=0,failed=0,redrawn=0,unchanged=0;try{const items=selected.map(i=>({record:s.records[i],index:i})).filter(x=>x.record?.dataUrl);if(!items.length)throw new Error('所选记录中没有可下载的图片数据。');status('准备逐张下载 '+items.length+' 张图片；浏览器可能会询问是否允许多个文件下载。');for(let n=0;n<items.length;n++){const {record,index}=items[n];try{const response=await fetch(record.dataUrl);if(!response.ok)throw new Error('读取图片失败');const originalBlob=await response.blob();const blob=cfg().downloadFormat==='jpg'?await convertImageBlobToJpeg(originalBlob):originalBlob;if(!blob.size)throw new Error('图片数据为空');if(cfg().downloadFormat!=='jpg')unchanged++;const url=URL.createObjectURL(blob);const ext=blob.type.includes('jpeg')?'jpg':blob.type.includes('webp')?'webp':blob.type.includes('gif')?'gif':'png';const a=document.createElement('a');a.href=url;a.download='shizhen-'+(record.at||Date.now())+'.'+ext;a.style.display='none';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(error){failed++;console.warn('[拾帧 Lite] 单张缓存下载失败',index,error);continue;}success++;if(n<items.length-1)await new Promise(resolve=>setTimeout(resolve,350));}status('逐张下载已发起：成功 '+success+' 张'+(failed?'，失败 '+failed+' 张':'')+'。'+(cfg().downloadFormat!=='jpg'?' PNG 保留原始文件。':' JPG 已重新编码。')+' 若 Edge 拦截了多个文件，请允许此页面的多个下载，或分批选择。');}catch(error){console.error('[拾帧 Lite] 缓存逐张下载失败',error);status('下载失败：'+(error?.message||String(error)));}finally{button.disabled=false;button.textContent=original;}});
- footer?.querySelector('[data-ql-bulk-delete]')?.addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();const selected=[...host.querySelectorAll('.ql-cache-tile.is-selected')].map(tile=>Number(tile.querySelector('[data-ql-detail]')?.dataset.qlDetail)).filter(Number.isInteger);if(!selected.length)return;if(!await qlConfirm('确定删除选中的 '+selected.length+' 张缓存图片？不会删除聊天消息中的图片。'))return;selected.sort((a,b)=>b-a).forEach(i=>{if(i>=0&&i<s.records.length)s.records.splice(i,1);});save();history();status('已删除所选缓存图片。');});
+ footer?.querySelector('[data-ql-bulk-delete]')?.addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();const selected=[...host.querySelectorAll('.ql-cache-tile.is-selected')].map(tile=>Number(tile.querySelector('[data-ql-detail]')?.dataset.qlDetail)).filter(Number.isInteger);if(!selected.length)return;if(!await qlConfirm('确定删除选中的 '+selected.length+' 张缓存图片？不会删除聊天消息中的图片。'))return;const removed=[];selected.sort((a,b)=>b-a).forEach(i=>{if(i>=0&&i<s.records.length)removed.push(...s.records.splice(i,1));});save();history();qlPurgeDroppedRecordFiles(removed,s.records);status('已删除所选缓存图片。');});
  // 每次刷新缓存时同步刷新独立的角色相册页；此前只有缓存页内的子标签点击才会渲染相册。
  renderAlbums();
 }
